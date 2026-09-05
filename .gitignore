@@ -1,0 +1,7 @@
+.DS_Store
+
+# Sample videos — link to Salk repo instead of committing
+data/barnes-maze/*.mp4
+
+# Transient inspection artifacts
+.inspect-tmp/
