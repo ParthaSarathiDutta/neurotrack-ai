@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { TimestampIndexEntry } from '../domain/types';
+import type { Geometry, Observation, TimestampIndexEntry, TrialWindow } from '../domain/types';
 import { secondsFromTimeUs } from '../domain/timing';
 import { computeLetterboxedContentRect } from '../domain/videoTransform';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 import { VideoOverlay } from './VideoOverlay';
-import type { Geometry, TrialWindow } from '../domain/types';
 import styles from '../styles/app.module.css';
 
 interface VideoPlayerProps {
@@ -15,10 +14,15 @@ interface VideoPlayerProps {
   durationSec: number;
   geometry: Geometry;
   trialWindow: TrialWindow;
+  observations?: Observation[];
   selectedHoleId: number | null;
   onHoleClick?: (holeId: number) => void;
   onCanvasClick?: (x: number, y: number) => void;
   onSeek?: (timeUs: number) => void;
+  onRegisterSeek?: (api: {
+    loadFrame: (frameIndex: number) => void;
+    seekToTimeUs: (timeUs: number) => void;
+  }) => void;
 }
 
 export function VideoPlayer({
@@ -29,10 +33,12 @@ export function VideoPlayer({
   durationSec,
   geometry,
   trialWindow,
+  observations = [],
   selectedHoleId,
   onHoleClick,
   onCanvasClick,
   onSeek,
+  onRegisterSeek,
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const frameCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,6 +50,16 @@ export function VideoPlayer({
   });
 
   const player = useVideoPlayer({ fingerprint, timestampIndex, videoWidth, videoHeight });
+
+  useEffect(() => {
+    onRegisterSeek?.({
+      loadFrame: player.loadFrame,
+      seekToTimeUs: player.seekToTimeUs,
+    });
+  }, [onRegisterSeek, player.loadFrame, player.seekToTimeUs]);
+
+  const currentObservation =
+    observations.find((o) => o.frameIndex === player.currentFrameIndex) ?? null;
 
   const updateDisplayBox = useCallback(() => {
     const el = containerRef.current;
@@ -141,6 +157,14 @@ export function VideoPlayer({
       ? (secondsFromTimeUs(trialWindow.startTimeUs) + trialWindow.cutoffSeconds) / durationSec
       : 1;
 
+  const trackingSegments =
+    observations.length > 0 && durationSec > 0
+      ? observations.map((o) => ({
+          startFrac: secondsFromTimeUs(o.timeUs) / durationSec,
+          status: o.observed,
+        }))
+      : [];
+
   return (
     <div className={styles.playerSection}>
       <div ref={containerRef} className={styles.playerContainer} data-testid="video-player">
@@ -162,6 +186,7 @@ export function VideoPlayer({
           geometry={geometry}
           displayBox={displayBox}
           selectedHoleId={selectedHoleId}
+          observation={currentObservation}
           onHoleClick={onHoleClick}
           onCanvasClick={onCanvasClick}
         />
@@ -221,6 +246,32 @@ export function VideoPlayer({
             }}
           />
         </div>
+        {trackingSegments.length > 0 && (
+          <div className={styles.trackingQualityStrip} aria-hidden="true" data-testid="tracking-quality-strip">
+            {trackingSegments.map((seg, i) => {
+              const nextFrac =
+                i + 1 < trackingSegments.length
+                  ? trackingSegments[i + 1].startFrac
+                  : 1;
+              const widthFrac = Math.max(0, nextFrac - seg.startFrac);
+              const cls =
+                seg.status === 'tracked'
+                  ? styles.trackSegmentTracked
+                  : seg.status === 'lost'
+                    ? styles.trackSegmentLost
+                    : seg.status === 'absent_in_hole'
+                      ? styles.trackSegmentAbsent
+                      : styles.trackSegmentPreTrial;
+              return (
+                <div
+                  key={`${seg.startFrac}-${i}`}
+                  className={cls}
+                  style={{ left: `${seg.startFrac * 100}%`, width: `${widthFrac * 100}%` }}
+                />
+              );
+            })}
+          </div>
+        )}
         <input
           type="range"
           min={0}

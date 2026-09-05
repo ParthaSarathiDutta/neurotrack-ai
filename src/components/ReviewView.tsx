@@ -4,6 +4,7 @@ import { getTrialReviewStatus, reviewStatusLabel } from '../domain/migration';
 import { VideoPlayer } from './VideoPlayer';
 import { CalibrationPanel } from './CalibrationPanel';
 import { TrialWindowPanel } from './TrialWindowPanel';
+import { TrackQualityPanel } from './TrackQualityPanel';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
 
@@ -16,9 +17,14 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
   const setTargetHole = useSessionStore((s) => s.setTargetHole);
   const [selectedHoleId, setSelectedHoleId] = useState<number | null>(null);
   const manualClickRef = useRef<((x: number, y: number) => void) | null>(null);
+  const seekApiRef = useRef<{ loadFrame: (i: number) => void } | null>(null);
 
   const registerManualHandler = useCallback((handler: ((x: number, y: number) => void) | null) => {
     manualClickRef.current = handler;
+  }, []);
+
+  const handleSeekToFrame = useCallback((frameIndex: number) => {
+    seekApiRef.current?.loadFrame(frameIndex);
   }, []);
 
   useEffect(() => {
@@ -55,7 +61,11 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
         durationSec={meta.durationSec}
         geometry={trial.geometry}
         trialWindow={trial.trialWindow}
+        observations={trial.track?.observations ?? []}
         selectedHoleId={selectedHoleId}
+        onRegisterSeek={(api) => {
+          seekApiRef.current = api;
+        }}
         onHoleClick={(holeId) => {
           setSelectedHoleId(holeId);
           setTargetHole(trial.id, holeId);
@@ -72,6 +82,8 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
       />
 
       <TrialWindowPanel trial={trial} />
+
+      <TrackQualityPanel trial={trial} onSeekToFrame={handleSeekToFrame} />
 
       {/* MS-1 validation compatibility — metadata testids */}
       <div hidden aria-hidden="true" data-testid="trial-metadata-compat">

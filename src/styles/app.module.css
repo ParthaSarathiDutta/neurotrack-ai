@@ -498,3 +498,56 @@
   border-radius: var(--radius);
   background: var(--color-surface);
 }
+
+.flaggedFrameList {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-sm) 0;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  color: var(--color-accent, #0066cc);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: var(--space-xs) 0;
+  min-height: var(--min-touch);
+}
+
+.trackingQualityStrip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  pointer-events: none;
+}
+
+.trackSegmentTracked,
+.trackSegmentLost,
+.trackSegmentAbsent,
+.trackSegmentPreTrial {
+  position: absolute;
+  top: 0;
+  height: 100%;
+}
+
+.trackSegmentTracked {
+  background: rgba(0, 100, 0, 0.7);
+}
+
+.trackSegmentLost {
+  background: rgba(200, 0, 0, 0.7);
+}
+
+.trackSegmentAbsent {
+  background: rgba(100, 50, 200, 0.7);
+}
+
+.trackSegmentPreTrial {
+  background: rgba(128, 128, 128, 0.4);
+}

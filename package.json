@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "validate:ms1": "node scripts/validate-ms1.mjs",
     "validate:ms2": "node scripts/validate-ms2.mjs",
+    "validate:tracking": "npx tsx scripts/validate-tracking.mjs",
+    "validate:ms3": "node scripts/validate-ms3.mjs",
     "validate:calibration": "npx tsx scripts/validate-calibration.mjs",
     "preview": "vite preview"
   },

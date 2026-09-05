@@ -10,5 +10,6 @@ describe('migration', () => {
     expect(migrated.geometry.targetHoleConfirmedAt).toBeNull();
     expect(migrated.trialWindow.proposedStartTimeUs).toBeNull();
     expect(migrated.trialWindow.confirmedAt).toBeNull();
+    expect(migrated.track).toBeNull();
   });
 });

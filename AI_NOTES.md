@@ -44,3 +44,20 @@ Validation harness ~5.0 s; browser ~4.3 s / 3.67 s with confidence 1.00.
 
 ### Low-confidence confirmation UX (2026-03-21)
 Rejected requiring manual hole nudge before confirm — scientifically wrong when overlay is visually acceptable. Replaced with explicit `calibrationReviewAcknowledgedAt` acknowledgment checkbox; per-hole provenance unchanged unless user actually nudges.
+
+## MS-3 tracking — WebCodecs sample buffer detachment (2026-03-21)
+
+### Mistake
+Initial tracking worker demuxed all MP4 samples into an array, then ran separate `VideoDecoder` sessions per background frame / batch. `EncodedVideoChunk` transfers underlying `ArrayBuffer`s; after the first decode session, later sessions hit `Decoding error` immediately (failed on test53 bg sample 2/30 at index 176 in ~0.1 s).
+
+### Rejected approach
+Falling back to per-frame `frameService.getFramePixels()` on the main thread — would work but is far too slow for test50 (~5539 frames) and sidesteps the spec’s dedicated tracking worker.
+
+### Fix validated
+- Tracking worker uses **ingest-worker’s demux+decode-in-`onSamples` pattern** twice (background pass, tracking pass), feeding `sample.data` directly from mp4box without storing compressed buffers across sessions.
+- `frame-worker.ts` stores sample bytes as `Uint8Array` and passes `data.slice()` into each chunk so interactive stepping survives multiple seeks.
+- `mp4-utils.ts` copies codec description bytes so decoder config survives after mp4box teardown.
+
+### test51 tracking quality
+Cylinder occlusion yields ~66% tracked with many provisional `absent_in_hole` labels (D7 heuristic — not escape detection). Offline validation passes (>60% tracked, >50% in first 5 s after start). Browser MS-3 validation completes; quality tier **low** — expected for this clip until MS-4+ correction.
+

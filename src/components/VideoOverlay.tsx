@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { Geometry } from '../domain/types';
+import type { Geometry, Observation } from '../domain/types';
 import { videoToDisplay, displayToVideo, type VideoDisplayBox } from '../domain/videoTransform';
 import styles from '../styles/app.module.css';
 
@@ -7,6 +7,7 @@ interface VideoOverlayProps {
   geometry: Geometry;
   displayBox: VideoDisplayBox;
   selectedHoleId: number | null;
+  observation?: Observation | null;
   onHoleClick?: (holeId: number) => void;
   onCanvasClick?: (x: number, y: number) => void;
 }
@@ -15,6 +16,7 @@ export function VideoOverlay({
   geometry,
   displayBox,
   selectedHoleId,
+  observation,
   onHoleClick,
   onCanvasClick,
 }: VideoOverlayProps) {
@@ -109,7 +111,44 @@ export function VideoOverlay({
       ctx.fillStyle = '#111111';
       ctx.fillText(label, p.x + 8, p.y - 8);
     }
-  }, [geometry, displayBox, selectedHoleId]);
+
+    if (observation?.bodyXY) {
+      const body = videoToDisplay(observation.bodyXY, displayBox);
+      ctx.beginPath();
+      if (observation.observed === 'tracked') {
+        ctx.arc(body.x, body.y, 7, 0, 2 * Math.PI);
+        ctx.fillStyle = '#111111';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else {
+        ctx.rect(body.x - 6, body.y - 6, 12, 12);
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+
+    if (observation?.noseXY) {
+      const nose = videoToDisplay(observation.noseXY, displayBox);
+      ctx.beginPath();
+      ctx.moveTo(nose.x, nose.y - 8);
+      ctx.lineTo(nose.x + 7, nose.y + 6);
+      ctx.lineTo(nose.x - 7, nose.y + 6);
+      ctx.closePath();
+      ctx.fillStyle = '#111111';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    } else if (observation?.qualityFlags?.includes('ambiguous_head_tail') && observation.bodyXY) {
+      const body = videoToDisplay(observation.bodyXY, displayBox);
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.fillStyle = '#111111';
+      ctx.fillText('?', body.x + 10, body.y - 10);
+    }
+  }, [geometry, displayBox, selectedHoleId, observation]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
