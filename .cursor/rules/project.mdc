@@ -1,0 +1,46 @@
+---
+description: NeuroTrack AI project constraints and authoritative documentation pointers
+alwaysApply: true
+---
+
+# NeuroTrack AI — Project Rules
+
+This project implements **Task 1 (Barnes Maze Analysis Pipeline)** for the Salk AIRC Research Software Engineer take-home. Tasks 2 and 3 are intentionally out of scope — do not restore or work on them.
+
+## Consult Before Major Decisions
+
+Before making product, architecture, or implementation decisions, read:
+
+- `reference/salk-assignment.md` — overall assignment, cross-cutting requirements, evaluation criteria, submission requirements
+- `reference/task-01-barnes-maze.md` — authoritative functional specification for the Barnes maze pipeline
+- `reference/sample-data.md` — sample video properties, known difficulties, data-handling instructions
+- `specs/constitution.md` — once it exists, project constitution and non-negotiables
+
+Salk's requirements take precedence over implementation convenience. Work should follow the roadmap and current feature spec.
+
+## Scientific Integrity
+
+- Do not silently hide tracking uncertainty or fabricate missing scientific data.
+- Tracking failures must be visibly identified.
+- Limited gap filling and interpolation is allowed when scientifically justified, but it must never be silent. Interpolated points must remain distinguishable from directly tracked or manually corrected points, and the relevant parameters must be visible to the user.
+- Distinguish mouse entering the escape hole (disappearance) from tracker failure.
+- Make hole-investigation thresholds visible, adjustable, and defensible.
+- Preserve manual corrections and provenance (automatic vs human-edited values).
+- Respect each video's actual timing information; do not assume uniform or integer frame rates.
+
+## Generalization
+
+- Do not hard-code behavior for the three sample videos (`test50`, `test51`, `test53`).
+- The solution must generalize to other Barnes maze videos with different lighting, camera positions, and capture settings.
+
+## Quality and Submission
+
+- Before declaring a feature complete, execute its validation criteria.
+- Keep changes understandable and interview-defensible.
+- Preserve meaningful Git history.
+- Do not commit secrets or the sample `.mp4` videos (link to the Salk repo instead).
+- Keep `AI_NOTES.md` updated with meaningful examples of agent mistakes, disagreements, rejected approaches, and what was validated.
+
+## Intended User
+
+Design for a scientist who should not need a terminal, Python, Docker, Node, a GPU, or administrator privileges to use the finished product.
