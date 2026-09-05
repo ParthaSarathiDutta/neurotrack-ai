@@ -10,7 +10,7 @@ interface DecodedSample {
   cts: number;
   timescale: number;
   isSync: boolean;
-  data: BufferSource;
+  data: Uint8Array;
   duration: number;
 }
 
@@ -58,7 +58,7 @@ async function initDecoder(buffer: ArrayBuffer): Promise<void> {
             cts: sample.cts,
             timescale: sample.timescale,
             isSync: sample.is_sync,
-            data: copy.buffer,
+            data: copy,
             duration: sample.duration,
           });
           demuxed += 1;
@@ -131,7 +131,7 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
       type: s.isSync ? 'key' : 'delta',
       timestamp: ctsToMicroseconds(s.cts, s.timescale),
       duration: ctsToMicroseconds(s.duration, s.timescale),
-      data: s.data,
+      data: s.data.slice(),
     });
     decoder.decode(chunk);
   }

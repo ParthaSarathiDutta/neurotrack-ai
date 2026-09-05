@@ -48,7 +48,7 @@ export function extractDecoderConfig(mp4: ISOFile, track: VideoTrackRef): Decode
       box.write(stream);
       hdrSize = typeof box.hdr_size === 'number' ? box.hdr_size : 8;
       const total = stream.buffer.byteLength;
-      description = new Uint8Array(stream.buffer, hdrSize, total - hdrSize);
+      description = new Uint8Array(stream.buffer, hdrSize, total - hdrSize).slice();
       break;
     }
   }

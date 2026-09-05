@@ -3,7 +3,7 @@ import type { AnalysisParams, Geometry, Hole, TrialRecord, TrialWindow } from '.
 import { computePxPerCm } from '../domain/calibration/detectMaze';
 import { holesFromAnchor } from '../domain/calibration/ringFit';
 import { HOLE_COUNT } from '../domain/constants';
-import { migrateTrialRecord } from '../domain/migration';
+import { migrateTrialRecord, migrateAnalysisParams } from '../domain/migration';
 import { defaultAnalysisParams } from '../db/database';
 import {
   hydratePersistedSession,
@@ -15,6 +15,7 @@ import {
 import { runAutoCalibration } from '../services/calibrationService';
 import { applyTemplateGeometry } from '../services/templateService';
 import { proposeTrialWindow } from '../services/trialWindowService';
+import { cancelTracking as cancelTrackingJob, runTracking } from '../services/trackingService';
 import { clearFrameCache } from '../services/frameService';
 import { evictAllFromCache } from '../db/videoCache';
 
@@ -23,6 +24,8 @@ interface SessionState {
   saving: boolean;
   ingestBusy: boolean;
   calibrationBusy: boolean;
+  trackingBusy: boolean;
+  trackingProgress: { phase: string; framesProcessed: number; total: number } | null;
   templateWarning: string | null;
   trials: TrialRecord[];
   selectedTrialId: string | null;
@@ -53,11 +56,14 @@ interface SessionState {
   confirmTrialWindow: (trialId: string) => void;
   updateTrialWindow: (trialId: string, patch: Partial<TrialWindow>) => void;
   updateTrialGeometry: (trialId: string, patch: Partial<Geometry>) => void;
+  runTracking: (trialId: string) => Promise<void>;
+  cancelTracking: (trialId: string) => void;
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let calibrationOpSeq = 0;
 let windowOpSeq = 0;
+let trackingOpSeq = 0;
 
 async function flushSave(getState: () => SessionState) {
   if (saveTimer) {
@@ -100,6 +106,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   saving: false,
   ingestBusy: false,
   calibrationBusy: false,
+  trackingBusy: false,
+  trackingProgress: null,
   templateWarning: null,
   trials: [],
   selectedTrialId: null,
@@ -111,7 +119,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({
       trials: data.trials.map(migrateTrialRecord),
       selectedTrialId: data.selectedTrialId,
-      analysisParams: data.analysisParams,
+      analysisParams: migrateAnalysisParams(data.analysisParams),
       hydrated: true,
       statusMessage: 'Session restored from local storage.',
     });
@@ -464,6 +472,62 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
     }));
     scheduleSave(get);
+  },
+
+  runTracking: async (trialId) => {
+    const trial = get().trials.find((t) => t.id === trialId);
+    if (!trial) return;
+    const opSeq = ++trackingOpSeq;
+    const fingerprint = trial.fingerprint;
+    const params = get().analysisParams.tracking;
+
+    set({
+      trackingBusy: true,
+      trackingProgress: { phase: 'starting', framesProcessed: 0, total: trial.timestampIndex.length },
+      statusMessage: 'Running automatic tracking…',
+    });
+
+    try {
+      const track = await runTracking(trial, params, (progress) => {
+        if (opSeq !== trackingOpSeq) return;
+        set({ trackingProgress: progress });
+      });
+
+      const current = get().trials.find((t) => t.id === trialId);
+      if (opSeq !== trackingOpSeq || !current || current.fingerprint !== fingerprint) {
+        set({
+          statusMessage: 'Tracking discarded — trial or video changed during run.',
+        });
+        return;
+      }
+
+      set((state) => ({
+        trials: patchTrial(state.trials, trialId, (t) => ({ ...t, track })),
+        statusMessage:
+          track.status === 'done'
+            ? `Tracking complete — ${(track.quality!.trackedFraction * 100).toFixed(1)}% tracked (${track.quality!.overallAssessment} quality).`
+            : `Tracking ${track.status}: ${track.error ?? 'unknown error'}`,
+      }));
+    } catch (err) {
+      set({
+        statusMessage: `Tracking error: ${err instanceof Error ? err.message : err}`,
+      });
+    } finally {
+      if (opSeq === trackingOpSeq) {
+        set({ trackingBusy: false, trackingProgress: null });
+      }
+      scheduleSave(get);
+    }
+  },
+
+  cancelTracking: () => {
+    trackingOpSeq += 1;
+    cancelTrackingJob();
+    set({
+      trackingBusy: false,
+      trackingProgress: null,
+      statusMessage: 'Tracking cancelled.',
+    });
   },
 }));
 
