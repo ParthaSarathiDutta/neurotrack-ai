@@ -2,7 +2,7 @@
 
 Branch: `ms-2-review-player-maze-calibration-trial-window`
 Constitution reference: `specs/constitution.md` → MS-2
-Status: **Implementation complete on branch — pending final manual visual review before merge.**
+Status: **Complete** (merged to `main`, September 5, 2026)
 
 ### Approved clarifications (September 5, 2026)
 
@@ -334,28 +334,54 @@ The 20-hole ring is the Salk task's assay contract. Fixed `HOLE_COUNT = 20` in c
 
 ## Completion
 
-**Status: Pending manual visual review** (automated validation green; not merged to `main`)
+**Status: Complete** (merged to `main`, September 5, 2026)
 
-| Check | Result | Notes |
+Branch: `ms-2-review-player-maze-calibration-trial-window` — final commit `bfa41ac`.
+
+### Automated validation
+
+| Check | Result | Evidence |
 |---|---|---|
-| V1–V20 | PASS | `npm run validate:ms2` against test50, test51, test53 |
-| Unit tests | PASS | ringFit, refineHoles, motionOnset, templateService, migration, videoTransform |
-| MS-1 regression | PASS | `npm run validate:ms1` |
+| Lint | PASS | `npm run lint` |
+| Unit tests | PASS | `npm test` — 34/34 |
+| Build | PASS | `npm run build` |
 | Offline calibration | PASS | `npm run validate:calibration` |
+| MS-1 regression | PASS | `npm run validate:ms1` |
+| MS-2 end-to-end | PASS | `npm run validate:ms2` — V1–V20 |
 
-### Known remaining MS-2 limitations
+| # | Result | Notes |
+|---|---|---|
+| V1–V15 | PASS | Player, calibration, trial window, accessibility, no filename branching |
+| V16 | PASS | Per-clip confidence tiers and slot residuals within bounds |
+| V17–V18 | PASS | Trial start populated; never silent failure |
+| V19 | PASS | Per-trial calibration isolation across switch and reload |
+| V20 | PASS | Low-confidence review acknowledgment (no mandatory hole nudge) |
+
+Unit coverage includes: `ringFit`, `refineHoles`, `motionOnset`, `templateService`, `migration`, `videoTransform`.
+
+### Manual validation (accepted)
+
+- Maze overlays visually credible on `test50`, `test51`, and `test53`.
+- Low-confidence acknowledgment workflow on `test51` — confirm without mandatory hole edits.
+- Template reuse and cross-rig warning covered by automated/unit validation (V9, V10, `templateService.test.ts`).
+
+### Requirements delivered
+
+| Area | Status |
+|---|---|
+| A. Review player (RA1–RA7) | Complete |
+| B. Automatic maze calibration (RB1–RB9) | Complete |
+| C. Maze-template reuse (RC1–RC6) | Complete |
+| D. Trial window (RD1–RD7) | Complete |
+| E. UI/UX (RE1–RE5) | Complete |
+| F. Data contracts (RF1–RF2) | Complete |
+| Low-confidence review acknowledgment | Complete |
+| Per-trial state isolation | Complete |
+
+### Known MS-2 limitations (retained)
 
 - Calibration validated on three sample rigs only; genuinely different lighting or non-20-hole mazes may still fail visibly (manual fallback + low-confidence acknowledgment exist for this).
 - Frame stepping depends on WebCodecs worker decode; very large videos may need LRU tuning not exercised here.
 - Template reuse uses rough-platform discrepancy check, not full feature-based registration — sufficient for sample cross-rig warning, not a general CV registration system.
 - Motion-onset confidence is heuristic (~5 s expected region); unusual protocols may need manual trial-start edit.
 - `platformEdgeSampleCount` retained internally but removed from scientist-facing technical details (value was not meaningful in current pipeline).
-
-### Manual validation still required
-
-- Visual overlay alignment on all three clips after final fixes.
-- Low-confidence acknowledgment workflow on `test51` without nudging holes.
-- Template apply `test50` → `test53` overlay sanity check.
-- Cross-rig warning readability on `test50` → `test51`.
-
-*Do not merge to `main` until manual review sign-off.*

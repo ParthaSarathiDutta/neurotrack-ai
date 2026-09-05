@@ -141,15 +141,17 @@ Persistence uses a Dexie/IndexedDB schema for trials, parameters, geometry, trac
 
 **Validate:** cold clone builds from README alone and deploys to a working URL; all three clips load and decode without any per-file special-casing; `test51` resolves to 15000/1001, not 15; a mid-session refresh loses nothing; a video evicted from cache and re-selected is recognized as the same trial.
 
-### MS-2 — Review Player, Maze Calibration & Trial Window
+### MS-2 — Review Player, Maze Calibration & Trial Window — ✅ Complete
+
+Validated September 5, 2026 on branch `ms-2-review-player-maze-calibration-trial-window`, merged to `main`.
 
 Frame-accurate scrubbing, frame stepping, and keyboard shortcuts, with a Canvas overlay locked to the displayed frame — the substrate everything else in this milestone, and manual correction later, is drawn on.
 
-Maze calibration is automatic by default: an Otsu platform mask locates the platform, dark-blob candidates around its rim are fit to a least-squares circle, and the 20 hole positions are derived from the fitted ring's own angular spacing (validated at 18.0° ± 0.6°). The user confirms the result, nudges any hole that needs it, and picks the target hole; platform diameter in centimeters drives the pixel→cm scale. Because a session commonly reuses one physical rig across many trials, geometry from an already-calibrated trial can be applied to another with alignment and per-trial override, so later videos in a session take materially fewer clicks than the first.
+Maze calibration is automatic by default: an Otsu platform mask locates the platform, dark-blob candidates around its rim are fit to a least-squares circle, and the 20 hole positions are derived from the fitted ring's own angular spacing (validated at 18.0° ± 0.6°). The user confirms the result, nudges any hole that needs it, and picks the target hole; platform diameter in centimeters drives the pixel→cm scale. Low-confidence auto calibrations require explicit human review acknowledgment before confirmation — hole edits are optional and provenance is preserved per hole. Because a session commonly reuses one physical rig across many trials, geometry from an already-calibrated trial can be applied to another with alignment and per-trial override, so later videos in a session take materially fewer clicks than the first.
 
 The trial window (start, end, protocol cutoff) is proposed automatically from motion onset and confirmed or edited by the user; pre-trial frames are excluded from every downstream measure and clearly marked as such in the UI.
 
-**Validate:** automatic calibration finds 20/20 holes on all three clips, including the off-center, brighter `test51`; applying a template to a second trial measurably reduces clicks versus the first; the overlay matches the displayed frame across keyframe boundaries; proposed trial-window starts land at ~5.0 s on all three clips without mistaking `test51`'s start cylinder for the animal; distances report in cm.
+**Validate:** automatic calibration finds 20/20 holes on all three clips, including the off-center, brighter `test51`; applying a template to a second trial measurably reduces clicks versus the first; the overlay matches the displayed frame across keyframe boundaries; proposed trial-window starts land at ~5.0 s on all three clips without mistaking `test51`'s start cylinder for the animal; distances report in cm. All criteria exercised by `npm run validate:ms2` (V1–V20) plus offline `npm run validate:calibration`.
 
 ### MS-3 — Tracking & Quality Assessment
 
