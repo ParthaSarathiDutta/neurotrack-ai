@@ -40,17 +40,23 @@ export function useVideoPlayer({
     null;
 
   useEffect(() => {
+    let cancelled = false;
     let url: string | null = null;
     (async () => {
+      setLoading(true);
+      setVideoUrl(null);
       const cached = await getCachedVideo(fingerprint);
+      if (cancelled) return;
       if (cached) {
         url = URL.createObjectURL(cached.blob);
         setVideoUrl(url);
       }
       await initFrameDecoder(fingerprint);
+      if (cancelled) return;
       setLoading(false);
     })();
     return () => {
+      cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
   }, [fingerprint]);
@@ -63,13 +69,13 @@ export function useVideoPlayer({
       setPlaying(false);
       if (videoRef.current) videoRef.current.pause();
 
-      const bitmap = await getFrameBitmap(clamped, videoWidth, videoHeight);
+      const bitmap = await getFrameBitmap(clamped, videoWidth, videoHeight, fingerprint);
       setFrameBitmap((prev) => {
         prev?.close();
         return bitmap;
       });
     },
-    [maxFrameIndex, videoWidth, videoHeight],
+    [maxFrameIndex, videoWidth, videoHeight, fingerprint],
   );
 
   useEffect(() => {

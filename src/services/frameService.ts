@@ -4,6 +4,8 @@ import { getCachedVideo } from '../db/videoCache';
 let worker: Worker | null = null;
 let currentFingerprint: string | null = null;
 let cachedDimensions: { width: number; height: number } | null = null;
+/** Serializes worker init so concurrent callers cannot cross-contaminate videos. */
+let initChain: Promise<void> = Promise.resolve();
 
 const frameCache = new Map<number, Uint8ClampedArray>();
 const MAX_CACHED_FRAMES = 300;
@@ -54,30 +56,57 @@ export async function initFrameDecoder(fingerprint: string): Promise<{ width: nu
     return cachedDimensions;
   }
 
-  const cached = await getCachedVideo(fingerprint);
-  if (!cached) throw new Error('Video not in cache');
+  const runInit = async () => {
+    if (currentFingerprint === fingerprint && cachedDimensions) {
+      return cachedDimensions!;
+    }
 
-  frameCache.clear();
-  currentFingerprint = fingerprint;
+    const cached = await getCachedVideo(fingerprint);
+    if (!cached) throw new Error('Video not in cache');
 
-  const buffer = await cached.blob.arrayBuffer();
-  const resp = await postToWorker({
-    type: 'init',
-    id: '',
-    buffer: buffer.slice(0),
-    fileName: cached.fileName,
-  });
+    frameCache.clear();
+    currentFingerprint = fingerprint;
 
-  if (resp.type !== 'ready' || !resp.width || !resp.height) {
-    throw new Error('Frame decoder init failed');
-  }
-  cachedDimensions = { width: resp.width, height: resp.height };
-  return cachedDimensions;
+    const buffer = await cached.blob.arrayBuffer();
+    const resp = await postToWorker({
+      type: 'init',
+      id: '',
+      buffer: buffer.slice(0),
+      fileName: cached.fileName,
+    });
+
+    if (resp.type !== 'ready' || !resp.width || !resp.height) {
+      currentFingerprint = null;
+      cachedDimensions = null;
+      throw new Error('Frame decoder init failed');
+    }
+
+    cachedDimensions = { width: resp.width, height: resp.height };
+    return cachedDimensions;
+  };
+
+  const resultPromise = initChain.then(runInit);
+  initChain = resultPromise.then(
+    () => undefined,
+    () => undefined,
+  );
+  return resultPromise;
+}
+
+export function getActiveDecoderFingerprint(): string | null {
+  return currentFingerprint;
 }
 
 export async function getFramePixels(
   frameIndex: number,
+  expectedFingerprint?: string,
 ): Promise<{ data: Uint8ClampedArray; width: number; height: number }> {
+  if (expectedFingerprint && currentFingerprint !== expectedFingerprint) {
+    throw new Error(
+      `Frame decoder fingerprint mismatch (expected ${expectedFingerprint}, active ${currentFingerprint ?? 'none'})`,
+    );
+  }
+
   const cached = frameCache.get(frameIndex);
   const dims = cachedDimensions ?? { width: 640, height: 480 };
   if (cached) {
@@ -103,7 +132,14 @@ export async function getFramePixels(
 
 export async function getMultipleFramePixels(
   frameIndices: number[],
+  expectedFingerprint?: string,
 ): Promise<Array<{ frameIndex: number; data: Uint8ClampedArray; width: number; height: number }>> {
+  if (expectedFingerprint && currentFingerprint !== expectedFingerprint) {
+    throw new Error(
+      `Frame decoder fingerprint mismatch (expected ${expectedFingerprint}, active ${currentFingerprint ?? 'none'})`,
+    );
+  }
+
   const missing = frameIndices.filter((i) => !frameCache.has(i));
   for (const idx of missing) {
     const resp = await postToWorker({
@@ -136,8 +172,9 @@ export async function getFrameBitmap(
   frameIndex: number,
   width: number,
   height: number,
+  expectedFingerprint?: string,
 ): Promise<ImageBitmap> {
-  const { data } = await getFramePixels(frameIndex);
+  const { data } = await getFramePixels(frameIndex, expectedFingerprint);
   const copy = new Uint8ClampedArray(data);
   const imageData = new ImageData(copy, width, height);
   return createImageBitmap(imageData);

@@ -75,5 +75,6 @@ function migrateTrialWindow(tw: TrialWindow): TrialWindow {
     proposedEndTimeUs: tw.proposedEndTimeUs ?? null,
     confirmedAt: tw.confirmedAt ?? null,
     motionOnsetConfidence: tw.motionOnsetConfidence ?? null,
+    detectionFailureReason: tw.detectionFailureReason ?? null,
   };
 }

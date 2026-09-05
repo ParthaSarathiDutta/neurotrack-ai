@@ -6,6 +6,7 @@ import { captureFrameViaVideo, getVideoBlobUrl } from './videoCaptureService';
 
 export interface CalibrationResult {
   success: boolean;
+  confidence: import('../domain/types').CalibrationConfidence;
   geometry: Partial<Geometry>;
   roughCenter: { x: number; y: number } | null;
   roughRadius: number | null;
@@ -20,7 +21,7 @@ async function getReferenceFrames(
   // Pre-trial segment is frozen — one worker-decoded frame is sufficient
   await initFrameDecoder(trial.fingerprint);
   try {
-    const { data } = await getFramePixels(0);
+    const { data } = await getFramePixels(0, trial.fingerprint);
     return [data];
   } catch {
     const url = await getVideoBlobUrl(trial.fingerprint);
@@ -33,7 +34,14 @@ async function getReferenceFrames(
 
 export async function runAutoCalibration(trial: TrialRecord): Promise<CalibrationResult> {
   if (!trial.metadata || trial.timestampIndex.length === 0) {
-    return { success: false, geometry: {}, roughCenter: null, roughRadius: null, error: 'No metadata' };
+    return {
+      success: false,
+      confidence: 'failed',
+      geometry: {},
+      roughCenter: null,
+      roughRadius: null,
+      error: 'No metadata',
+    };
   }
 
   const width = trial.metadata.codedWidth;

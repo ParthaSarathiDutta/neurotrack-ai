@@ -311,6 +311,12 @@
   background: #fff8eb;
 }
 
+.reasonList {
+  margin: var(--space-sm) 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+}
+
 .footerNote {
   margin-top: var(--space-xl);
   font-size: 0.875rem;

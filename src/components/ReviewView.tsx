@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import type { TrialRecord } from '../domain/types';
 import { getTrialReviewStatus, reviewStatusLabel } from '../domain/migration';
 import { VideoPlayer } from './VideoPlayer';
@@ -21,6 +21,10 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
     manualClickRef.current = handler;
   }, []);
 
+  useEffect(() => {
+    setSelectedHoleId(null);
+  }, [trial.id]);
+
   if (!trial.metadata || !trial.videoCached) {
     return (
       <section className={styles.panel} data-testid="review-view">
@@ -34,7 +38,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
   const meta = trial.metadata;
 
   return (
-    <div className={styles.reviewView} data-testid="review-view">
+    <div key={trial.id} className={styles.reviewView} data-testid="review-view" data-trial-id={trial.id}>
       <div className={styles.reviewHeader}>
         <h2>Review &amp; calibrate — {trial.label}</h2>
         <span className={styles.reviewStatus} data-testid="review-status">

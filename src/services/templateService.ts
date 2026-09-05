@@ -52,7 +52,7 @@ export async function applyTemplateGeometry(
 
   let geometry: Geometry;
 
-  if (destDetection.success && destDetection.geometry.holes?.length === 20) {
+  if (destDetection.geometry.holes?.length === 20 && destDetection.confidence !== 'failed') {
     // Use destination's own detection; template only proposes target + diameter
     geometry = {
       ...destTrial.geometry,

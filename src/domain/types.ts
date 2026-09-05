@@ -10,9 +10,19 @@ export interface Hole {
   confidence: number | null;
 }
 
+export type CalibrationConfidence = 'high' | 'low' | 'failed';
+
 export interface GeometryDetectionMeta {
   holeCandidateCount: number | null;
+  /** Max per-hole slot-alignment residual (px). */
   ringFitResidualPx: number | null;
+  medianSlotResidualPx: number | null;
+  rmsSlotResidualPx: number | null;
+  circleFitResidualPx: number | null;
+  detectedHoleCount: number | null;
+  modeledHoleCount: number | null;
+  confidence: CalibrationConfidence | null;
+  confidenceReasons: string[] | null;
   platformEdgeSampleCount: number | null;
 }
 
@@ -41,6 +51,8 @@ export interface TrialWindow {
   proposedEndTimeUs: number | null;
   confirmedAt: string | null;
   motionOnsetConfidence: number | null;
+  /** Set when automatic onset detection fails — shown in UI; cleared on success. */
+  detectionFailureReason: string | null;
 }
 
 export interface TimestampIndexEntry {

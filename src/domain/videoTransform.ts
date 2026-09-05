@@ -12,18 +12,55 @@ export interface VideoPoint {
   y: number;
 }
 
-/** Map native video pixel coordinates to display CSS coordinates. */
-export function videoToDisplay(point: VideoPoint, box: VideoDisplayBox): VideoPoint {
-  const scaleX = box.displayWidth / box.videoWidth;
-  const scaleY = box.displayHeight / box.videoHeight;
-  return { x: point.x * scaleX, y: point.y * scaleY };
+export interface LetterboxedContentRect {
+  offsetX: number;
+  offsetY: number;
+  contentWidth: number;
+  contentHeight: number;
 }
 
-/** Map display CSS coordinates to native video pixel coordinates. */
+/** Content area when video uses object-fit: contain inside the display box. */
+export function computeLetterboxedContentRect(box: VideoDisplayBox): LetterboxedContentRect {
+  const videoAspect = box.videoWidth / box.videoHeight;
+  const displayAspect = box.displayWidth / box.displayHeight;
+
+  if (displayAspect > videoAspect) {
+    const contentHeight = box.displayHeight;
+    const contentWidth = contentHeight * videoAspect;
+    return {
+      offsetX: (box.displayWidth - contentWidth) / 2,
+      offsetY: 0,
+      contentWidth,
+      contentHeight,
+    };
+  }
+
+  const contentWidth = box.displayWidth;
+  const contentHeight = contentWidth / videoAspect;
+  return {
+    offsetX: 0,
+    offsetY: (box.displayHeight - contentHeight) / 2,
+    contentWidth,
+    contentHeight,
+  };
+}
+
+/** Map native video pixel coordinates to display CSS coordinates (letterbox-aware). */
+export function videoToDisplay(point: VideoPoint, box: VideoDisplayBox): VideoPoint {
+  const rect = computeLetterboxedContentRect(box);
+  return {
+    x: rect.offsetX + (point.x / box.videoWidth) * rect.contentWidth,
+    y: rect.offsetY + (point.y / box.videoHeight) * rect.contentHeight,
+  };
+}
+
+/** Map display CSS coordinates to native video pixel coordinates (letterbox-aware). */
 export function displayToVideo(point: VideoPoint, box: VideoDisplayBox): VideoPoint {
-  const scaleX = box.videoWidth / box.displayWidth;
-  const scaleY = box.videoHeight / box.displayHeight;
-  return { x: point.x * scaleX, y: point.y * scaleY };
+  const rect = computeLetterboxedContentRect(box);
+  return {
+    x: ((point.x - rect.offsetX) / rect.contentWidth) * box.videoWidth,
+    y: ((point.y - rect.offsetY) / rect.contentHeight) * box.videoHeight,
+  };
 }
 
 /** Find nearest timestamp index entry to a time in seconds. */

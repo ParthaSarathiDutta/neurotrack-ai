@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Geometry } from '../domain/types';
-import { videoToDisplay, type VideoDisplayBox } from '../domain/videoTransform';
+import { videoToDisplay, displayToVideo, type VideoDisplayBox } from '../domain/videoTransform';
 import styles from '../styles/app.module.css';
 
 interface VideoOverlayProps {
@@ -47,7 +47,7 @@ export function VideoOverlay({
 
       ctx.beginPath();
       ctx.arc(center.x, center.y, radiusPx, 0, 2 * Math.PI);
-      ctx.strokeStyle = '#333';
+      ctx.strokeStyle = 'rgba(40, 40, 40, 0.85)';
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
       ctx.stroke();
@@ -59,43 +59,55 @@ export function VideoOverlay({
       const isTarget =
         hole.id === geometry.targetHoleId || hole.id === geometry.proposedTargetHoleId;
       const isSelected = hole.id === selectedHoleId;
-      const r = isTarget ? 8 : 5;
+      const r = isTarget ? 9 : 6;
 
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+
       if (hole.source === 'manual') {
-        ctx.fillStyle = '#fff';
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 2.5;
         ctx.fill();
         ctx.stroke();
       } else if (hole.source === 'detected') {
-        ctx.fillStyle = isTarget ? '#000' : '#555';
+        ctx.fillStyle = isTarget ? '#111111' : 'rgba(30, 30, 30, 0.75)';
         ctx.fill();
-      } else {
-        ctx.strokeStyle = '#888';
+        ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1.5;
-        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = 'rgba(120, 120, 120, 0.95)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
         ctx.stroke();
         ctx.setLineDash([]);
       }
 
       if (isTarget) {
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillStyle = '#000';
+        ctx.font = 'bold 12px system-ui, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 3;
+        ctx.strokeText('T', p.x - 4, p.y + 4);
         ctx.fillText('T', p.x - 4, p.y + 4);
       }
+
       if (isSelected) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r + 4, 0, 2 * Math.PI);
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
+        ctx.arc(p.x, p.y, r + 5, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#0066cc';
+        ctx.lineWidth = 2.5;
         ctx.stroke();
       }
 
-      ctx.font = '10px sans-serif';
-      ctx.fillStyle = '#000';
-      ctx.fillText(String(hole.id + 1), p.x + 6, p.y - 6);
+      const label = String(hole.id + 1);
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.strokeText(label, p.x + 8, p.y - 8);
+      ctx.fillStyle = '#111111';
+      ctx.fillText(label, p.x + 8, p.y - 8);
     }
   }, [geometry, displayBox, selectedHoleId]);
 
@@ -109,7 +121,7 @@ export function VideoOverlay({
       for (const hole of geometry.holes) {
         const p = videoToDisplay(hole, displayBox);
         const dist = Math.hypot(p.x - displayX, p.y - displayY);
-        if (dist < 15 && (!closest || dist < closest.dist)) {
+        if (dist < 18 && (!closest || dist < closest.dist)) {
           closest = { id: hole.id, dist };
         }
       }
@@ -120,9 +132,8 @@ export function VideoOverlay({
     }
 
     if (onCanvasClick) {
-      const scaleX = displayBox.videoWidth / displayBox.displayWidth;
-      const scaleY = displayBox.videoHeight / displayBox.displayHeight;
-      onCanvasClick(displayX * scaleX, displayY * scaleY);
+      const videoPt = displayToVideo({ x: displayX, y: displayY }, displayBox);
+      onCanvasClick(videoPt.x, videoPt.y);
     }
   };
 

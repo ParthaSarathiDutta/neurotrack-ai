@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TimestampIndexEntry } from '../domain/types';
 import { secondsFromTimeUs } from '../domain/timing';
+import { computeLetterboxedContentRect } from '../domain/videoTransform';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 import { VideoOverlay } from './VideoOverlay';
 import type { Geometry, TrialWindow } from '../domain/types';
@@ -75,12 +76,17 @@ export function VideoPlayer({
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, displayBox.displayWidth, displayBox.displayHeight);
+    const content = computeLetterboxedContentRect(displayBox);
     ctx.drawImage(
       player.frameBitmap,
       0,
       0,
-      displayBox.displayWidth,
-      displayBox.displayHeight,
+      displayBox.videoWidth,
+      displayBox.videoHeight,
+      content.offsetX,
+      content.offsetY,
+      content.contentWidth,
+      content.contentHeight,
     );
   }, [player.frameBitmap, player.mode, displayBox]);
 

@@ -1,6 +1,7 @@
 import { HOLE_COUNT, HOLE_SPACING_DEG } from '../constants';
 import type { Hole } from '../types';
 import type { Point } from './connectedComponents';
+import { fitCircle } from './circleFit';
 
 export interface RingFitResult {
   center: Point;
@@ -9,10 +10,16 @@ export interface RingFitResult {
   holes: Hole[];
   detectedCount: number;
   modelCount: number;
+  /** Max slot-alignment residual among detected holes (legacy name). */
   residualPx: number;
+  /** Per-hole distance from assigned position to uniform 18° slot (px). */
+  slotResidualsPx: number[];
+  medianSlotResidualPx: number;
+  rmsSlotResidualPx: number;
 }
 
 const DEG = Math.PI / 180;
+const SLOT_MATCH_TOLERANCE = 0.1; // fraction of ring radius
 
 /** Fit 20-hole ring with uniform 18° spacing to candidate centroids. */
 export function fitHoleRing(
@@ -21,81 +28,102 @@ export function fitHoleRing(
 ): RingFitResult | null {
   if (candidates.length < 3) return null;
 
-  // Initial center from candidate mean if no hint
-  let cx = centerHint?.x ?? 0;
-  let cy = centerHint?.y ?? 0;
-  if (!centerHint) {
-    for (const c of candidates) {
-      cx += c.x;
-      cy += c.y;
+  const initial = fitCircle(candidates);
+  if (!initial && !centerHint) return null;
+
+  let cx = initial?.center.x ?? centerHint!.x;
+  let cy = initial?.center.y ?? centerHint!.y;
+  let ringRadius =
+    initial?.radius ??
+    candidates.reduce((sum, c) => sum + Math.hypot(c.x - cx, c.y - cy), 0) / candidates.length;
+
+  let bestRotation = searchBestRotationDeg(candidates, cx, cy, ringRadius);
+
+  // Refine center/radius/rotation with geometric circle fits — never average centroids.
+  for (let iter = 0; iter < 4; iter += 1) {
+    const matches = matchCandidatesToRing(candidates, cx, cy, ringRadius, bestRotation);
+    const inliers = matches.filter((m) => m.dist < ringRadius * SLOT_MATCH_TOLERANCE);
+    if (inliers.length >= 6) {
+      const refined = fitCircle(inliers.map((m) => m.candidate));
+      if (refined) {
+        cx = refined.center.x;
+        cy = refined.center.y;
+        ringRadius = refined.radius;
+      }
     }
-    cx /= candidates.length;
-    cy /= candidates.length;
+    bestRotation = searchBestRotationDeg(candidates, cx, cy, ringRadius);
   }
 
-  // Mean radius from candidates
-  const radii = candidates.map((c) => Math.hypot(c.x - cx, c.y - cy));
-  let ringRadius = radii.reduce((a, b) => a + b, 0) / radii.length;
+  return buildRingResult(candidates, cx, cy, ringRadius, bestRotation);
+}
 
-  // Find best rotation offset by trying all candidate angles as phase anchors
+function searchBestRotationDeg(
+  candidates: Point[],
+  cx: number,
+  cy: number,
+  radius: number,
+): number {
   let bestRotation = 0;
   let bestScore = Infinity;
 
-  for (const c of candidates) {
-    const baseAngle = Math.atan2(c.y - cy, c.x - cx);
-    for (let offset = 0; offset < HOLE_COUNT; offset += 1) {
-      const rotation = baseAngle - offset * HOLE_SPACING_DEG * DEG;
-      const score = scoreRotation(candidates, cx, cy, ringRadius, rotation);
-      if (score < bestScore) {
-        bestScore = score;
-        bestRotation = (rotation * 180) / Math.PI;
-        bestRotation = ((bestRotation % 360) + 360) % 360;
-      }
+  for (let deg = 0; deg < 360; deg += 0.5) {
+    const score = scoreRotation(candidates, cx, cy, radius, deg * DEG);
+    if (score < bestScore) {
+      bestScore = score;
+      bestRotation = deg;
     }
   }
 
-  // Refine center and radius with matched candidates
-  const matched = matchCandidatesToRing(candidates, cx, cy, ringRadius, bestRotation);
-  if (matched.length >= 3) {
-    let sumX = 0;
-    let sumY = 0;
-    let sumR = 0;
-    for (const m of matched) {
-      sumX += m.candidate.x;
-      sumY += m.candidate.y;
-      sumR += Math.hypot(m.candidate.x - cx, m.candidate.y - cy);
+  for (let deg = bestRotation - 1; deg <= bestRotation + 1; deg += 0.05) {
+    const normalized = ((deg % 360) + 360) % 360;
+    const score = scoreRotation(candidates, cx, cy, radius, normalized * DEG);
+    if (score < bestScore) {
+      bestScore = score;
+      bestRotation = normalized;
     }
-    cx = sumX / matched.length;
-    cy = sumY / matched.length;
-    ringRadius = sumR / matched.length;
   }
 
-  const holes: Hole[] = [];
-  let detectedCount = 0;
-  let modelCount = 0;
-  let maxResidual = 0;
+  return bestRotation;
+}
 
+function buildRingResult(
+  candidates: Point[],
+  cx: number,
+  cy: number,
+  ringRadius: number,
+  rotationDeg: number,
+): RingFitResult {
   const matchMap = new Map<number, { candidate: Point; dist: number }>();
-  for (const m of matchCandidatesToRing(candidates, cx, cy, ringRadius, bestRotation)) {
+  for (const m of matchCandidatesToRing(candidates, cx, cy, ringRadius, rotationDeg)) {
     matchMap.set(m.holeId, { candidate: m.candidate, dist: m.dist });
   }
 
+  const matchTolerance = ringRadius * SLOT_MATCH_TOLERANCE;
+  const holes: Hole[] = [];
+  const slotResidualsPx = new Array<number>(HOLE_COUNT).fill(Infinity);
+  let detectedCount = 0;
+  let modelCount = 0;
+  let maxResidual = 0;
+  const detectedResiduals: number[] = [];
+
   for (let i = 0; i < HOLE_COUNT; i += 1) {
-    const angle = (bestRotation + i * HOLE_SPACING_DEG) * DEG;
+    const angle = (rotationDeg + i * HOLE_SPACING_DEG) * DEG;
     const modelX = cx + ringRadius * Math.cos(angle);
     const modelY = cy + ringRadius * Math.sin(angle);
     const match = matchMap.get(i);
 
-    if (match && match.dist < ringRadius * 0.12) {
+    if (match && match.dist < matchTolerance) {
       holes.push({
         id: i,
         x: match.candidate.x,
         y: match.candidate.y,
         source: 'detected',
-        confidence: 1 - match.dist / (ringRadius * 0.12),
+        confidence: 1 - match.dist / matchTolerance,
       });
+      slotResidualsPx[i] = match.dist;
       detectedCount += 1;
       maxResidual = Math.max(maxResidual, match.dist);
+      detectedResiduals.push(match.dist);
     } else {
       holes.push({
         id: i,
@@ -104,18 +132,28 @@ export function fitHoleRing(
         source: 'model',
         confidence: null,
       });
+      slotResidualsPx[i] = match?.dist ?? Infinity;
       modelCount += 1;
     }
   }
 
+  const medianSlot =
+    detectedResiduals.length > 0
+      ? median(detectedResiduals)
+      : median(slotResidualsPx.filter(Number.isFinite));
+  const rmsSlot = rms(detectedResiduals.length > 0 ? detectedResiduals : []);
+
   return {
     center: { x: cx, y: cy },
     ringRadius,
-    rotationDeg: bestRotation,
+    rotationDeg,
     holes,
     detectedCount,
     modelCount,
     residualPx: maxResidual,
+    slotResidualsPx,
+    medianSlotResidualPx: medianSlot,
+    rmsSlotResidualPx: rmsSlot,
   };
 }
 
@@ -132,9 +170,8 @@ function scoreRotation(
     const rel = angle - rotationRad;
     const slot = Math.round(rel / (HOLE_SPACING_DEG * DEG));
     const expected = rotationRad + slot * HOLE_SPACING_DEG * DEG;
-    const expectedR = radius;
-    const ex = cx + expectedR * Math.cos(expected);
-    const ey = cy + expectedR * Math.sin(expected);
+    const ex = cx + radius * Math.cos(expected);
+    const ey = cy + radius * Math.sin(expected);
     score += Math.hypot(c.x - ex, c.y - ey);
   }
   return score;
@@ -171,6 +208,18 @@ function matchCandidatesToRing(
   return slots.filter((s): s is NonNullable<typeof s> => s !== null);
 }
 
+function median(values: number[]): number {
+  if (values.length === 0) return Infinity;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+function rms(values: number[]): number {
+  if (values.length === 0) return Infinity;
+  return Math.sqrt(values.reduce((sum, v) => sum + v * v, 0) / values.length);
+}
+
 /** Generate 20 holes from center, ring radius, and one anchor hole click. */
 export function holesFromAnchor(
   center: Point,
@@ -192,7 +241,6 @@ export function holesFromAnchor(
     });
   }
 
-  // Find which hole is closest to anchor and renumber rotation
   let closestId = 0;
   let closestDist = Infinity;
   for (const h of holes) {
@@ -209,13 +257,45 @@ export function holesFromAnchor(
     source: idx === closestId ? ('manual' as const) : h.source,
   }));
 
+  const sorted = rotated.sort((a, b) => a.id - b.id);
+
   return {
     center,
     ringRadius,
     rotationDeg,
-    holes: rotated.sort((a, b) => a.id - b.id),
+    holes: sorted,
     detectedCount: 0,
     modelCount: HOLE_COUNT,
     residualPx: 0,
+    slotResidualsPx: new Array(HOLE_COUNT).fill(0),
+    medianSlotResidualPx: 0,
+    rmsSlotResidualPx: 0,
+  };
+}
+
+/** Recompute slot-alignment residuals after hole positions are refined post-fit. */
+export function recomputeSlotResiduals(ring: RingFitResult): RingFitResult {
+  const slotResidualsPx = new Array<number>(HOLE_COUNT).fill(Infinity);
+  let maxResidual = 0;
+  const detectedResiduals: number[] = [];
+
+  for (const hole of ring.holes) {
+    const angle = (ring.rotationDeg + hole.id * HOLE_SPACING_DEG) * DEG;
+    const ex = ring.center.x + ring.ringRadius * Math.cos(angle);
+    const ey = ring.center.y + ring.ringRadius * Math.sin(angle);
+    const dist = Math.hypot(hole.x - ex, hole.y - ey);
+    slotResidualsPx[hole.id] = dist;
+    if (hole.source === 'detected') {
+      maxResidual = Math.max(maxResidual, dist);
+      detectedResiduals.push(dist);
+    }
+  }
+
+  return {
+    ...ring,
+    residualPx: maxResidual,
+    slotResidualsPx,
+    medianSlotResidualPx: median(detectedResiduals.length ? detectedResiduals : []),
+    rmsSlotResidualPx: rms(detectedResiduals.length ? detectedResiduals : []),
   };
 }

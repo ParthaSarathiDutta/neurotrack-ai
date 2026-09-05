@@ -31,6 +31,7 @@ export function createEmptyTrialWindow(): TrialWindow {
     proposedEndTimeUs: null,
     confirmedAt: null,
     motionOnsetConfidence: null,
+    detectionFailureReason: null,
   };
 }
 

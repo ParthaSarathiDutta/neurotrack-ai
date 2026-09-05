@@ -15,11 +15,14 @@ export function TrialWindowPanel({ trial }: TrialWindowPanelProps) {
 
   const tw = trial.trialWindow;
   const durationSec = trial.metadata?.durationSec ?? 0;
+  const displaySec = (sec: number | null) => (sec != null ? sec.toFixed(3) : null);
 
   const startSec = tw.startTimeUs != null ? secondsFromTimeUs(tw.startTimeUs) : null;
   const endSec = tw.endTimeUs != null ? secondsFromTimeUs(tw.endTimeUs) : null;
   const proposedStartSec =
     tw.proposedStartTimeUs != null ? secondsFromTimeUs(tw.proposedStartTimeUs) : null;
+  const trialDurationSec =
+    startSec != null && endSec != null ? endSec - startSec : durationSec > 0 ? durationSec : null;
 
   return (
     <section className={styles.panel} aria-labelledby="window-heading">
@@ -37,10 +40,29 @@ export function TrialWindowPanel({ trial }: TrialWindowPanelProps) {
         </button>
       </div>
 
+      {tw.detectionFailureReason && (
+        <div
+          className={styles.warningBox}
+          role="alert"
+          data-testid="trial-window-detection-failed"
+        >
+          {tw.detectionFailureReason}
+        </div>
+      )}
+
       {proposedStartSec != null && (
         <p data-testid="proposed-start">
-          Proposed start: {proposedStartSec.toFixed(2)} s
-          {tw.source === 'auto' && !tw.confirmedAt ? ' (auto)' : ''}
+          Proposed start: {displaySec(proposedStartSec)} s
+          {tw.motionOnsetConfidence != null
+            ? ` (confidence ${tw.motionOnsetConfidence.toFixed(2)})`
+            : ''}
+          {tw.source === 'auto' && !tw.confirmedAt ? ' — auto' : ''}
+        </p>
+      )}
+
+      {trialDurationSec != null && (
+        <p data-testid="trial-duration-display">
+          Proposed trial duration: {displaySec(trialDurationSec)} s
         </p>
       )}
 
@@ -126,6 +148,10 @@ export function TrialWindowPanel({ trial }: TrialWindowPanelProps) {
             <tr>
               <th scope="row">Confirmed start (timeUs)</th>
               <td className={styles.mono}>{tw.startTimeUs ?? '—'}</td>
+            </tr>
+            <tr>
+              <th scope="row">Detection failure</th>
+              <td>{tw.detectionFailureReason ?? '—'}</td>
             </tr>
             <tr>
               <th scope="row">Motion onset confidence</th>

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { AnalysisParams, Geometry, Hole, TrialRecord, TrialWindow } from '../domain/types';
 import { computePxPerCm } from '../domain/calibration/detectMaze';
 import { holesFromAnchor } from '../domain/calibration/ringFit';
+import { HOLE_COUNT } from '../domain/constants';
 import { migrateTrialRecord } from '../domain/migration';
 import { defaultAnalysisParams } from '../db/database';
 import {
@@ -54,6 +55,8 @@ interface SessionState {
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let calibrationOpSeq = 0;
+let windowOpSeq = 0;
 
 async function flushSave(getState: () => SessionState) {
   if (saveTimer) {
@@ -183,10 +186,32 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   runAutoDetect: async (trialId) => {
     const trial = get().trials.find((t) => t.id === trialId);
     if (!trial) return;
+    const opSeq = ++calibrationOpSeq;
+    const fingerprint = trial.fingerprint;
     set({ calibrationBusy: true, statusMessage: 'Detecting maze geometry…' });
     try {
       const result = await runAutoCalibration(trial);
-      if (result.success && result.geometry.holes) {
+      const current = get().trials.find((t) => t.id === trialId);
+      if (opSeq !== calibrationOpSeq || !current || current.fingerprint !== fingerprint) {
+        set({ statusMessage: 'Calibration discarded — trial or video changed during detection.' });
+        return;
+      }
+      const holes = result.geometry.holes;
+      const confidence = result.confidence ?? result.geometry.detection?.confidence ?? 'failed';
+
+      if (holes && holes.length > 0 && confidence !== 'failed') {
+        const det = result.geometry.detection;
+        const residual = det?.ringFitResidualPx?.toFixed(1) ?? '?';
+        const detected = det?.detectedHoleCount ?? holes.filter((h) => h.source === 'detected').length;
+        const modeled = det?.modeledHoleCount ?? holes.filter((h) => h.source === 'model').length;
+
+        let statusMessage: string;
+        if (confidence === 'high') {
+          statusMessage = `Detected 20 holes (${detected} detected, ${modeled} modeled). Max alignment residual ${residual} px. Review overlay, then confirm.`;
+        } else {
+          statusMessage = `Low-confidence calibration: ${detected} detected / ${modeled} modeled, max residual ${residual} px. Adjust holes manually before confirming.`;
+        }
+
         set((state) => ({
           trials: patchTrial(state.trials, trialId, (t) => ({
             ...t,
@@ -197,10 +222,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
               confirmedAt: null,
             } as Geometry,
           })),
-          statusMessage: `Detected ${result.geometry.holes?.length ?? 0} holes (${result.geometry.detection?.holeCandidateCount ?? '?'} candidates).`,
+          statusMessage,
         }));
       } else {
-        set({ statusMessage: `Auto-detection failed: ${result.error ?? 'unknown error'}. Use manual calibration.` });
+        set({
+          statusMessage: `Auto-detection failed: ${result.error ?? 'unknown error'}. Use manual calibration.`,
+        });
       }
     } catch (err) {
       set({ statusMessage: `Calibration error: ${err instanceof Error ? err.message : err}` });
@@ -294,6 +321,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           detection: {
             holeCandidateCount: 0,
             ringFitResidualPx: 0,
+            medianSlotResidualPx: 0,
+            rmsSlotResidualPx: 0,
+            circleFitResidualPx: 0,
+            detectedHoleCount: 0,
+            modeledHoleCount: HOLE_COUNT,
+            confidence: 'high',
+            confidenceReasons: null,
             platformEdgeSampleCount: 0,
           },
         },
@@ -334,24 +368,45 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   proposeWindow: async (trialId) => {
     const trial = get().trials.find((t) => t.id === trialId);
     if (!trial) return;
+    const opSeq = ++windowOpSeq;
+    const fingerprint = trial.fingerprint;
     set({ calibrationBusy: true, statusMessage: 'Detecting trial start…' });
     try {
       const proposal = await proposeTrialWindow(trial);
-      if (proposal) {
-        set((state) => ({
-          trials: patchTrial(state.trials, trialId, (t) => ({
-            ...t,
-            trialWindow: {
-              ...t.trialWindow,
-              ...proposal.trialWindow,
-              cutoffSeconds: t.trialWindow.cutoffSeconds ?? 180,
-            },
-          })),
-          statusMessage: `Proposed trial start at ${proposal.startSeconds.toFixed(2)} s.`,
-        }));
+      const current = get().trials.find((t) => t.id === trialId);
+      if (opSeq !== windowOpSeq || !current || current.fingerprint !== fingerprint) {
+        set({ statusMessage: 'Trial start detection discarded — trial or video changed during detection.' });
+        return;
       }
+      set((state) => ({
+        trials: patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          trialWindow: {
+            ...t.trialWindow,
+            ...proposal.trialWindow,
+            cutoffSeconds: t.trialWindow.cutoffSeconds ?? 180,
+            startTimeUs: proposal.success
+              ? (proposal.trialWindow.startTimeUs ?? t.trialWindow.startTimeUs)
+              : t.trialWindow.startTimeUs,
+          },
+        })),
+        statusMessage: proposal.success
+          ? `Proposed trial start at ${proposal.startSeconds!.toFixed(3)} s (confidence ${proposal.confidence!.toFixed(2)}).`
+          : (proposal.failureReason ??
+            'Automatic trial start detection was inconclusive. Set the start time manually.'),
+      }));
     } catch (err) {
-      set({ statusMessage: `Trial window detection failed: ${err instanceof Error ? err.message : err}` });
+      const msg = err instanceof Error ? err.message : String(err);
+      set((state) => ({
+        trials: patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          trialWindow: {
+            ...t.trialWindow,
+            detectionFailureReason: `Trial start detection error: ${msg}. Set the start time manually.`,
+          },
+        })),
+        statusMessage: `Trial window detection failed: ${msg}`,
+      }));
     } finally {
       set({ calibrationBusy: false });
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { TrialRecord } from '../domain/types';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
@@ -34,6 +34,12 @@ export function CalibrationPanel({
     trial.geometry.diameterCm?.toString() ?? '91',
   );
 
+  useEffect(() => {
+    setManualStep('idle');
+    setDiameterInput(trial.geometry.diameterCm?.toString() ?? '91');
+    registerManualHandler?.(null);
+  }, [trial.id, trial.geometry.diameterCm, registerManualHandler]);
+
   const geo = trial.geometry;
   const templateSources = allTrials.filter(
     (t) => t.id !== trial.id && t.geometry.confirmedAt && t.geometry.holes.length === 20,
@@ -68,9 +74,20 @@ export function CalibrationPanel({
   const detectedCount = geo.holes.filter((h) => h.source === 'detected').length;
   const modelCount = geo.holes.filter((h) => h.source === 'model').length;
   const manualCount = geo.holes.filter((h) => h.source === 'manual').length;
+  const confidence = geo.detection?.confidence;
+  const needsReview =
+    geo.source === 'auto' &&
+    (confidence === 'low' || confidence === 'failed') &&
+    manualCount === 0;
+  const canConfirmGeometry = !needsReview;
 
   return (
-    <section className={styles.panel} aria-labelledby="calibration-heading">
+    <section
+      className={styles.panel}
+      aria-labelledby="calibration-heading"
+      data-testid="calibration-panel"
+      data-trial-label={trial.label}
+    >
       <h2 id="calibration-heading">Maze calibration</h2>
 
       <div className={styles.actions}>
@@ -136,6 +153,32 @@ export function CalibrationPanel({
             {geo.holes.length} holes: {detectedCount} detected, {modelCount} modeled
             {manualCount > 0 ? `, ${manualCount} manual` : ''}
           </p>
+
+          {confidence && confidence !== 'high' && (
+            <div
+              className={styles.warningBox}
+              role="alert"
+              data-testid="calibration-confidence-warning"
+            >
+              {confidence === 'low'
+                ? 'Low-confidence automatic calibration — review hole markers on the video and nudge any misaligned holes before confirming.'
+                : 'Automatic calibration failed quality checks — use manual calibration or adjust holes before confirming.'}
+              {geo.detection?.confidenceReasons?.length ? (
+                <ul className={styles.reasonList}>
+                  {geo.detection.confidenceReasons.map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          )}
+
+          {confidence === 'high' && geo.source === 'auto' && (
+            <p className={styles.hint} data-testid="calibration-confidence-high">
+              High-confidence calibration (max residual{' '}
+              {geo.detection?.ringFitResidualPx?.toFixed(1) ?? '—'} px). Review overlay before confirming.
+            </p>
+          )}
 
           <div className={styles.actions}>
             <label htmlFor="target-hole">Target hole</label>
@@ -210,11 +253,17 @@ export function CalibrationPanel({
             <button
               type="button"
               className={styles.buttonPrimary}
+              disabled={!canConfirmGeometry}
               onClick={() => confirmGeometry(trial.id)}
               data-testid="confirm-geometry-btn"
             >
               Confirm geometry
             </button>
+            {!canConfirmGeometry && (
+              <span className={styles.hint} data-testid="confirm-geometry-blocked">
+                Adjust at least one hole manually before confirming low-confidence calibration.
+              </span>
+            )}
             {geo.confirmedAt && (
               <span className={styles.confirmedMarker} data-testid="geometry-confirmed">
                 Geometry confirmed
@@ -227,12 +276,34 @@ export function CalibrationPanel({
             <table className={styles.metaTable}>
               <tbody>
                 <tr>
+                  <th scope="row">Trial</th>
+                  <td data-testid="calibration-trial-label">{trial.label}</td>
+                </tr>
+                <tr>
                   <th scope="row">Source</th>
                   <td>{geo.source ?? '—'}</td>
                 </tr>
                 <tr>
-                  <th scope="row">Ring fit residual</th>
-                  <td>{geo.detection?.ringFitResidualPx?.toFixed(2) ?? '—'} px</td>
+                  <th scope="row">Confidence</th>
+                  <td data-testid="calibration-confidence">{geo.detection?.confidence ?? '—'}</td>
+                </tr>
+                <tr>
+                  <th scope="row">Max slot residual</th>
+                  <td data-testid="calibration-max-residual">
+                    {geo.detection?.ringFitResidualPx?.toFixed(2) ?? '—'} px
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Median slot residual</th>
+                  <td data-testid="calibration-median-residual">
+                    {geo.detection?.medianSlotResidualPx?.toFixed(2) ?? '—'} px
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Circle fit residual</th>
+                  <td data-testid="calibration-circle-residual">
+                    {geo.detection?.circleFitResidualPx?.toFixed(2) ?? '—'} px
+                  </td>
                 </tr>
                 <tr>
                   <th scope="row">Hole candidates</th>
