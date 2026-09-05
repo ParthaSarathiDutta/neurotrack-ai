@@ -82,6 +82,71 @@ export interface VideoMetadata {
 
 export type IngestStatus = 'pending' | 'indexing' | 'ready' | 'error' | 'needs_reselect';
 
+export type ObservedStatus = 'tracked' | 'absent_in_hole' | 'absent_pre_trial' | 'lost';
+export type ObservationOrigin = 'auto' | 'interpolated' | 'smoothed' | 'manual';
+
+export type ObservationQualityFlag =
+  | 'low_confidence'
+  | 'possible_occlusion'
+  | 'speed_outlier'
+  | 'ambiguous_head_tail'
+  | 'near_hole_disappearance';
+
+export interface Observation {
+  timeUs: number;
+  frameIndex: number;
+  bodyXY: { x: number; y: number } | null;
+  noseXY: { x: number; y: number } | null;
+  confidence: number;
+  observed: ObservedStatus;
+  origin: ObservationOrigin;
+  qualityFlags: ObservationQualityFlag[] | null;
+}
+
+export type TrackStatus = 'idle' | 'running' | 'done' | 'failed' | 'cancelled';
+
+export interface TrackingParams {
+  backgroundSampleCount: number;
+  minBlobAreaFraction: number;
+  maxBlobAreaFraction: number;
+  maxPlausibleSpeedPxPerSec: number;
+  lowConfidenceThreshold: number;
+  toolVersion: string;
+}
+
+export interface FlaggedFrame {
+  frameIndex: number;
+  timeUs: number;
+  reason: ObservationQualityFlag | 'lost';
+}
+
+export interface TrackQuality {
+  totalFrames: number;
+  trackedCount: number;
+  trackedFraction: number;
+  lostCount: number;
+  lostFraction: number;
+  absentInHoleCount: number;
+  longestLostGapFrames: number;
+  longestLostGapUs: number;
+  lowConfidenceCount: number;
+  speedOutlierCount: number;
+  meanConfidence: number;
+  medianConfidence: number;
+  overallAssessment: 'high' | 'low' | 'failed';
+  assessmentReasons: string[];
+  flaggedFrames: FlaggedFrame[];
+}
+
+export interface Track {
+  status: TrackStatus;
+  observations: Observation[];
+  quality: TrackQuality | null;
+  params: TrackingParams;
+  computedAt: string | null;
+  error: string | null;
+}
+
 export interface TrialRecord {
   id: string;
   fingerprint: string;
@@ -94,6 +159,7 @@ export interface TrialRecord {
   timestampIndex: TimestampIndexEntry[];
   trialWindow: TrialWindow;
   geometry: Geometry;
+  track: Track | null;
   progress: {
     lastIngestAt: string | null;
     decodeWallClockMs: number | null;
@@ -105,6 +171,7 @@ export interface TrialRecord {
 export interface AnalysisParams {
   id: 'default';
   toolVersion: string;
+  tracking: TrackingParams;
   updatedAt: string;
 }
 
@@ -175,4 +242,41 @@ export interface FrameWorkerResponse {
   frame?: FrameWorkerFrameResult;
   frames?: FrameWorkerFrameResult[];
   error?: string;
+}
+
+export interface TrackingWorkerInput {
+  fingerprint: string;
+  timestampIndex: TimestampIndexEntry[];
+  geometry: Geometry;
+  trialWindow: TrialWindow;
+  params: TrackingParams;
+}
+
+export interface TrackingWorkerTrackMessage {
+  type: 'track';
+  id: string;
+  buffer: ArrayBuffer;
+  fileName: string;
+  input: TrackingWorkerInput;
+}
+
+export interface TrackingWorkerCancelMessage {
+  type: 'cancel';
+  id: string;
+}
+
+export type TrackingWorkerRequest = TrackingWorkerTrackMessage | TrackingWorkerCancelMessage;
+
+export interface TrackingWorkerResult {
+  observations: Observation[];
+  quality: TrackQuality;
+  wallClockMs: number;
+}
+
+export interface TrackingWorkerResponse {
+  type: 'done' | 'error' | 'progress' | 'cancelled';
+  id: string;
+  result?: TrackingWorkerResult;
+  error?: string;
+  progress?: { phase: string; framesProcessed: number; total: number };
 }

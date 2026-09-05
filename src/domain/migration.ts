@@ -1,4 +1,5 @@
-import type { Geometry, Hole, TrialRecord, TrialWindow } from './types';
+import type { AnalysisParams, Geometry, Hole, Track, TrialRecord, TrialWindow } from './types';
+import { defaultTrackingParams } from './trialFactory';
 
 export type TrialReviewStatus =
   | 'needs_review'
@@ -36,6 +37,26 @@ export function migrateTrialRecord(trial: TrialRecord): TrialRecord {
     ...trial,
     geometry: migrateGeometry(trial.geometry),
     trialWindow: migrateTrialWindow(trial.trialWindow),
+    track: migrateTrack(trial.track),
+  };
+}
+
+function migrateTrack(track: Track | null | undefined): Track | null {
+  if (!track) return null;
+  return {
+    status: track.status ?? 'idle',
+    observations: track.observations ?? [],
+    quality: track.quality ?? null,
+    params: { ...defaultTrackingParams(), ...track.params },
+    computedAt: track.computedAt ?? null,
+    error: track.error ?? null,
+  };
+}
+
+export function migrateAnalysisParams(params: AnalysisParams): AnalysisParams {
+  return {
+    ...params,
+    tracking: params.tracking ?? defaultTrackingParams(),
   };
 }
 

@@ -34,3 +34,21 @@ export const MAX_SLOT_RESIDUAL_LOW_PX = 7;
 export const MAX_SLOT_MEDIAN_RESIDUAL_LOW_PX = 4;
 export const MIN_DETECTED_HOLES_HIGH = 20;
 export const MIN_DETECTED_HOLES_LOW = 16;
+
+/** Tracking — blob area as fraction of π·platformRadiusPx² (validated on sample clips). */
+export const TRACKING_BACKGROUND_SAMPLE_COUNT = 30;
+/** ~600 px at r≈204 → ~0.0046; floor allows smaller partial blobs at rim. */
+export const TRACKING_MIN_BLOB_AREA_FRACTION = 0.0015;
+/** ~750 px animal vs ~3200 px start cylinder at r≈218 → reject above ~0.012. */
+export const TRACKING_MAX_BLOB_AREA_FRACTION = 0.012;
+/** Max centroid jump speed (px/s) before flagging speed_outlier. */
+export const TRACKING_MAX_PLAUSIBLE_SPEED_PX_PER_SEC = 800;
+export const TRACKING_LOW_CONFIDENCE_THRESHOLD = 0.45;
+export const TRACKING_FLAGGED_FRAME_CAP = 200;
+/** Recent frames for heading / disappearance heuristics. */
+export const TRACKING_HEADING_HISTORY = 5;
+export const TRACKING_DISAPPEARANCE_LOOKBACK = 4;
+/** Rim band: fraction of platform radius where hole-proximity applies. */
+export const TRACKING_RIM_BAND_FRACTION = 0.82;
+/** Hole proximity: fraction of platform radius from hole center. */
+export const TRACKING_HOLE_PROXIMITY_FRACTION = 0.12;

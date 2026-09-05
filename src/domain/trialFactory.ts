@@ -1,7 +1,36 @@
-import { DEFAULT_CUTOFF_SECONDS } from './constants';
-import type { Geometry, TrialRecord, TrialWindow, VideoMetadata } from './types';
+import {
+  DEFAULT_CUTOFF_SECONDS,
+  TRACKING_BACKGROUND_SAMPLE_COUNT,
+  TRACKING_LOW_CONFIDENCE_THRESHOLD,
+  TRACKING_MAX_BLOB_AREA_FRACTION,
+  TRACKING_MAX_PLAUSIBLE_SPEED_PX_PER_SEC,
+  TRACKING_MIN_BLOB_AREA_FRACTION,
+} from './constants';
+import type { Geometry, TrialRecord, TrialWindow, Track, TrackingParams, VideoMetadata } from './types';
 
-export const TOOL_VERSION = '0.2.0-ms2';
+export const TOOL_VERSION = '0.3.0-ms3';
+
+export function defaultTrackingParams(): TrackingParams {
+  return {
+    backgroundSampleCount: TRACKING_BACKGROUND_SAMPLE_COUNT,
+    minBlobAreaFraction: TRACKING_MIN_BLOB_AREA_FRACTION,
+    maxBlobAreaFraction: TRACKING_MAX_BLOB_AREA_FRACTION,
+    maxPlausibleSpeedPxPerSec: TRACKING_MAX_PLAUSIBLE_SPEED_PX_PER_SEC,
+    lowConfidenceThreshold: TRACKING_LOW_CONFIDENCE_THRESHOLD,
+    toolVersion: TOOL_VERSION,
+  };
+}
+
+export function createEmptyTrack(params: TrackingParams = defaultTrackingParams()): Track {
+  return {
+    status: 'idle',
+    observations: [],
+    quality: null,
+    params,
+    computedAt: null,
+    error: null,
+  };
+}
 
 export function createEmptyGeometry(): Geometry {
   return {
@@ -53,6 +82,7 @@ export function createTrialStub(
     timestampIndex: [],
     trialWindow: createEmptyTrialWindow(),
     geometry: createEmptyGeometry(),
+    track: null,
     progress: {
       lastIngestAt: null,
       decodeWallClockMs: null,

@@ -138,14 +138,19 @@ export function detectMazeFromFrames(
     return { ...hole, x: center.x, y: center.y };
   });
   const ring = { ...ring0, holes: refinedHoles };
-  const platformRadiusPx = estimatePlatformEdgeRadius(
-    ref,
-    width,
-    height,
-    ring.center,
-    threshold,
-    ring.holes,
-  );
+  const platformRadiusPx =
+    estimatePlatformEdgeRadius(
+      ref,
+      width,
+      height,
+      ring.center,
+      threshold,
+      ring.holes,
+    ) ??
+    (ring.holes.length > 0
+      ? ring.holes.reduce((sum, h) => sum + Math.hypot(h.x - ring.center.x, h.y - ring.center.y), 0) /
+        ring.holes.length
+      : roughRadius);
 
   const geometry: Partial<Geometry> = {
     platformCenter: ring.center,
