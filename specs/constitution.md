@@ -61,7 +61,7 @@ Findings that change the design:
 2. **`test51` opens with an opaque start cylinder over the animal at platform centre** — a compact ~3,200 px dark object, roughly 4× the animal's area. A naive "largest dark blob" tracker follows the cylinder. Non-animal foreground objects (start cylinder, experimenter hand) must be rejected on size/shape, not assumed away.
 3. **Escape is progressive, not a clean disappearance.** No clip shows the blob vanishing outright. Visible area decays as the animal descends (test53: ~606 → ~170 px over the final 2.6 s at the rim; test51: 654 → 350 px; test50 settles at ~550 px and stops moving). A binary present/absent rule would detect **no escape in any of the three clips** and report "never escaped" for all of them. Escape evidence must combine proximity to a hole, sustained area loss, loss of motion, and darkening of the hole region.
 4. **All three clips end mid-entry, so total latency is right-censored in all three.** Censoring is normal in this assay (protocols use a cutoff, commonly 180 s; `test50`'s 185 s is consistent with one). Censored results must be flagged, never silently emitted as a latency equal to clip duration.
-5. **A circular platform model is sufficient.** Hole-ring circle fits leave ≤2.1 px maximum residual (mean ≤1.0 px); best-fit ellipse axis ratios are 0.984–0.994. No homography or lens undistortion is needed for the MVP.
+5. **A circular platform model is sufficient.** Hole-ring circle fits leave ≤2.1 px maximum residual (mean ≤1.0 px); best-fit ellipse axis ratios are 0.984–0.994. No homography or lens undistortion is needed.
 6. **Fit geometry from the hole ring, not the bright-region centroid.** The two differ by ~7 px because of the platform lighting gradient. Hole angular spacing averages exactly 18.0° (σ ≈ 0.6°), so a parametric ring (centre, radius, rotation, 20 positions) plus per-hole refinement is accurate and cheap in clicks.
 7. **Intra-platform lighting is strongly uneven** — quadrant means differ by 17–21 gray levels. A single global threshold cannot work; a **per-pixel** background model is required, not optional.
 8. **A 15-frame periodic compression artifact is present**, matching the keyframe interval noted in the data README. Interframe difference spikes at every keyframe. Smoothing, outlier rejection, and confidence scoring must not mistake this for animal motion.
@@ -99,27 +99,27 @@ Validated as feasible, so no longer open questions: per-pixel median-background 
 **`WebCodecs VideoDecoder` + an MP4 demuxer (`mp4box.js`), inside a Worker, is the primary decode path.** `<video>` + Canvas is *not* adequate as the analysis path:
 
 - Per-frame seek-and-draw over 5,539 frames is far too slow, and capturing during playback caps throughput at real time (≥185 s for `test50`) while risking dropped frames.
-- **Corrected by Phase 0 (D7):** `requestVideoFrameCallback` *does* expose a genuine per-frame presentation timestamp (`mediaTime`) and a `presentedFrames` skip-counter — timestamp availability was never the real limitation. What the Phase 0 spike measured instead: it is main-thread-only (no Worker — `HTMLVideoElement` cannot exist off-thread); it delivered fewer callbacks than the container/decoder frame count on every clip without always signaling a gap (`test50`: 5,338 callbacks vs. 5,539 frames, zero `presentedFrames` gaps logged); and wall-clock throughput tracks playback speed rather than beating it (raising `playbackRate` to 4× produced no measured speedup in testing). See `spike/phase-0-decode-timing/results/findings.md`.
+- **Corrected finding:** `requestVideoFrameCallback` *does* expose a genuine per-frame presentation timestamp (`mediaTime`) and a `presentedFrames` skip-counter — timestamp availability was never the real limitation. A dedicated spike (`spike/phase-0-decode-timing/results/findings.md`) measured the actual constraints instead: it is main-thread-only (no Worker — `HTMLVideoElement` cannot exist off-thread); it delivered fewer callbacks than the container/decoder frame count on every clip without always signaling a gap (`test50`: 5,338 callbacks vs. 5,539 frames, zero `presentedFrames` gaps logged); and wall-clock throughput tracks playback speed rather than beating it (raising `playbackRate` to 4× produced no measured speedup in testing).
 
 WebCodecs gives frame timestamps in microseconds **from the container timebase**, decodes much faster than real time (190–430× on the three sample clips, measured), and runs in a Worker. Support is Chrome/Edge 94+, Firefox 130+ desktop, and Safari 16.4+ for the video interfaces we use (`VideoDecoder`, `EncodedVideoChunk`, `VideoFrame`); it is not Baseline only because Firefox for Android lacks it, which does not affect a desktop analysis tool.
 
 Required: feature-detect with `VideoDecoder.isConfigSupported()` and fall back to `<video>` + `requestVideoFrameCallback` with an explicit, visible notice that analysis will be slower. `<video>` + `requestVideoFrameCallback` remains the human review and scrubbing surface either way — that role never depended on frame-complete delivery or beating real time, only on `mediaTime` being a real timestamp, which it is.
 
-### Spike questions — disposition after Phase 0 and the Monday-night replan
+### Spike questions — disposition
 
 | Question | Status |
 |---|---|
-| **Decode throughput and timestamp exactness** | **Resolved by Phase 0.** All three clips decode with zero decoder errors at 190–430× real-time; `test51` spacing confirmed as exactly 1001/15000 s (median unique-`cts` interval), not 15 fps; frame counts agree across `ffprobe`/`mp4box`/decoder on all three clips. See `spike/phase-0-decode-timing/results/findings.md`. |
-| **Escape vs tracking loss** | **Not spiked separately — no schedule room.** Implemented directly, at full strength, in MS-5 (no simplified first pass; this is the scientific core of the submission). |
-| **Nose vs body from geometry alone** | **Deferred.** MS-3 ships a body-centroid proxy for the nose point, documented as a known limitation. True geometric nose estimation is optional hardening, cut first if time runs short. |
-| **Video persistence policy** | **Decided pragmatically for MVP.** MS-1 ships Dexie autosave for session/trial metadata; video re-identification may simply re-prompt for the file on reload rather than a bounded blob cache. Blob-cache refinement is optional hardening. |
+| **Decode throughput and timestamp exactness** | **Resolved.** All three clips decode with zero decoder errors at 190–430× real-time; `test51` spacing confirmed as exactly 1001/15000 s (median unique-`cts` interval), not 15 fps; frame counts agree across `ffprobe`/`mp4box`/decoder on all three clips. See `spike/phase-0-decode-timing/results/findings.md`. |
+| **Escape vs tracking loss** | Resolved directly during MS-5's implementation, at full strength, rather than through a separate throwaway spike — this is the scientific core of the product and is worth building for real the first time rather than prototyping twice. |
+| **Nose vs body from geometry alone** | Resolved during MS-3's implementation: a real nose estimate from blob geometry and heading, with explicit rim-occlusion handling. If contour geometry proves insufficient on real footage, an ML pose-estimation step is the documented fallback (see "Deliberately not chosen"). |
+| **Video persistence policy** | Decided: content-fingerprint-based re-identification with a bounded blob-cache budget (MS-1). When a video is evicted from cache, the user is re-prompted to reselect the file; geometry, corrections, events, and measures for that trial are unaffected because they live in Dexie independently of the raw video bytes. |
 
 ### Deliberately not chosen
 
 - **Any backend** — unnecessary, and it would add auth, hosting, and data-egress problems the user must not inherit.
 - **Python / notebook pipeline** — precisely what the facility said it cannot run.
 - **Hosted vision API** — would send animal research video off-machine for no benefit the local path cannot deliver.
-- **GPU or in-browser ML model** — held in reserve if the nose-estimation spike fails; not needed for detection, which is already validated.
+- **GPU or in-browser ML model** — held in reserve if geometric nose estimation proves insufficient during MS-3; not needed for maze or animal detection, which are already validated.
 - **Desktop app (Electron/Tauri)** — breaks "open it in a browser."
 - **Ellipse or homography maze model** — measured residuals show a circle is sufficient.
 
@@ -127,107 +127,81 @@ Required: feature-detect with `VideoDecoder.isConfigSupported()` and fall back t
 
 ## Roadmap
 
-**Replanned September 5, 2026**, after Phase 0 completed, against a hard deadline: submission-ready by **Monday night** with **no Tuesday-morning buffer**. The original 18-phase roadmap (Phase 0–17) is compressed into six vertical-slice milestones plus a required-submission-closure list. This changes sequencing and grouping only — every original requirement is preserved; nothing below is new scope. Where a milestone is explicitly marked "basic," that is a deliberate, named simplification for the first working pass, not a silent scope cut. See the phase-mapping table at the end of this section for where every original phase landed.
-
-The target user journey, unchanged: load video → review video → define/calibrate maze → define trial window → track mouse → inspect quality → manually correct → detect events → compute measures → visualize → export → save/reload.
-
-### Phase 0 — Decode and timing spike — ✅ Done
-Worker-based WebCodecs decode of all three clips; timestamp verification against the container timebase; throughput measurement; fallback path proven. See `spike/phase-0-decode-timing/results/findings.md` and the corrected D7 finding above. Throwaway harness code; the decision (WebCodecs + mp4box.js primary, `<video>`/rVFC as review-only fallback) is binding.
+The product is built as six milestones, each a coherent, load-bearing slice of the user's workflow: load a video → review it → define and calibrate the maze → define the trial window → track the animal → assess tracking quality → correct by hand → detect events → compute behavioral measures → visualize → export and save a reloadable analysis. Each milestone can carry its own branch, spec, validation, and review — and each is scoped to its intended finished quality, not a placeholder to be revisited later. MS-1 through MS-6 together are the complete, working pipeline, end to end, on all three supplied clips.
 
 ### MS-1 — Foundation, Ingest & Persistence
-*Absorbs Phase 1, Phase 2, Phase 3 (basic).*
-Vite + React + TS scaffold, MIT license, CI running lint/test/build and deploying to Pages. Accessibility baseline (focus order, labels, contrast tokens) — floor, not deferred. Drag-and-drop plus folder selection for multiple files, reusing the Phase 0 WebCodecs/mp4box worker unchanged. Per-video metadata and a timestamp index built from decoded presentation times. Dexie schema for trials, parameters, and progress, with autosave.
-**Basic now, optional hardening later:** video re-identification on reload may simply re-prompt for the file rather than a bounded blob cache; session/trial metadata persists in full regardless.
-**Validate:** cold clone builds from README alone and deploys; all three clips load and decode without hardcoding; `test51` resolves to 15000/1001, not 15; a mid-session refresh loses nothing.
 
-### MS-2 — Review Player, Maze Calibration & Trial Window (basic)
-*Absorbs Phase 4, Phase 5 (basic), Phase 7 (basic).*
-Frame-accurate scrubbing, frame stepping, keyboard shortcuts, and a Canvas overlay locked to the displayed frame. Maze calibration via a small number of clicks (platform center, radius, one hole for rotation reference) generating the 20-hole parametric ring, with per-hole nudging and target-hole selection; platform diameter in cm drives a pixel→cm scale. Trial window set manually (start, end, configurable cutoff); pre-trial frames excluded from measures and clearly marked.
-**Basic now, optional hardening later:** calibration is manual/semi-manual, not automatic platform/hole detection; trial-window start/end is user-set, not auto-proposed from motion onset; no cross-trial template reuse yet.
-**Validate:** overlay matches the displayed frame on all three clips, including across keyframe boundaries; a full calibration and trial window can be completed for any of the three clips through the UI alone; distances report in cm.
+The application shell: a Vite + React + TypeScript scaffold under an MIT license, with CI running lint/test/build and deploying to GitHub Pages, and an accessibility baseline (focus order, labeled controls, contrast tokens, 200% zoom) built in from the start rather than retrofitted.
 
-### MS-3 — Tracking v1 & Raw Quality Signal
-*Absorbs Phase 8, Phase 9 (raw signal only), Phase 10 (basic).*
-Worker pipeline: per-pixel median background, per-pixel differencing, morphology, animal blob selection with size/shape gating against non-animal objects (rejecting the `test51` start cylinder specifically), body centroid, per-frame observation status (`tracked`/`lost`) with confidence, and blob area carried forward as future escape evidence. Progress indicator. Basic per-video tracked/lost/absent fraction reporting.
-**Basic now, optional hardening later:** the nose point is the body-centroid proxy, not a true geometric nose estimate; no cancel/resume; the animal-absent cause is not yet split into `absent_in_hole` / `absent_pre_trial` / `lost` — that semantic split happens in MS-5, where the evidence needed to make it is actually consumed.
-**Validate:** trajectories produced on all three clips; the start cylinder is never tracked as the animal; frames without an animal are marked, not guessed; a progress indicator moves during the run.
+Video ingest is drag-and-drop plus folder selection for multiple files, decoded via the validated WebCodecs `VideoDecoder` + `mp4box.js` pipeline in a dedicated Worker (see "Video decode" above; the decision was validated by a spike under `spike/phase-0-decode-timing/`). Per-video metadata and a timestamp index are built from decoded presentation times, never an assumed frame rate.
 
-### MS-4 — Manual Correction & Basic Cleaning
-*Absorbs Phase 11 (basic), Phase 12 (full).*
-Scrub to a frame, fix body position, add or remove events; downstream results recompute; corrections persist and are labeled as human-touched, surviving reload. Bounded-gap linear interpolation for small tracking gaps, origin-marked and visually distinct from tracked and manual points; cleaning parameters visible (read-only for now).
-**Basic now, optional hardening later:** no live-preview or user-adjustable smoothing/outlier-rejection UI yet — parameters are visible but fixed.
-**Not simplified:** manual correction itself is full-strength — non-negotiable per Salk's brief.
-**Validate:** a correction survives reload, changes the affected measure, and is visually distinguishable from automatic output; an interpolated span is visually distinct from tracked and manual points.
+Persistence uses a Dexie/IndexedDB schema for trials, parameters, geometry, tracks, and progress, with autosave so a session survives an accidental refresh. Video re-identification uses a content fingerprint with a bounded blob-cache budget; when a video falls out of cache, the user is re-prompted to reselect the file, and everything else about that trial — geometry, corrections, events, measures — is unaffected because it lives in Dexie independently of the raw video bytes.
+
+**Validate:** cold clone builds from README alone and deploys to a working URL; all three clips load and decode without any per-file special-casing; `test51` resolves to 15000/1001, not 15; a mid-session refresh loses nothing; a video evicted from cache and re-selected is recognized as the same trial.
+
+### MS-2 — Review Player, Maze Calibration & Trial Window
+
+Frame-accurate scrubbing, frame stepping, and keyboard shortcuts, with a Canvas overlay locked to the displayed frame — the substrate everything else in this milestone, and manual correction later, is drawn on.
+
+Maze calibration is automatic by default: an Otsu platform mask locates the platform, dark-blob candidates around its rim are fit to a least-squares circle, and the 20 hole positions are derived from the fitted ring's own angular spacing (validated at 18.0° ± 0.6°). The user confirms the result, nudges any hole that needs it, and picks the target hole; platform diameter in centimeters drives the pixel→cm scale. Because a session commonly reuses one physical rig across many trials, geometry from an already-calibrated trial can be applied to another with alignment and per-trial override, so later videos in a session take materially fewer clicks than the first.
+
+The trial window (start, end, protocol cutoff) is proposed automatically from motion onset and confirmed or edited by the user; pre-trial frames are excluded from every downstream measure and clearly marked as such in the UI.
+
+**Validate:** automatic calibration finds 20/20 holes on all three clips, including the off-center, brighter `test51`; applying a template to a second trial measurably reduces clicks versus the first; the overlay matches the displayed frame across keyframe boundaries; proposed trial-window starts land at ~5.0 s on all three clips without mistaking `test51`'s start cylinder for the animal; distances report in cm.
+
+### MS-3 — Tracking & Quality Assessment
+
+A Worker pipeline: per-pixel median background modeling (required because intra-platform lighting is measurably uneven — a single global threshold does not work), per-pixel differencing, morphology, and animal-blob selection gated on size and shape to reject non-animal foreground objects such as `test51`'s start cylinder. From the blob, the pipeline derives a body centroid and a true nose estimate from contour geometry and heading, with explicit handling for rim occlusion, where the animal is partially cut off by the hole it is investigating. If geometric nose estimation proves insufficient on real footage, an ML pose-estimation step is the documented fallback (see "Deliberately not chosen").
+
+Each frame's observation carries a status that distinguishes **tracked**, **absent — inside a hole**, **absent — pre-trial**, and **lost**, because a tracker losing the animal and the animal actually entering the escape box must never look the same to downstream code. Tracking runs show progress and support cancel and resume.
+
+Quality assessment is a first-class output of this milestone: per-video fractions tracked / lost / absent / interpolated, and a timeline strip showing where failures cluster with click-through to the exact frame, so a user can decide whether to trust a video before building a figure on it.
+
+**Validate:** trajectories produced on all three clips; the start cylinder is never tracked as the animal; nose and body diverge visibly during rim investigations; the four observation statuses are correctly separated on hand-checked segments; a user can identify, from the quality report alone, which stretches of a trial to distrust.
+
+### MS-4 — Manual Correction & Trajectory Cleaning
+
+Manual correction is mandatory and non-negotiable: the user scrubs to a frame, sees the overlay, fixes the body or nose point or adds/removes an event, and every downstream result — cleaning, events, measures, visualizations, exports — recomputes from it. Corrections persist across reload and are visibly labeled as human-touched, distinguishable from automatic and interpolated output at every point downstream.
+
+Trajectory cleaning — gap filling, smoothing, and outlier rejection — exposes every parameter to the user, defaults to conservative values, and previews its effect live before it is applied; nothing is ever applied invisibly. Each point in the cleaned trajectory carries its own production method (`auto`, `interpolated`, `smoothed`, or `manual`), so provenance survives every later transformation.
+
+**Validate:** a correction survives reload, changes the affected measure, and remains visually distinguishable from automatic output; interpolated spans are visually distinct from tracked and manual points; changing a cleaning parameter visibly changes the previewed trajectory before the user commits to it; parameters appear in the export.
 
 ### MS-5 — Event Detection & Behavioral Measures
-*Absorbs Phase 9 (absence-cause finalization), Phase 13 (full), Phase 14 (full).*
-Hole investigations from nose/body proximity, dwell, and approach speed, all thresholds exposed with immediate visible consequence. Escape detection from combined progressive-area, proximity, motion, and hole-darkening evidence, with each event showing the evidence behind it. Explicit censoring when no escape occurs before the cutoff or the recording ends — never a silent "never escaped" with a fabricated latency. Primary and total latency, primary and total errors, path length, speed, time in the target quadrant, and search-strategy classification (spatial / serial / random) with reasoning shown and override allowed. Censored and assumption-violating cases (e.g. a non-centre start) flagged, not quietly scored.
-**Not simplified:** this is the scientific core of the submission, implemented at full strength with no separate first pass. The escape-vs-tracking-loss disambiguation — flagged as unresolved after Phase 0 — is designed and built for real here; there is no remaining schedule room for a dedicated spike.
-**Validate:** the end-of-clip descent is detected as escape or reported censored on all three clips, never a silent "never escaped"; mid-platform tracker loss is never labeled an escape; changing a threshold visibly changes the event count; measures recompute from corrected trajectories with every time value from container timestamps; overrides persist.
 
-### MS-6 — Visualization & Export/Bundle
-*Absorbs Phase 15 (core), Phase 16 (full).*
-Trajectory overlay and path plot at minimum (occupancy heat map, hole-visit raster, and cross-trial learning curve are optional hardening, not required for this milestone). CSV and XLSX with a per-trial summary, per-event detail, and a parameters/version sheet. Save and load the `.neurotrack.json` bundle; recompute measures from a bundle without re-tracking.
-**Not simplified:** export/bundle completeness is required for the demo and cannot be trimmed.
-**Validate:** figures render for all three clips; CSV/XLSX open cleanly in Excel with a parameters sheet; a saved bundle reloads and reproduces the same measures without re-tracking.
+Hole investigations are detected from nose/body proximity, dwell time, and approach speed, with every threshold exposed and its consequence immediately visible when changed. Escape detection combines progressive area loss, proximity to a hole, loss of motion, and darkening of the hole region — because no clip in hand shows the animal's blob vanishing outright, and a binary present/absent rule would report "never escaped" for all three. Every event shows the evidence behind it. When no escape occurs before the protocol cutoff or the recording ends, the result is explicitly censored and flagged — never silently emitted as a latency equal to clip duration.
 
-**MS-1 through MS-6 are the complete vertical slice and must be working, on all three clips, by Monday afternoon/evening.**
+From detected events, the pipeline computes primary and total latency, primary and total errors, path length, speed, time in the target quadrant (with the quadrant convention stated), and a search-strategy classification (spatial / serial / random) with its reasoning shown and an override the user can apply. Assumption-violating cases — for example a trial that doesn't start at the platform center — are flagged rather than quietly scored.
+
+**Validate:** the end-of-clip descent on all three clips is detected as escape or reported censored, never a silent "never escaped"; mid-platform tracker loss is never labeled an escape; changing a threshold visibly changes the event count; measures recompute from corrected trajectories with every time value from container timestamps; strategy overrides persist.
+
+### MS-6 — Visualization, Export & Reloadable Analysis
+
+Visualization is generous, per the brief: a trajectory overlay styled by time and by provenance, a path plot, an occupancy heat map, a hole-visit raster over the trial, and a learning curve across a session's trials — all grayscale-safe and rendered at export resolution, because these are the figures a scientist will screenshot into a paper.
+
+Export produces CSV and XLSX with a per-trial summary, per-event detail, and a parameters/version sheet, readable in Excel without a legend. The `.neurotrack.json` analysis bundle documents the full intermediate representation and can be saved and reloaded to recompute measures without re-tracking, so a facility can revisit an analysis as definitions evolve.
+
+**Validate:** all five visualization types render for all three clips and remain readable printed in grayscale; CSV/XLSX open cleanly in Excel with a parameters sheet matching the UI; a saved bundle reloads and reproduces the same displayed measures without re-tracking.
 
 ---
 
-### Required submission closure — mandatory, due Monday night, no Tuesday buffer
+### Delivery and documentation requirements
 
-Not optional, not hardening. Salk's explicit submission requirements; must ship regardless of what else slips:
+Independent of any single milestone, the finished product requires:
 
-- Live deployment (GitHub Pages) reachable by URL.
-- `README.md` with the live URL and demo video at the top, cold-clone setup instructions, data-handling and cost paragraphs, and a "Known limitations" section separating defects from deliberately excluded scope — including anything cut from Optional hardening below, named explicitly, never silently missing.
-- `AI_NOTES.md` covering tools/models used and specific moments of disagreement or rejected agent output, kept current.
-- "Load example" seed state reaching real computed output within about sixty seconds, for all three clips.
-- Generated outputs (per-trial summary, per-event detail, `.neurotrack.json` bundle) for `test50`, `test51`, and `test53` committed to the repo; sample videos linked, not committed.
-- A 2–3 minute demo video showing all three clips analyzed end to end, including a manual correction, recorded without editing out slow or awkward parts.
-- A basic accessibility validation pass — keyboard-only reachability, contrast, 200% zoom — per cross-cutting requirement #6 in the Salk brief; depth can be minimal under time pressure, but it is not skippable.
+- A live deployment (GitHub Pages) reachable by URL — no install, server, or account for the user.
+- A `README.md` with the live URL and a demo video at the top, cold-clone setup instructions, data-handling and cost paragraphs, and a "Known limitations" section that separates genuine defects from deliberately excluded scope, named specifically rather than left implicit.
+- An `AI_NOTES.md`, kept current, describing the tools/models used and specific moments of disagreement with or correction of agent output.
+- A "Load example" seed state that reaches real computed output quickly, for all three clips, without requiring the user to create anything first.
+- Generated outputs (per-trial summary, per-event detail, `.neurotrack.json` bundle) for `test50`, `test51`, and `test53` committed to the repository; the sample videos themselves are linked, not committed.
+- A demo video, 2–3 minutes, showing all three clips analyzed end to end including a manual correction, without editing out slow or awkward parts.
+- An accessibility validation pass — keyboard-only reachability, contrast, 200% zoom — exercised before considering the product finished, not merely designed for.
 - Agent configuration (`.cursor/`) committed, not gitignored.
+- A permissive license (MIT).
 
-### Optional hardening — cut first, in this order, if the schedule slips
+### Stretch — beyond the core product
 
-Genuine improvements, none required for a defensible submission, none to be started before required closure above is done:
-
-1. Additional visualization polish — occupancy heat map, hole-visit raster, cross-trial learning curve, grayscale/export-resolution pass.
-2. Enhanced cleaning UI — live-preview, user-adjustable smoothing/outlier-rejection parameters.
-3. Nose/heading refinement — true geometric nose estimate and rim-occlusion handling, replacing the MS-3 body-centroid proxy.
-4. Trial-window auto-propose from motion onset, replacing MS-2's manual entry.
-5. Maze auto-detection (Otsu + hole-blob + ring fit), replacing MS-2's few-click manual calibration.
-6. Maze template reuse across trials in a session (Phase 6).
-7. Tracking cancel/resume; quality-report timeline strip with click-through; bounded blob-cache persistence refinement.
-
-Anything cut from this list must be named in the README's Known Limitations section — cutting it silently is the one thing not allowed.
-
-### Stretch — out of scope for this submission entirely
-
-Cohort batch queue with progress; cross-session template library; inter-rater comparison; model-assisted labeling; MCP server for cohort summaries; SLEAP / DeepLabCut / ezTrack / AnyMaze interop. Per the Salk brief these are explicitly "if you have room"; there is no room this cycle.
-
-### Phase → milestone mapping
-
-| Old phase | New home |
-|---|---|
-| Phase 0 — Decode/timing spike | Done |
-| Phase 1 — Foundation | MS-1 |
-| Phase 2 — Video ingest/timestamp index | MS-1 |
-| Phase 3 — Persistence | MS-1 (basic) + optional hardening (blob-cache refinement) |
-| Phase 4 — Review player | MS-2 |
-| Phase 5 — Maze geometry/calibration | MS-2 (basic) + optional hardening (auto-detect) |
-| Phase 6 — Maze template reuse | Optional hardening |
-| Phase 7 — Trial window | MS-2 (basic) + optional hardening (auto-propose) |
-| Phase 8 — Tracking v1 | MS-3 |
-| Phase 9 — Tracking v2 (nose/heading/absence semantics) | MS-3 (raw signal) + MS-5 (absence-cause finalization) + optional hardening (nose/heading refinement) |
-| Phase 10 — Quality report | MS-3 (basic) + optional hardening (timeline strip) |
-| Phase 11 — Trajectory cleaning | MS-4 (basic) + optional hardening (tunable UI) |
-| Phase 12 — Manual correction | MS-4 |
-| Phase 13 — Event detection | MS-5 |
-| Phase 14 — Behavioral measures | MS-5 |
-| Phase 15 — Visualizations | MS-6 (core) + optional hardening (remaining views) |
-| Phase 16 — Export/bundle | MS-6 |
-| Phase 17 — Demo state/submission artifacts | Required submission closure |
+Cohort batch queue with progress; a cross-session template library (beyond the single-session template reuse in MS-2); inter-rater comparison; model-assisted labeling; an MCP server or agent skill for cohort summaries; interoperability with SLEAP / DeepLabCut / ezTrack / AnyMaze exports. The Salk brief itself lists these as "if you have room" — they are valuable future extensions, not part of the core product's quality bar.
 
 ---
 
@@ -257,7 +231,7 @@ Two rules these encode:
 
 ## Validation gates
 
-Before any phase is called complete:
+Before any milestone is called complete:
 
 1. Its stated validation criteria are executed, not assumed.
 2. Pure logic — timing, measures, censoring, provenance — has unit tests.
