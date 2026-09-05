@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeuroTrack AI — Phase 0 Decode Spike</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    label, button { display: block; margin: 0.75rem 0; }
+    pre { background: #f4f4f4; padding: 1rem; overflow: auto; max-height: 480px; font-size: 12px; }
+    #status { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Phase 0 — Decode and Timing Spike</h1>
+  <p>Throwaway harness. Select MP4 files and run the WebCodecs + mp4box primary path and rVFC fallback.</p>
+
+  <label>
+    MP4 files:
+    <input type="file" id="files" accept="video/mp4,video/*" multiple />
+  </label>
+  <button type="button" id="run">Run spike</button>
+  <p id="status">Ready.</p>
+  <pre id="output">{}</pre>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
