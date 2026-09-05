@@ -17,6 +17,7 @@ export function createEmptyGeometry(): Geometry {
     source: null,
     templateSourceTrialId: null,
     confirmedAt: null,
+    calibrationReviewAcknowledgedAt: null,
     detection: null,
   };
 }

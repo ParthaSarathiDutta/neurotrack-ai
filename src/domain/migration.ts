@@ -61,6 +61,7 @@ function migrateGeometry(geo: Geometry): Geometry {
     source: geo.source ?? null,
     templateSourceTrialId: geo.templateSourceTrialId ?? null,
     confirmedAt: geo.confirmedAt ?? null,
+    calibrationReviewAcknowledgedAt: geo.calibrationReviewAcknowledgedAt ?? null,
     detection: geo.detection ?? null,
   };
 }

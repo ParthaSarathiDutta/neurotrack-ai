@@ -35,6 +35,7 @@ interface SessionState {
   reselectFile: (trialId: string, file: File) => Promise<void>;
   forceEvictCacheForTest: () => Promise<void>;
   runAutoDetect: (trialId: string) => Promise<void>;
+  acknowledgeCalibrationReview: (trialId: string) => void;
   confirmGeometry: (trialId: string) => void;
   setTargetHole: (trialId: string, holeId: number) => void;
   confirmTargetHole: (trialId: string) => void;
@@ -220,6 +221,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
               ...result.geometry,
               source: 'auto',
               confirmedAt: null,
+              calibrationReviewAcknowledgedAt: null,
             } as Geometry,
           })),
           statusMessage,
@@ -234,6 +236,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } finally {
       set({ calibrationBusy: false });
     }
+    scheduleSave(get);
+  },
+
+  acknowledgeCalibrationReview: (trialId) => {
+    set((state) => ({
+      trials: patchTrial(state.trials, trialId, (t) => ({
+        ...t,
+        geometry: {
+          ...t.geometry,
+          calibrationReviewAcknowledgedAt: new Date().toISOString(),
+        },
+      })),
+    }));
     scheduleSave(get);
   },
 
@@ -318,6 +333,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           ringRotationDeg: ring.rotationDeg,
           source: 'manual',
           confirmedAt: null,
+          calibrationReviewAcknowledgedAt: null,
           detection: {
             holeCandidateCount: 0,
             ringFitResidualPx: 0,
@@ -348,7 +364,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set((state) => ({
         trials: patchTrial(state.trials, destTrialId, (t) => ({
           ...t,
-          geometry: result.geometry,
+          geometry: {
+            ...result.geometry,
+            calibrationReviewAcknowledgedAt: null,
+          },
         })),
         templateWarning: result.discrepancyWarning,
         statusMessage: result.discrepancyWarning

@@ -2,7 +2,7 @@
 
 Branch: `ms-2-review-player-maze-calibration-trial-window`
 Constitution reference: `specs/constitution.md` → MS-2
-Status: **Approved — implementation in progress.**
+Status: **Implementation complete on branch — pending final manual visual review before merge.**
 
 ### Approved clarifications (September 5, 2026)
 
@@ -205,6 +205,7 @@ export interface Geometry {
   source: 'auto' | 'manual' | 'template' | null;
   templateSourceTrialId: string | null;  // NEW — set when source === 'template'
   confirmedAt: string | null;            // NEW — null while still an unconfirmed proposal
+  calibrationReviewAcknowledgedAt: string | null; // NEW — explicit human review for low-confidence auto
   detection: {                           // NEW — Technical-details-only, never scientific truth
     holeCandidateCount: number | null;
     ringFitResidualPx: number | null;
@@ -252,6 +253,42 @@ Extends `scripts/validate-ms1.mjs`'s pattern (Playwright against the three local
 | V13 | Manual window edits persist | An edited start/end/cutoff survives reload and is distinguishable from the original proposal. |
 | V14 | Accessibility intact | Keyboard reachability, visible focus, non-color-only state, and 200% zoom usability hold for every new control (player, calibration, template, trial window). |
 | V15 | No filename branching | Static check (grep/lint rule or code review) confirms no `test50`/`test51`/`test53` string literals gate behavior in the shipped calibration/trial-window code (fixtures/tests are exempt). |
+| V16 | Calibration quality | Per-clip confidence tiers and slot residuals within defensible bounds (`test51` low-confidence, `test50`/`test53` high-confidence). |
+| V17 | test53 trial start populated | After detect, `test53` start input is populated (~4.5–5.5 s). |
+| V18 | Trial start never silent | Detect surfaces proposed start or visible failure banner on all three clips. |
+| V19 | Per-trial isolation | Sequential calibrate + switch + reload preserves distinct per-trial calibration metrics. |
+| V20 | Low-confidence review ack | `test51` low-confidence auto calibration requires explicit “I reviewed this calibration” acknowledgment before confirm; hole edits are **not** required. |
+
+---
+
+## Low-confidence calibration confirmation (approved)
+
+When automatic calibration returns `confidence: 'low'` or `'failed'`:
+
+1. Show the low-confidence warning with fit residuals in technical details.
+2. Require the scientist to visually review the 20-hole overlay.
+3. Allow optional hole nudges — **not** required for confirmation.
+4. Require an explicit acknowledgment control: **“I reviewed this calibration on the video overlay.”**
+5. Store acknowledgment in `Geometry.calibrationReviewAcknowledgedAt` (cleared on re-detect, manual calibration, or template apply).
+6. Preserve per-hole provenance: untouched holes remain `detected`/`model`; only nudged holes become `manual`.
+
+High-confidence auto calibrations may confirm without the acknowledgment step.
+
+---
+
+## Template reuse (verified)
+
+- **Same rig (`test50` → `test53`):** destination re-detects independently; template proposes target hole and diameter. Rough-platform discrepancy check passes (no warning). V9 validates 20 holes after apply.
+- **Cross rig (`test50` → `test51`):** rough-platform comparison triggers visible warning (V10). Destination geometry comes from destination detection when confident; template does not blindly copy pixel coordinates when registration path is available.
+
+---
+
+## Frame-accurate navigation (verified)
+
+- Stepping uses Worker-decoded frames indexed by `timestampIndex` frame indices — not assumed integer FPS.
+- `test51` step deltas trace to 15000/1001 container timing (V4).
+- V3 validates ±1 frame round-trip, timestamp sync, and frame reset after trial switch.
+- Async load generation guards prevent stale frame bitmaps during rapid stepping.
 
 ---
 
@@ -297,10 +334,28 @@ The 20-hole ring is the Salk task's assay contract. Fixed `HOLE_COUNT = 20` in c
 
 ## Completion
 
-**Status: Complete** (validated on branch, pending merge review)
+**Status: Pending manual visual review** (automated validation green; not merged to `main`)
 
-| # | Result | Evidence |
+| Check | Result | Notes |
 |---|---|---|
-| V1–V15 | PASS | `npm run validate:ms2` — all criteria against test50, test51, test53 |
-| Unit tests | PASS | 19 tests including ringFit, motionOnset, migration, videoTransform |
+| V1–V20 | PASS | `npm run validate:ms2` against test50, test51, test53 |
+| Unit tests | PASS | ringFit, refineHoles, motionOnset, templateService, migration, videoTransform |
 | MS-1 regression | PASS | `npm run validate:ms1` |
+| Offline calibration | PASS | `npm run validate:calibration` |
+
+### Known remaining MS-2 limitations
+
+- Calibration validated on three sample rigs only; genuinely different lighting or non-20-hole mazes may still fail visibly (manual fallback + low-confidence acknowledgment exist for this).
+- Frame stepping depends on WebCodecs worker decode; very large videos may need LRU tuning not exercised here.
+- Template reuse uses rough-platform discrepancy check, not full feature-based registration — sufficient for sample cross-rig warning, not a general CV registration system.
+- Motion-onset confidence is heuristic (~5 s expected region); unusual protocols may need manual trial-start edit.
+- `platformEdgeSampleCount` retained internally but removed from scientist-facing technical details (value was not meaningful in current pipeline).
+
+### Manual validation still required
+
+- Visual overlay alignment on all three clips after final fixes.
+- Low-confidence acknowledgment workflow on `test51` without nudging holes.
+- Template apply `test50` → `test53` overlay sanity check.
+- Cross-rig warning readability on `test50` → `test51`.
+
+*Do not merge to `main` until manual review sign-off.*

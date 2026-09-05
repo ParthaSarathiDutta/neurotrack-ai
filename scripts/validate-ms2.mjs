@@ -315,22 +315,56 @@ async function main() {
       : `FAIL: ${JSON.stringify({ trialSnapshots, test53AfterSwitch, test51AfterSwitch, afterReload, distinct51vs53, test53Stable, test51Stable, reloadStable, labelMatches })}`;
   if (results.V19 !== 'PASS') failures.push(`V19: per-trial isolation ${results.V19}`);
 
+  // V20 — low-confidence calibration requires explicit review acknowledgment (not hole edits)
+  await selectTrial(page, 'test51');
+  const v20ConfirmBlocked = await page.locator('[data-testid="confirm-geometry-btn"]').isDisabled();
+  const v20AckVisible = await page.locator('[data-testid="calibration-review-ack"]').isVisible();
+  await page.locator('[data-testid="calibration-review-ack"]').click();
+  await page.waitForSelector('[data-testid="calibration-review-acknowledged"]', { timeout: 10_000 });
+  const v20ConfirmEnabled = await page.locator('[data-testid="confirm-geometry-btn"]').isEnabled();
+  results.V20 =
+    v20ConfirmBlocked && v20AckVisible && v20ConfirmEnabled
+      ? 'PASS'
+      : `FAIL: blocked=${v20ConfirmBlocked} ack=${v20AckVisible} enabled=${v20ConfirmEnabled}`;
+  if (results.V20 !== 'PASS') failures.push(`V20: ${results.V20}`);
+
   // V3/V4 — frame stepping on test51
   await selectTrial(page, 'test51');
+  const parseFrameLabel = (text) => {
+    const m = text?.match(/Frame (\d+)/);
+    return m ? parseInt(m[1], 10) : NaN;
+  };
   const startTs = await page.locator('[data-testid="current-timestamp"]').textContent();
-  const startFrame = await page.locator('[data-testid="current-frame-index"]').textContent();
-  for (let i = 0; i < 5; i += 1) {
-    await page.locator('[data-testid="step-forward-btn"]').click();
-    await page.waitForTimeout(500);
-  }
-  for (let i = 0; i < 5; i += 1) {
-    await page.locator('[data-testid="step-back-btn"]').click();
-    await page.waitForTimeout(500);
-  }
+  const startFrameNum = parseFrameLabel(
+    await page.locator('[data-testid="current-frame-index"]').textContent(),
+  );
+  await page.locator('[data-testid="step-forward-btn"]').click();
+  await page.waitForTimeout(800);
+  const midTs = await page.locator('[data-testid="current-timestamp"]').textContent();
+  const midFrameNum = parseFrameLabel(
+    await page.locator('[data-testid="current-frame-index"]').textContent(),
+  );
+  await page.locator('[data-testid="step-back-btn"]').click();
+  await page.waitForTimeout(800);
   const endTs = await page.locator('[data-testid="current-timestamp"]').textContent();
-  const endFrame = await page.locator('[data-testid="current-frame-index"]').textContent();
-  results.V3 = startTs === endTs && startFrame === endFrame ? 'PASS' : `FAIL: ${startTs} vs ${endTs}`;
-  if (results.V3 !== 'PASS') failures.push(`V3: stepping drift ${startTs} -> ${endTs}`);
+  const endFrameNum = parseFrameLabel(
+    await page.locator('[data-testid="current-frame-index"]').textContent(),
+  );
+  const frameStepOk = midFrameNum === startFrameNum + 1 && endFrameNum === startFrameNum;
+  const tsStepOk = midTs !== startTs && endTs === startTs;
+  await selectTrial(page, 'test50');
+  await page.waitForTimeout(500);
+  await selectTrial(page, 'test51');
+  await page.waitForTimeout(800);
+  const afterSwitchFrame = parseFrameLabel(
+    await page.locator('[data-testid="current-frame-index"]').textContent(),
+  );
+  const switchResetOk = afterSwitchFrame === 1;
+  results.V3 =
+    frameStepOk && tsStepOk && switchResetOk
+      ? 'PASS'
+      : `FAIL: step=${frameStepOk}/${tsStepOk} switchReset=${switchResetOk} frames ${startFrameNum}->${midFrameNum}->${endFrameNum}`;
+  if (results.V3 !== 'PASS') failures.push(`V3: ${results.V3}`);
 
   // V4 — test51 uses real timestamps (check frame rate label still correct from MS-1 if visible)
   results.V4 = 'PASS'; // validated via MS-1 + stepping uses index

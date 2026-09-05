@@ -26,6 +26,8 @@ export function useVideoPlayer({
 }: UseVideoPlayerOptions) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const rVfcId = useRef<number>(0);
+  const loadGenRef = useRef(0);
+  const currentFrameIndexRef = useRef(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<PlayerMode>('frame');
   const [playing, setPlaying] = useState(false);
@@ -38,6 +40,10 @@ export function useVideoPlayer({
     indexEntryByFrameIndex(timestampIndex, currentFrameIndex) ??
     timestampIndex[0] ??
     null;
+
+  useEffect(() => {
+    currentFrameIndexRef.current = currentFrameIndex;
+  }, [currentFrameIndex]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,13 +69,19 @@ export function useVideoPlayer({
 
   const loadFrame = useCallback(
     async (frameIndex: number) => {
+      const gen = ++loadGenRef.current;
       const clamped = stepFrameIndex(frameIndex, 0, maxFrameIndex);
       setCurrentFrameIndex(clamped);
+      currentFrameIndexRef.current = clamped;
       setMode('frame');
       setPlaying(false);
       if (videoRef.current) videoRef.current.pause();
 
       const bitmap = await getFrameBitmap(clamped, videoWidth, videoHeight, fingerprint);
+      if (gen !== loadGenRef.current) {
+        bitmap.close();
+        return;
+      }
       setFrameBitmap((prev) => {
         prev?.close();
         return bitmap;
@@ -84,9 +96,9 @@ export function useVideoPlayer({
 
   const stepFrame = useCallback(
     (delta: number) => {
-      void loadFrame(currentFrameIndex + delta);
+      void loadFrame(currentFrameIndexRef.current + delta);
     },
-    [currentFrameIndex, loadFrame],
+    [loadFrame],
   );
 
   const seekToTimeUs = useCallback(

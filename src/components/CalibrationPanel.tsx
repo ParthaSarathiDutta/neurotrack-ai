@@ -18,6 +18,7 @@ export function CalibrationPanel({
   registerManualHandler,
 }: CalibrationPanelProps) {
   const runAutoDetect = useSessionStore((s) => s.runAutoDetect);
+  const acknowledgeCalibrationReview = useSessionStore((s) => s.acknowledgeCalibrationReview);
   const confirmGeometry = useSessionStore((s) => s.confirmGeometry);
   const setTargetHole = useSessionStore((s) => s.setTargetHole);
   const confirmTargetHole = useSessionStore((s) => s.confirmTargetHole);
@@ -75,11 +76,11 @@ export function CalibrationPanel({
   const modelCount = geo.holes.filter((h) => h.source === 'model').length;
   const manualCount = geo.holes.filter((h) => h.source === 'manual').length;
   const confidence = geo.detection?.confidence;
-  const needsReview =
+  const requiresReviewAcknowledgment =
     geo.source === 'auto' &&
     (confidence === 'low' || confidence === 'failed') &&
-    manualCount === 0;
-  const canConfirmGeometry = !needsReview;
+    !geo.calibrationReviewAcknowledgedAt;
+  const canConfirmGeometry = !requiresReviewAcknowledgment;
 
   return (
     <section
@@ -161,8 +162,8 @@ export function CalibrationPanel({
               data-testid="calibration-confidence-warning"
             >
               {confidence === 'low'
-                ? 'Low-confidence automatic calibration — review hole markers on the video and nudge any misaligned holes before confirming.'
-                : 'Automatic calibration failed quality checks — use manual calibration or adjust holes before confirming.'}
+                ? 'Low-confidence automatic calibration — visually review all 20 hole markers on the video overlay. Nudge any misaligned holes if needed, then acknowledge your review before confirming.'
+                : 'Automatic calibration failed quality checks — visually review the overlay, adjust holes or use manual calibration, then acknowledge your review before confirming.'}
               {geo.detection?.confidenceReasons?.length ? (
                 <ul className={styles.reasonList}>
                   {geo.detection.confidenceReasons.map((r) => (
@@ -249,6 +250,28 @@ export function CalibrationPanel({
             </div>
           )}
 
+          {requiresReviewAcknowledgment && (
+            <label className={styles.labelField} data-testid="calibration-review-ack-label">
+              <input
+                type="checkbox"
+                checked={Boolean(geo.calibrationReviewAcknowledgedAt)}
+                onChange={(e) => {
+                  if (e.target.checked) acknowledgeCalibrationReview(trial.id);
+                }}
+                data-testid="calibration-review-ack"
+              />
+              I reviewed this calibration on the video overlay
+            </label>
+          )}
+
+          {geo.calibrationReviewAcknowledgedAt &&
+            geo.source === 'auto' &&
+            (confidence === 'low' || confidence === 'failed') && (
+              <p className={styles.hint} data-testid="calibration-review-acknowledged">
+                Calibration review acknowledged — you may confirm geometry when ready.
+              </p>
+            )}
+
           <div className={styles.actions}>
             <button
               type="button"
@@ -261,7 +284,7 @@ export function CalibrationPanel({
             </button>
             {!canConfirmGeometry && (
               <span className={styles.hint} data-testid="confirm-geometry-blocked">
-                Adjust at least one hole manually before confirming low-confidence calibration.
+                Acknowledge that you reviewed this calibration before confirming geometry.
               </span>
             )}
             {geo.confirmedAt && (
@@ -308,10 +331,6 @@ export function CalibrationPanel({
                 <tr>
                   <th scope="row">Hole candidates</th>
                   <td>{geo.detection?.holeCandidateCount ?? '—'}</td>
-                </tr>
-                <tr>
-                  <th scope="row">Platform edge samples</th>
-                  <td>{geo.detection?.platformEdgeSampleCount ?? '—'}</td>
                 </tr>
                 {geo.templateSourceTrialId && (
                   <tr>

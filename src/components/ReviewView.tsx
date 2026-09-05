@@ -47,6 +47,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
       </div>
 
       <VideoPlayer
+        key={trial.fingerprint}
         fingerprint={trial.fingerprint}
         timestampIndex={trial.timestampIndex}
         videoWidth={meta.codedWidth}

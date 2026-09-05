@@ -43,4 +43,16 @@ describe('videoTransform', () => {
     expect(stepFrameIndex(0, -1, 10)).toBe(0);
     expect(stepFrameIndex(10, 1, 10)).toBe(10);
   });
+
+  it('uses timestamp-index frame indices without assuming integer fps', () => {
+    const frameIntervalUs = Math.round(1_000_000 / (15000 / 1001));
+    const timestampIndex = [
+      { timeUs: 0, frameIndex: 0, cts: 0, timescale: 15000 },
+      { timeUs: frameIntervalUs, frameIndex: 1, cts: 1001, timescale: 15000 },
+      { timeUs: frameIntervalUs * 2, frameIndex: 2, cts: 2002, timescale: 15000 },
+    ];
+    const stepDeltaUs = timestampIndex[2].timeUs - timestampIndex[1].timeUs;
+    expect(stepDeltaUs).toBe(frameIntervalUs);
+    expect(stepFrameIndex(timestampIndex[1].frameIndex, 1, 5538)).toBe(2);
+  });
 });

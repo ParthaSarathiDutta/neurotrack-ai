@@ -41,3 +41,6 @@ Validation harness ~5.0 s; browser ~4.3 s / 3.67 s with confidence 1.00.
 **Fix:** Single evenly spaced timeline sample (0–7 s) with consecutive pairs; noise floor from pairs < 4.0 s only; onset scan restricted to ≥ 4.5 s; confidence penalizes timing distance from expected ~5 s. Renamed "Trial duration" → "Proposed trial duration".
 
 **Validated:** lint/test/build PASS; validate:ms2 V1–V19 PASS; test51 now shows low confidence / 6.35 px max residual distinct from test53.
+
+### Low-confidence confirmation UX (2026-03-21)
+Rejected requiring manual hole nudge before confirm — scientifically wrong when overlay is visually acceptable. Replaced with explicit `calibrationReviewAcknowledgedAt` acknowledgment checkbox; per-hole provenance unchanged unless user actually nudges.

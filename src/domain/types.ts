@@ -39,6 +39,8 @@ export interface Geometry {
   source: 'auto' | 'manual' | 'template' | null;
   templateSourceTrialId: string | null;
   confirmedAt: string | null;
+  /** Set when user explicitly acknowledges reviewing a low-confidence auto calibration. */
+  calibrationReviewAcknowledgedAt: string | null;
   detection: GeometryDetectionMeta | null;
 }
 
