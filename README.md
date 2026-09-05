@@ -1,3 +1,24 @@
+# NeuroTrack AI
+
+Browser-based Barnes maze analysis pipeline (Salk Task 1). See `specs/constitution.md` for architecture and roadmap.
+
+## Development (MS-1)
+
+Requires Node.js 20+ and Chromium (for validation). Sample videos are not committed — download from [Salk sample data](https://github.com/talmolab/salk-airc-takehome/tree/main/data/barnes-maze) into `data/barnes-maze/`.
+
+```bash
+npm ci
+npm run dev          # local dev server
+npm run lint && npm test && npm run build
+npm run validate:ms1 # ingest all three videos (build first)
+```
+
+All video processing runs locally in the browser; no API keys or backend required.
+
+License: MIT
+
+---
+
 # Salk AIRC: Research Software Engineer take-home
 
 Center for AI and Research Computing · Salk Institute for Biological Studies
