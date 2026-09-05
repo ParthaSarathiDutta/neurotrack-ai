@@ -16,6 +16,12 @@ describe('templateService', () => {
     expect(warning).toMatch(/different/i);
   });
 
+  it('warns using confirmed source geometry vs destination auto-detect centers', () => {
+    const sourceConfirmed = { center: { x: 328.6, y: 242.0 }, radius: 204 };
+    const destAuto = { center: { x: 284.2, y: 244.3 }, radius: 218 };
+    expect(checkTemplateDiscrepancy(sourceConfirmed, destAuto)).toMatch(/different/i);
+  });
+
   it('warns in both directions for cross-rig transfer', () => {
     expect(checkTemplateDiscrepancy(TEST51_ROUGH, TEST50_ROUGH)).toMatch(/different/i);
   });

@@ -45,9 +45,22 @@ export async function applyTemplateGeometry(
 
   const sourceRough = await getRoughPlatformForTrial(sourceTrial);
 
+  const sourceReference =
+    sourceGeo.platformCenter && sourceGeo.platformRadiusPx
+      ? { center: sourceGeo.platformCenter, radius: sourceGeo.platformRadiusPx }
+      : sourceRough;
+
+  const destReference =
+    destDetection.geometry.platformCenter && destDetection.geometry.platformRadiusPx
+      ? {
+          center: destDetection.geometry.platformCenter,
+          radius: destDetection.geometry.platformRadiusPx,
+        }
+      : destRough;
+
   let discrepancyWarning: string | null = null;
-  if (sourceRough && destRough) {
-    discrepancyWarning = checkTemplateDiscrepancy(sourceRough, destRough);
+  if (sourceReference && destReference) {
+    discrepancyWarning = checkTemplateDiscrepancy(sourceReference, destReference);
   }
 
   let geometry: Geometry;

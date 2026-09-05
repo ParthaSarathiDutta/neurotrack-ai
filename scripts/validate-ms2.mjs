@@ -409,9 +409,25 @@ async function main() {
   const diameterVal = await page.locator('[data-testid="diameter-input"]').inputValue().catch(() => '');
   results.V8 = (pxPerCm && pxPerCm.includes('px/cm')) || diameterVal === '91' ? 'PASS' : `FAIL: pxPerCm=${pxPerCm} diameter=${diameterVal}`;
 
+  const templateSelect = page.locator('[data-testid="template-select"]');
+
+  // V10 — cross-rig template warning test50 -> test51 (before same-rig V9)
+  await selectTrial(page, 'test51');
+  if (await templateSelect.isVisible()) {
+    await templateSelect.selectOption({ label: 'test50' });
+    await page.waitForSelector('[data-testid="template-discrepancy-warning"]', {
+      timeout: 180_000,
+    });
+    const warning = await page.locator('[data-testid="template-discrepancy-warning"]').isVisible();
+    results.V10 = warning ? 'PASS' : 'FAIL';
+    if (!warning) failures.push('V10: no cross-rig warning');
+  } else {
+    results.V10 = 'FAIL';
+    failures.push('V10: template select missing');
+  }
+
   // V9 — template reuse test50 -> test53 (same rig)
   await selectTrial(page, 'test53');
-  const templateSelect = page.locator('[data-testid="template-select"]');
   if (await templateSelect.isVisible()) {
     await templateSelect.selectOption({ label: 'test50' });
     await page.waitForFunction(
@@ -427,19 +443,6 @@ async function main() {
   } else {
     results.V9 = 'FAIL: no template select';
     failures.push('V9: template select not visible');
-  }
-
-  // V10 — cross-rig template warning test50 -> test51
-  await selectTrial(page, 'test51');
-  if (await templateSelect.isVisible()) {
-    await templateSelect.selectOption({ label: 'test50' });
-    await page.waitForTimeout(3000);
-    const warning = await page.locator('[data-testid="template-discrepancy-warning"]').isVisible();
-    results.V10 = warning ? 'PASS' : 'FAIL';
-    if (!warning) failures.push('V10: no cross-rig warning');
-  } else {
-    results.V10 = 'FAIL';
-    failures.push('V10: template select missing');
   }
 
   // V13 — manual window edit persists
