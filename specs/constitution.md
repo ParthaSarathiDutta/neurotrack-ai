@@ -129,7 +129,9 @@ Required: feature-detect with `VideoDecoder.isConfigSupported()` and fall back t
 
 The product is built as six milestones, each a coherent, load-bearing slice of the user's workflow: load a video → review it → define and calibrate the maze → define the trial window → track the animal → assess tracking quality → correct by hand → detect events → compute behavioral measures → visualize → export and save a reloadable analysis. Each milestone can carry its own branch, spec, validation, and review — and each is scoped to its intended finished quality, not a placeholder to be revisited later. MS-1 through MS-6 together are the complete, working pipeline, end to end, on all three supplied clips.
 
-### MS-1 — Foundation, Ingest & Persistence
+### MS-1 — Foundation, Ingest & Persistence — ✅ Complete
+
+Validated September 5, 2026 on branch `ms-1-foundation-ingest-persistence`, merged to `main`.
 
 The application shell: a Vite + React + TypeScript scaffold under an MIT license, with CI running lint/test/build and deploying to GitHub Pages, and an accessibility baseline (focus order, labeled controls, contrast tokens, 200% zoom) built in from the start rather than retrofitted.
 

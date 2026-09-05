@@ -64,6 +64,7 @@ async function main() {
 
   await page.getByRole('button', { name: /test51/i }).click();
   const test51Rate = await page.locator('[data-testid="meta-frame-rate"] td').textContent();
+  await page.locator('[data-testid="technical-details"] summary').click();
   const test51Timescale = await page.locator('[data-testid="meta-timescale"] td').textContent();
 
   const failures = [];

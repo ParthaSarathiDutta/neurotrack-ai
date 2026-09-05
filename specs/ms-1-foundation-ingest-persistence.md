@@ -47,3 +47,19 @@ Constitution reference: `specs/constitution.md` → MS-1
 | V5 | Persistence | Trial list and metadata survive page refresh. |
 | V6 | Cache re-association | After forced cache eviction, reselecting the same file restores the same trial record. |
 | V7 | Accessibility | Controls labeled; keyboard tab order reaches ingest actions; 200% zoom does not clip primary UI. |
+
+## Completion
+
+**Status: Complete** (merged to `main`, September 5, 2026)
+
+| # | Result | Evidence |
+|---|---|---|
+| V1 | PASS | `npm run lint`, `npm test`, `npm run build`; `.github/workflows/ci.yml` |
+| V2 | PASS | `npm run validate:ms1` — all three clips ingest without per-file logic |
+| V3 | PASS | test51 container frame rate `15000/1001`, timescale `15000` |
+| V4 | PASS | Timestamp index from `cts/timescale`; no fps literals in timing path |
+| V5 | PASS | Trial list survives page refresh |
+| V6 | PASS | Cache eviction + reselect preserves trial label and metadata |
+| V7 | PASS | Keyboard-reachable upload/trials; Technical details disclosure; selected state uses text marker + border (not color alone) |
+
+Final UI refinement: user-facing subtitle "Barnes maze video analysis"; trial summary vs collapsible Technical details; no milestone terminology in UI.

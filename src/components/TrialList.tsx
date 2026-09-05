@@ -11,7 +11,7 @@ function statusBadge(status: TrialRecord['ingestStatus']) {
     case 'error':
       return <span className={styles.badgeError}>Error</span>;
     case 'indexing':
-      return <span className={styles.badgeIndexing}>Indexing</span>;
+      return <span className={styles.badgeIndexing}>Processing</span>;
     default:
       return <span className={styles.badge}>Pending</span>;
   }
@@ -33,28 +33,35 @@ export function TrialList() {
 
   return (
     <section className={styles.panel} aria-labelledby="trials-heading">
-      <h2 id="trials-heading" data-testid="trials-heading">Trials ({trials.length})</h2>
-      <ul className={styles.trialList}>
-        {trials.map((trial) => (
-          <li key={trial.id} className={styles.trialItem}>
-            <button
-              type="button"
-              className={
-                trial.id === selectedTrialId
-                  ? `${styles.trialButton} ${styles.trialButtonSelected}`
-                  : styles.trialButton
-              }
-              aria-pressed={trial.id === selectedTrialId}
-              onClick={() => selectTrial(trial.id)}
-            >
-              <strong>{trial.label}</strong>
-              <br />
-              <span className={styles.mono}>{trial.fileName}</span>
-              <br />
-              {statusBadge(trial.ingestStatus)}
-            </button>
-          </li>
-        ))}
+      <h2 id="trials-heading" data-testid="trials-heading">
+        Trials ({trials.length})
+      </h2>
+      <ul className={styles.trialList} role="list">
+        {trials.map((trial) => {
+          const isSelected = trial.id === selectedTrialId;
+          return (
+            <li key={trial.id} className={styles.trialItem}>
+              <button
+                type="button"
+                className={isSelected ? styles.trialButtonSelected : styles.trialButton}
+                aria-pressed={isSelected}
+                aria-label={`${trial.label}, ${trial.fileName}${isSelected ? ', selected' : ''}`}
+                onClick={() => selectTrial(trial.id)}
+              >
+                <span className={styles.trialButtonHeader}>
+                  <strong>{trial.label}</strong>
+                  {isSelected && (
+                    <span className={styles.selectedMarker} aria-hidden="true">
+                      Selected
+                    </span>
+                  )}
+                </span>
+                <span className={styles.mono}>{trial.fileName}</span>
+                {statusBadge(trial.ingestStatus)}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

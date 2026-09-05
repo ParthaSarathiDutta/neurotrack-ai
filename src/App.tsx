@@ -30,7 +30,7 @@ export default function App() {
     <main className={styles.app}>
       <header className={styles.header}>
         <h1>NeuroTrack AI</h1>
-        <p className={styles.subtitle}>Barnes maze analysis — ingest &amp; persistence (MS-1)</p>
+        <p className={styles.subtitle}>Barnes maze video analysis</p>
       </header>
 
       <div className={styles.layout}>
@@ -56,7 +56,7 @@ function TrialDetailPanelPlaceholder() {
   return (
     <section className={styles.panel} aria-labelledby="detail-placeholder">
       <h2 id="detail-placeholder">Trial details</h2>
-      <p>Select a trial to view metadata and timestamp index.</p>
+      <p>Select a trial to view its summary.</p>
     </section>
   );
 }
