@@ -1,6 +1,7 @@
+import { DEFAULT_CUTOFF_SECONDS } from './constants';
 import type { Geometry, TrialRecord, TrialWindow, VideoMetadata } from './types';
 
-export const TOOL_VERSION = '0.1.0-ms1';
+export const TOOL_VERSION = '0.2.0-ms2';
 
 export function createEmptyGeometry(): Geometry {
   return {
@@ -8,8 +9,15 @@ export function createEmptyGeometry(): Geometry {
     platformRadiusPx: null,
     holes: [],
     targetHoleId: null,
+    proposedTargetHoleId: null,
+    targetHoleConfirmedAt: null,
     pxPerCm: null,
+    diameterCm: null,
+    ringRotationDeg: null,
     source: null,
+    templateSourceTrialId: null,
+    confirmedAt: null,
+    detection: null,
   };
 }
 
@@ -17,8 +25,12 @@ export function createEmptyTrialWindow(): TrialWindow {
   return {
     startTimeUs: null,
     endTimeUs: null,
-    cutoffSeconds: null,
+    cutoffSeconds: DEFAULT_CUTOFF_SECONDS,
     source: 'manual',
+    proposedStartTimeUs: null,
+    proposedEndTimeUs: null,
+    confirmedAt: null,
+    motionOnsetConfidence: null,
   };
 }
 
@@ -55,12 +67,18 @@ export function applyIngestResult(
   decodeWallClockMs: number,
 ): TrialRecord {
   const now = new Date().toISOString();
+  const lastTimeUs = timestampIndex[timestampIndex.length - 1]?.timeUs ?? null;
   return {
     ...trial,
     ingestStatus: 'ready',
     ingestError: null,
     metadata,
     timestampIndex,
+    trialWindow: {
+      ...trial.trialWindow,
+      proposedEndTimeUs: lastTimeUs,
+      endTimeUs: trial.trialWindow.endTimeUs ?? lastTimeUs,
+    },
     progress: {
       lastIngestAt: now,
       decodeWallClockMs,

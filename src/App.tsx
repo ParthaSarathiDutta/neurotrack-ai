@@ -3,6 +3,7 @@ import styles from './styles/app.module.css';
 import { VideoIngestPanel } from './components/VideoIngestPanel';
 import { TrialList } from './components/TrialList';
 import { TrialDetailPanel } from './components/TrialDetailPanel';
+import { ReviewView } from './components/ReviewView';
 import { useSessionStore } from './store/sessionStore';
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
   }, [hydrate]);
 
   const selected = trials.find((t) => t.id === selectedTrialId) ?? null;
+  const showReview = selected?.ingestStatus === 'ready' && selected.videoCached;
 
   if (!hydrated) {
     return (
@@ -38,7 +40,15 @@ export default function App() {
           <VideoIngestPanel />
           <TrialList />
         </div>
-        <div>{selected ? <TrialDetailPanel trial={selected} /> : <TrialDetailPanelPlaceholder />}</div>
+        <div>
+          {showReview && selected ? (
+            <ReviewView trial={selected} allTrials={trials} />
+          ) : selected ? (
+            <TrialDetailPanel trial={selected} />
+          ) : (
+            <TrialDetailPanelPlaceholder />
+          )}
+        </div>
       </div>
 
       <p className={styles.status} role="status" aria-live="polite" data-testid="status-message">

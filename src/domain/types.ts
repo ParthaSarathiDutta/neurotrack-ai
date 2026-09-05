@@ -2,20 +2,45 @@
 
 export type TrialWindowSource = 'auto' | 'manual';
 
-export interface TrialWindow {
-  startTimeUs: number | null;
-  endTimeUs: number | null;
-  cutoffSeconds: number | null;
-  source: TrialWindowSource;
+export interface Hole {
+  id: number;
+  x: number;
+  y: number;
+  source: 'detected' | 'model' | 'manual';
+  confidence: number | null;
+}
+
+export interface GeometryDetectionMeta {
+  holeCandidateCount: number | null;
+  ringFitResidualPx: number | null;
+  platformEdgeSampleCount: number | null;
 }
 
 export interface Geometry {
   platformCenter: { x: number; y: number } | null;
   platformRadiusPx: number | null;
-  holes: Array<{ id: number; x: number; y: number }>;
+  holes: Hole[];
   targetHoleId: number | null;
+  proposedTargetHoleId: number | null;
+  targetHoleConfirmedAt: string | null;
   pxPerCm: number | null;
+  diameterCm: number | null;
+  ringRotationDeg: number | null;
   source: 'auto' | 'manual' | 'template' | null;
+  templateSourceTrialId: string | null;
+  confirmedAt: string | null;
+  detection: GeometryDetectionMeta | null;
+}
+
+export interface TrialWindow {
+  startTimeUs: number | null;
+  endTimeUs: number | null;
+  cutoffSeconds: number | null;
+  source: TrialWindowSource;
+  proposedStartTimeUs: number | null;
+  proposedEndTimeUs: number | null;
+  confirmedAt: string | null;
+  motionOnsetConfidence: number | null;
 }
 
 export interface TimestampIndexEntry {
@@ -55,7 +80,6 @@ export interface TrialRecord {
   timestampIndex: TimestampIndexEntry[];
   trialWindow: TrialWindow;
   geometry: Geometry;
-  /** Placeholders for MS-2+ */
   progress: {
     lastIngestAt: string | null;
     decodeWallClockMs: number | null;
@@ -95,4 +119,46 @@ export interface IngestWorkerResponse {
   result?: IngestWorkerResult;
   error?: string;
   progress?: { phase: string; framesDecoded: number; total: number };
+}
+
+export interface FrameWorkerInitMessage {
+  type: 'init';
+  id: string;
+  buffer: ArrayBuffer;
+  fileName: string;
+}
+
+export interface FrameWorkerGetFrameMessage {
+  type: 'getFrame';
+  id: string;
+  frameIndex: number;
+}
+
+export interface FrameWorkerGetFramesMessage {
+  type: 'getFrames';
+  id: string;
+  frameIndices: number[];
+}
+
+export type FrameWorkerRequest =
+  | FrameWorkerInitMessage
+  | FrameWorkerGetFrameMessage
+  | FrameWorkerGetFramesMessage;
+
+export interface FrameWorkerFrameResult {
+  frameIndex: number;
+  width: number;
+  height: number;
+  /** RGBA pixel data */
+  data: ArrayBuffer;
+}
+
+export interface FrameWorkerResponse {
+  type: 'ready' | 'frame' | 'frames' | 'error';
+  id: string;
+  width?: number;
+  height?: number;
+  frame?: FrameWorkerFrameResult;
+  frames?: FrameWorkerFrameResult[];
+  error?: string;
 }

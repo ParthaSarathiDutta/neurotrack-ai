@@ -2,7 +2,12 @@
 
 Branch: `ms-2-review-player-maze-calibration-trial-window`
 Constitution reference: `specs/constitution.md` → MS-2
-Status: **Design only. No application code written under this spec until it is approved.**
+Status: **Approved — implementation in progress.**
+
+### Approved clarifications (September 5, 2026)
+
+1. **20-hole assay contract.** NeuroTrack AI targets the standard 20-hole Barnes maze required by the Salk task. Hole count is **not** exposed as a user-configurable product setting. The ring-fit math uses a fixed `HOLE_COUNT = 20` constant (assay contract, not per-filename logic). Avoid brittle filename-specific assumptions; generalize via measured pixel properties.
+2. **Template target-hole confirmation.** Maze-template reuse may **propose** the source trial's target-hole position/identity, but the destination trial's target hole must be **explicitly confirmed** by the user before geometry is treated as final. Never silently inherit target-hole identity as experimental truth (`targetHoleConfirmedAt` field required).
 
 This spec was written after re-reading `specs/constitution.md`, `specs/ms-1-foundation-ingest-persistence.md`, `.cursor/rules/project.mdc`, `reference/salk-assignment.md`, `reference/task-01-barnes-maze.md`, `reference/sample-data.md`, `spike/phase-0-decode-timing/results/findings.md`, and the current MS-1 source (`src/domain/*`, `src/store/sessionStore.ts`, `src/db/database.ts`, `src/workers/*`). Frames were re-extracted from all three local sample videos (`data/barnes-maze/{test50,test51,test53}.mp4`) at the pre-trial mark and at ~5–6 s to visually re-confirm the constitution's measured findings before designing against them. That visual check confirmed: all three clips show a 20-hole ring; `test50`/`test53` share one rig and crop with a cable visible at the bottom and an empty platform at t≈0; `test51` uses a different, more centered crop, is visibly brighter, and shows a distinct cylindrical object at platform center at t≈0 that is absent by ~5.5 s; the mouse is a small, high-contrast, tailed blob, off-center in `test53`'s early frame and centered in `test50`/`test51`'s.
 
@@ -141,9 +146,13 @@ Applying a template to a destination trial:
 4. Either way, a **discrepancy check** compares the destination's own rough platform measurement (Otsu mask centroid/radius from D3 step 2, which requires no ring fit to compute cheaply) against the template source's. If they differ beyond a configurable tolerance, the UI surfaces an explicit warning ("this trial's rig looks different from the template's source — review the overlay carefully") rather than silently trusting the template. This is exactly the guard needed for `test51` vs. `test50`/`test53`: applying either sample rig's template to the other must warn, not silently misplace 20 holes.
 5. Result is stored with `source: 'template'` and `templateSourceTrialId` set until the user confirms/edits, at which point `confirmedAt` is set (the `source` value is retained as provenance of *how* it was produced, separate from *whether* it's confirmed — see Data contracts).
 
-### D8 — Hole count is a visible parameter, defaulted to 20, not a hard-coded constant
+### D8 — 20-hole assay contract (approved)
 
-All three sample clips have exactly 20 holes, and the constitution's mission statement describes the assay as always having 20. To honor "Generalization over tuning," the ring-fit math (D3 step 5) takes hole count as a parameter defaulted to 20 and displayed (not buried) next to the calibration result, rather than literal `20` scattered through the fitting code. This does not change behavior on the three sample clips — see the [report](#report) below for why this is flagged as a constitution point worth the user's explicit sign-off rather than a silent implementation choice.
+NeuroTrack AI targets the standard 20-hole Barnes maze required by the Salk task. Ring-fit math uses a fixed `HOLE_COUNT = 20` constant in code — this is the assay contract, not a user-facing setting and not filename-specific logic. Generalization is achieved via threshold-relative pixel measurements, not by making hole count adjustable.
+
+### D9 — Template target-hole requires explicit confirmation (approved)
+
+When applying a template, the source trial's target-hole identity may pre-fill the destination UI as a **proposal** (`proposedTargetHoleId`). Geometry confirmation requires an explicit user action to confirm the target hole for this trial (`targetHoleConfirmedAt` set). Until confirmed, downstream steps treat target-hole selection as incomplete even if other geometry fields are confirmed.
 
 ---
 
@@ -188,6 +197,8 @@ export interface Geometry {
   platformRadiusPx: number | null;      // platform edge, not hole-ring radius
   holes: Hole[];                         // was Array<{id,x,y}> in MS-1 — narrowed to Hole
   targetHoleId: number | null;
+  proposedTargetHoleId: number | null;   // NEW — template may propose; not experimental truth until confirmed
+  targetHoleConfirmedAt: string | null;  // NEW — explicit user confirmation required
   pxPerCm: number | null;
   diameterCm: number | null;             // NEW — user-entered real-world platform diameter
   ringRotationDeg: number | null;        // NEW — phase offset of the 20-point comb
@@ -276,10 +287,20 @@ Fifteen numbered criteria (V1–V15 above) exercised by an extended Playwright s
 2. **Overlay/coordinate-transform correctness across zoom, DPI, and resize.** A quietly-wrong scale factor produces a plausible-looking but incorrect overlay — exactly the kind of error that is hard to notice by eye and easy to introduce with per-component ad hoc math; this spec centralizes the transform for that reason, but it remains the most failure-prone class of bug in this milestone.
 3. **Calibration and template-reuse generalization beyond the three validated clips.** The algorithm is designed to be threshold-relative rather than filename-specific, but it has only been validated against three rigs, two of which share a setup. Genuinely different lighting, hole counts, or platform contrast in videos not in hand remain unproven; the manual fallback and discrepancy warnings exist specifically to make failure visible rather than eliminate the possibility of it.
 
-### Constitution assumption worth reconsidering
+### Constitution assumption — resolved
 
-The constitution's mission statement and tech-stack section describe the assay as always having a 20-hole ring, matching all three sample clips. For a tool meant to generalize past this folder (per `.cursor/rules/project.mdc`'s "Generalization" section), hole count should probably be a visible, adjustable parameter defaulted to 20 rather than an assumption baked into the ring-fit math — D8 above proposes exactly this, defaulting to 20 with no behavior change on the sample clips, but it is called out explicitly here because it is a product decision (does the tool claim to support other Barnes maze variants, or only 20-hole ones?) rather than a purely technical one, and deserves the user's explicit sign-off rather than a silent implementation choice.
+The 20-hole ring is the Salk task's assay contract. Fixed `HOLE_COUNT = 20` in code; not user-configurable. Generalization applies to lighting, camera position, and timing — not to non-standard hole counts.
 
 ---
 
-*No application code was written under this spec. Awaiting approval before implementation begins.*
+*Implementation follows this approved spec on branch `ms-2-review-player-maze-calibration-trial-window`.*
+
+## Completion
+
+**Status: Complete** (validated on branch, pending merge review)
+
+| # | Result | Evidence |
+|---|---|---|
+| V1–V15 | PASS | `npm run validate:ms2` — all criteria against test50, test51, test53 |
+| Unit tests | PASS | 19 tests including ringFit, motionOnset, migration, videoTransform |
+| MS-1 regression | PASS | `npm run validate:ms1` |

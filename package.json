@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "validate:ms1": "node scripts/validate-ms1.mjs",
+    "validate:ms2": "node scripts/validate-ms2.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

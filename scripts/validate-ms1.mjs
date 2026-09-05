@@ -63,9 +63,9 @@ async function main() {
   await page.waitForSelector('[data-testid="trials-heading"]:has-text("Trials (3)")');
 
   await page.getByRole('button', { name: /test51/i }).click();
-  const test51Rate = await page.locator('[data-testid="meta-frame-rate"] td').textContent();
-  await page.locator('[data-testid="technical-details"] summary').click();
-  const test51Timescale = await page.locator('[data-testid="meta-timescale"] td').textContent();
+  await page.waitForSelector('[data-testid="review-view"]', { timeout: 30_000 });
+  const test51Rate = await page.locator('[data-testid="meta-frame-rate"]').textContent();
+  const test51Timescale = await page.locator('[data-testid="meta-timescale"]').textContent();
 
   const failures = [];
   if (test51Timescale?.trim() !== '15000') {
@@ -97,15 +97,17 @@ async function main() {
   await page.waitForSelector('text=Reselect video', { timeout: 15_000 });
 
   await page.getByRole('button', { name: /test53/i }).click();
-  const labelBefore = await page.locator('[data-testid="trial-label-input"]').inputValue();
+  await page.waitForSelector('[data-testid="trial-label-input"]');
+  const labelBefore = await page.locator('[data-testid="trial-label-input"]').first().inputValue();
 
   await page.locator('input[type="file"]').last().setInputFiles([VIDEO_PATHS[2]]);
   await page.waitForFunction(
     () => document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Re-associated'),
     { timeout: 15_000 },
   );
+  await page.waitForSelector('[data-testid="review-view"]', { timeout: 60_000 });
 
-  const labelAfter = await page.locator('[data-testid="trial-label-input"]').inputValue();
+  const labelAfter = await page.locator('[data-testid="trial-label-input"]').first().inputValue();
   const sampleCount = await page.locator('[data-testid="meta-sample-count"]').textContent();
 
   if (labelBefore !== labelAfter) {

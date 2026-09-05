@@ -1,5 +1,6 @@
 import styles from '../styles/app.module.css';
 import type { TrialRecord } from '../domain/types';
+import { getTrialReviewStatus, reviewStatusLabel } from '../domain/migration';
 import { useSessionStore } from '../store/sessionStore';
 
 function statusBadge(status: TrialRecord['ingestStatus']) {
@@ -58,6 +59,11 @@ export function TrialList() {
                 </span>
                 <span className={styles.mono}>{trial.fileName}</span>
                 {statusBadge(trial.ingestStatus)}
+                {trial.ingestStatus === 'ready' && (
+                  <span className={styles.reviewBadge} data-testid={`review-badge-${trial.label}`}>
+                    {reviewStatusLabel(getTrialReviewStatus(trial))}
+                  </span>
+                )}
               </button>
             </li>
           );
