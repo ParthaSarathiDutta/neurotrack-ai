@@ -38,6 +38,7 @@ async function main() {
   await page.locator('input[type="file"][multiple]').first().setInputFiles(paths);
   await page.waitForFunction(
     () => document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Ingest complete'),
+    undefined,
     { timeout: 180_000 },
   );
 

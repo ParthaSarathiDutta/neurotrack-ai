@@ -77,8 +77,12 @@ async function setupTrials(page) {
   await page.goto(`http://127.0.0.1:8779/`);
   await page.waitForFunction(() => document.querySelector('h1')?.textContent?.includes('NeuroTrack'));
   await page.locator('input[type="file"][multiple]').first().setInputFiles(VIDEO_PATHS);
+  // NOTE: waitForFunction(fn, {timeout}) with a zero-arg fn treats the object as the
+  // browser-side `arg` (unused), not `options` — it silently falls back to the 30s
+  // default. Pass `undefined` explicitly whenever the intended timeout exceeds 30s.
   await page.waitForFunction(
     () => document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Ingest complete'),
+    undefined,
     { timeout: 180_000 },
   );
 }
@@ -94,6 +98,7 @@ async function prepareTrialForTracking(page, label) {
   await page.locator('[data-testid="auto-detect-btn"]').click({ timeout: 60_000 });
   await page.waitForFunction(
     () => document.querySelector('[data-testid="hole-count-summary"]')?.textContent?.includes('20'),
+    undefined,
     { timeout: 180_000 },
   );
 
@@ -107,13 +112,37 @@ async function prepareTrialForTracking(page, label) {
     }
   }
 
-  await page.evaluate(() => {
-    const sel = document.querySelector('[data-testid="target-hole-select"]');
-    if (sel) {
-      sel.value = '0';
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  });
+  // Target hole starts unknown; confirming with nothing selected must be blocked
+  // (no silent fallback to Hole 1) — checked once, on the first trial only.
+  if (label === 'test53') {
+    results.V_target_unknown_blocks_confirm = await page
+      .locator('[data-testid="confirm-target-btn"]')
+      .isDisabled()
+      ? 'PASS'
+      : 'FAIL';
+
+    // Select a hole, confirm it, then clear it back to unknown — the select and the
+    // confirm button must both return to their unknown/disabled state.
+    await page.locator('[data-testid="target-hole-select"]').selectOption('3');
+    await page.locator('[data-testid="confirm-target-btn"]').click();
+    await page.waitForSelector('[data-testid="target-confirmed"]', { timeout: 15_000 });
+    await page.locator('[data-testid="clear-target-btn"]').click();
+    await page.waitForFunction(
+      () => !document.querySelector('[data-testid="target-confirmed"]'),
+      undefined,
+      { timeout: 10_000 },
+    );
+    const selectValueAfterClear = await page
+      .locator('[data-testid="target-hole-select"]')
+      .inputValue();
+    const confirmDisabledAfterClear = await page
+      .locator('[data-testid="confirm-target-btn"]')
+      .isDisabled();
+    results.V_target_clear_returns_to_unknown =
+      selectValueAfterClear === '' && confirmDisabledAfterClear ? 'PASS' : 'FAIL';
+  }
+
+  await page.locator('[data-testid="target-hole-select"]').selectOption('0');
   await page.locator('[data-testid="confirm-target-btn"]').click();
   await page.waitForSelector('[data-testid="target-confirmed"]', { timeout: 15_000 });
   await page.locator('[data-testid="confirm-geometry-btn"]').click();
@@ -125,6 +154,7 @@ async function prepareTrialForTracking(page, label) {
       const start = document.querySelector('[data-testid="start-time-input"]');
       return start && start.value && parseFloat(start.value) > 0;
     },
+    undefined,
     { timeout: 180_000 },
   );
   await page.locator('[data-testid="confirm-window-btn"]').click();
@@ -138,6 +168,7 @@ async function runTrackingAndWait(page, timeoutMs = 600_000) {
       const msg = document.querySelector('[data-testid="status-message"]')?.textContent ?? '';
       return msg.includes('Tracking complete') || msg.includes('Tracking failed') || msg.includes('cancelled');
     },
+    undefined,
     { timeout: timeoutMs },
   );
 }
@@ -176,6 +207,12 @@ async function main() {
   const gateAfter = await page.locator('[data-testid="tracking-gate-message"]').isVisible().catch(() => false);
   results.V8b = !gateAfter ? 'PASS' : 'FAIL';
   if (results.V8b !== 'PASS') failures.push('V8b: gate still visible after prep');
+  if (results.V_target_unknown_blocks_confirm !== 'PASS') {
+    failures.push('V_target_unknown_blocks_confirm: confirm enabled with no selection');
+  }
+  if (results.V_target_clear_returns_to_unknown !== 'PASS') {
+    failures.push('V_target_clear_returns_to_unknown: clearing target did not restore unknown state');
+  }
 
   // V1/V3 — run tracking on test53 (short clip)
   await runTrackingAndWait(page, 600_000);
@@ -202,18 +239,58 @@ async function main() {
     results.V9 = 'PASS';
   }
 
-  // V6 — flagged frame seek
+  // Category-based review UX: every category is present with a count, and expanding
+  // one category never hides frames belonging to another (each category's frames are
+  // rendered independently, so opening all of them and counting must match the totals).
+  const categoryKeys = ['lost', 'absent_in_hole', 'ambiguous_head_tail', 'low_confidence', 'speed_outlier', 'possible_occlusion'];
+  const categoryEls = await page.locator('details[data-testid^="flagged-category-"]').count();
+  results.V_review_categories_present = categoryEls === categoryKeys.length ? 'PASS' : `FAIL: found ${categoryEls}`;
+  if (results.V_review_categories_present !== 'PASS') {
+    failures.push(`V_review_categories_present: ${results.V_review_categories_present}`);
+  }
+  // Force every category open so collapsed <details> content becomes clickable.
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-testid^="flagged-category-"]').forEach((el) => {
+      el.open = true;
+    });
+  });
+
+  // V6 — flagged frame seek: clicking a flagged frame must seek to that EXACT frame
+  // (RH1), not merely "some" different frame.
   const flaggedBtn = page.locator('[data-testid^="flagged-frame-"]').first();
-  if (await flaggedBtn.isVisible()) {
-    const before = await page.locator('[data-testid="current-frame-index"]').textContent();
+  if ((await flaggedBtn.count()) > 0 && (await flaggedBtn.isVisible())) {
+    const testId = await flaggedBtn.getAttribute('data-testid');
+    const targetFrame = Number(testId.replace('flagged-frame-', ''));
     await flaggedBtn.click();
-    await page.waitForTimeout(1000);
-    const after = await page.locator('[data-testid="current-frame-index"]').textContent();
-    results.V6 = before !== after ? 'PASS' : 'FAIL';
+    try {
+      await page.waitForFunction(
+        (n) => document.querySelector('[data-testid="current-frame-index"]')?.textContent?.includes(`Frame ${n}/`),
+        targetFrame + 1,
+        { timeout: 10_000 },
+      );
+      results.V6 = 'PASS';
+    } catch {
+      const after = await page.locator('[data-testid="current-frame-index"]').textContent();
+      results.V6 = `FAIL: expected frame ${targetFrame + 1}, got ${after}`;
+    }
   } else {
     results.V6 = test53Track.assessment === 'high' ? 'PASS (no flags — high quality)' : 'SKIP';
   }
-  if (results.V6 === 'FAIL') failures.push('V6: flagged frame seek did not change frame');
+  if (typeof results.V6 === 'string' && results.V6.startsWith('FAIL')) {
+    failures.push(`V6: ${results.V6}`);
+  }
+
+  // "Go to frame" — exact numeric seek, synchronized with the displayed frame counter.
+  await page.locator('[data-testid="goto-frame-input"]').fill('50');
+  await page.locator('[data-testid="goto-frame-input"]').press('Enter');
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="current-frame-index"]')?.textContent?.includes('Frame 50/'),
+    undefined,
+    { timeout: 10_000 },
+  );
+  const gotoFrameText = await page.locator('[data-testid="current-frame-index"]').textContent();
+  results.V_goto_frame = gotoFrameText?.includes('Frame 50/') ? 'PASS' : `FAIL: ${gotoFrameText}`;
+  if (results.V_goto_frame !== 'PASS') failures.push(`V_goto_frame: ${gotoFrameText}`);
 
   // V4 — persistence
   const snap53 = test53Track;
@@ -237,6 +314,47 @@ async function main() {
   // V7 — test51 tracking completes (cylinder rejection via worker)
   results.V7 = test51Track.summary?.includes('Tracked') ? 'PASS' : 'FAIL';
   if (results.V7 !== 'PASS') failures.push(`V7: test51 ${test51Track.summary}`);
+
+  // Washed-out-frame check (test51 ~frame 115): decode/seek must not corrupt any frame
+  // into a flat/blank image relative to its neighbors. Sampled across several GOPs.
+  // Must re-select test51 first — the V5 check above left test53 active.
+  await selectTrial(page, 'test51');
+  const frameStats = [];
+  for (let f = 105; f <= 125; f += 1) {
+    await page.locator('[data-testid="goto-frame-input"]').fill(String(f));
+    await page.locator('[data-testid="goto-frame-input"]').press('Enter');
+    await page.waitForFunction(
+      (n) => document.querySelector('[data-testid="current-frame-index"]')?.textContent?.includes(`Frame ${n}/`),
+      f,
+      { timeout: 10_000 },
+    );
+    await page.waitForTimeout(150);
+    const stats = await page.evaluate(() => {
+      const canvas = document.querySelector('[data-testid="player-frame-canvas"]');
+      if (!canvas) return null;
+      const ctx = canvas.getContext('2d');
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let sum = 0;
+      let sumSq = 0;
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4 * 37) {
+        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        sum += lum;
+        sumSq += lum * lum;
+        n += 1;
+      }
+      const mean = sum / n;
+      const std = Math.sqrt(Math.max(0, sumSq / n - mean * mean));
+      return { mean, std };
+    });
+    frameStats.push({ f, ...stats });
+  }
+  const stds = frameStats.map((s) => s.std);
+  const medianStd = [...stds].sort((a, b) => a - b)[Math.floor(stds.length / 2)];
+  const washedOut = frameStats.filter((s) => s.std < medianStd * 0.15);
+  console.log('test51 frame 105-125 luminance stats:', JSON.stringify(frameStats));
+  results.V_no_washed_out_frames = washedOut.length === 0 ? 'PASS' : `FAIL: ${JSON.stringify(washedOut)}`;
+  if (washedOut.length > 0) failures.push(`V_no_washed_out_frames: ${JSON.stringify(washedOut)}`);
 
   await browser.close();
   server.close();

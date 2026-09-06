@@ -55,8 +55,13 @@ async function main() {
 
   await page.locator('input[type="file"][multiple]').first().setInputFiles(VIDEO_PATHS);
 
+  // Passing { timeout } as the 2nd positional arg to waitForFunction() is a common
+  // trap: for a zero-arg pageFunction it's treated as `arg` (unused), not `options`,
+  // so Playwright silently falls back to its 30s default. Always pass `undefined`
+  // explicitly for `arg` when the intended timeout must exceed 30s.
   await page.waitForFunction(
     () => document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Ingest complete'),
+    undefined,
     { timeout: 180_000 },
   );
 
@@ -103,6 +108,7 @@ async function main() {
   await page.locator('input[type="file"]').last().setInputFiles([VIDEO_PATHS[2]]);
   await page.waitForFunction(
     () => document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Re-associated'),
+    undefined,
     { timeout: 15_000 },
   );
   await page.waitForSelector('[data-testid="review-view"]', { timeout: 60_000 });

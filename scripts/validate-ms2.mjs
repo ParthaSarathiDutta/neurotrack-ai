@@ -70,8 +70,12 @@ async function setupTrials(page) {
   await page.goto(`http://127.0.0.1:8778/`);
   await page.waitForFunction(() => document.querySelector('h1')?.textContent?.includes('NeuroTrack'));
   await page.locator('input[type="file"][multiple]').first().setInputFiles(VIDEO_PATHS);
+  // NOTE: waitForFunction(fn, {timeout}) with a zero-arg fn treats the object as the
+  // browser-side `arg` (unused), not `options` — it silently falls back to the 30s
+  // default. Pass `undefined` explicitly whenever the intended timeout exceeds 30s.
   await page.waitForFunction(
     () => document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Ingest complete'),
+    undefined,
     { timeout: 180_000 },
   );
   await page.waitForSelector('[data-testid="trials-heading"]:has-text("Trials (3)")');
@@ -151,6 +155,7 @@ async function main() {
           msg.includes('error')
         );
       },
+      undefined,
       { timeout: 180_000 },
     );
 
@@ -183,6 +188,7 @@ async function main() {
           msg.includes('confidence')
         );
       },
+      undefined,
       { timeout: 180_000 },
     );
     const proposed = await page.locator('[data-testid="proposed-start"]').textContent().catch(() => null);
@@ -374,20 +380,19 @@ async function main() {
   results.V2 = overlayVisible ? 'PASS' : 'FAIL';
   if (!overlayVisible) failures.push('V2: overlay not visible');
 
-  // V7/V8 — confirm geometry with target hole and scale, persist across reload
+  // V7/V8 — confirm geometry with target hole and scale, persist across reload.
+  // test50 was already auto-detected once in the loop above (hole-count-summary
+  // already reads "20 holes"), so re-clicking auto-detect here would be redundant —
+  // and genuinely un-observable as a "busy" transition, since detection only ever
+  // analyzes frame 0 and settles in well under one Playwright poll interval. Reuse
+  // the existing calibration state instead of racing a same-trial re-detection.
   await selectTrial(page, 'test50');
-  await page.locator('[data-testid="auto-detect-btn"]').click({ timeout: 60_000 });
   await page.waitForFunction(
     () => document.querySelector('[data-testid="hole-count-summary"]')?.textContent?.includes('20'),
-    { timeout: 180_000 },
+    undefined,
+    { timeout: 30_000 },
   );
-  await page.evaluate(() => {
-    const sel = document.querySelector('[data-testid="target-hole-select"]');
-    if (sel) {
-      sel.value = '0';
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  });
+  await page.locator('[data-testid="target-hole-select"]').selectOption('0');
   await page.waitForTimeout(300);
   await page.locator('[data-testid="confirm-target-btn"]').click();
   await page.waitForSelector('[data-testid="target-confirmed"]', { timeout: 15_000 });
@@ -435,6 +440,7 @@ async function main() {
         const msg = document.querySelector('[data-testid="status-message"]')?.textContent ?? '';
         return msg.includes('Template') || msg.includes('template') || msg.includes('Confirm');
       },
+      undefined,
       { timeout: 180_000 },
     );
     const holeCount = await page.locator('[data-testid="hole-count-summary"]').textContent().catch(() => null);

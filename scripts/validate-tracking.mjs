@@ -193,6 +193,11 @@ for (const name of ['test53', 'test51', 'test50']) {
   }
 
   const quality = computeTrackQuality(observations, params);
+  const trackedObs = observations.filter((o) => o.observed === 'tracked');
+  const noseCount = trackedObs.filter((o) => o.bodyXY != null && o.noseXY != null).length;
+  const ambiguousHeadTailCount = trackedObs.filter((o) =>
+    o.qualityFlags?.includes('ambiguous_head_tail'),
+  ).length;
   results[name] = {
     totalFrames: quality.totalFrames,
     trackedFraction: Number(quality.trackedFraction.toFixed(4)),
@@ -203,6 +208,10 @@ for (const name of ['test53', 'test51', 'test50']) {
       ? Number((quality.speedOutlierCount / quality.trackedCount).toFixed(4))
       : 0,
     meanConfidence: Number(quality.meanConfidence.toFixed(3)),
+    noseRate: trackedObs.length ? Number((noseCount / trackedObs.length).toFixed(4)) : 0,
+    ambiguousHeadTailRate: trackedObs.length
+      ? Number((ambiguousHeadTailCount / trackedObs.length).toFixed(4))
+      : 0,
   };
 
   if (observations.some((o) => o.origin !== 'auto')) failures.push(`${name}: non-auto origin`);
