@@ -22,7 +22,10 @@ function post(msg: FrameWorkerResponse, transfer?: Transferable[]) {
   }
 }
 
+/** Samples in original container/decode order — required for correct B-frame decoding. */
 let samples: DecodedSample[] = [];
+/** presentationOrder[frameIndex] = index into `samples` (decode order) for that presentation-order frame. */
+let presentationOrder: number[] = [];
 let extract: ReturnType<typeof extractDecoderConfig> | null = null;
 let frameWidth = 0;
 let frameHeight = 0;
@@ -30,6 +33,7 @@ let initPromise: Promise<void> | null = null;
 
 async function initDecoder(buffer: ArrayBuffer): Promise<void> {
   samples = [];
+  presentationOrder = [];
   extract = null;
 
   await new Promise<void>((resolve, reject) => {
@@ -77,7 +81,14 @@ async function initDecoder(buffer: ArrayBuffer): Promise<void> {
     mp4.flush();
   });
 
-  samples.sort((a, b) => a.cts - b.cts);
+  // `samples` stays in decode order (required for correct B-frame reference decoding —
+  // ISOBMFF stores samples in decode order; sorting here would feed the decoder frames
+  // out of dependency order and corrupt output for any GOP using B-frames). Presentation
+  // order (used everywhere else in the app as "frameIndex") is a separate index built
+  // from cts, matching `buildTimestampIndex`'s ordering exactly.
+  presentationOrder = samples
+    .map((_, i) => i)
+    .sort((a, b) => samples[a].cts - samples[b].cts);
 }
 
 async function decodeFrameAtIndex(frameIndex: number): Promise<{
@@ -87,11 +98,17 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
   data: ArrayBuffer;
 }> {
   if (!extract) throw new Error('Decoder not initialized');
-  if (frameIndex < 0 || frameIndex >= samples.length) {
+  if (frameIndex < 0 || frameIndex >= presentationOrder.length) {
     throw new Error(`Frame index ${frameIndex} out of range`);
   }
 
-  let startIdx = frameIndex;
+  const targetIdx = presentationOrder[frameIndex];
+  const targetTimestampUs = ctsToMicroseconds(samples[targetIdx].cts, samples[targetIdx].timescale);
+
+  // Walk backward in DECODE order (natural array index) to the nearest keyframe —
+  // a keyframe always starts its GOP in decode order too, so this is safe even
+  // though `targetIdx`'s decode position and presentation position can differ.
+  let startIdx = targetIdx;
   while (startIdx > 0 && !samples[startIdx].isSync) startIdx -= 1;
 
   const config = {
@@ -106,13 +123,14 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
 
   let capturedFrame: VideoFrame | null = null;
   let decodeError: string | null = null;
-  const outputsPending = frameIndex - startIdx + 1;
-  let outputsReceived = 0;
 
   const decoder = new VideoDecoder({
     output: (frame) => {
-      outputsReceived += 1;
-      if (outputsReceived === outputsPending) {
+      // The decode-order range [startIdx..targetIdx] always includes every reference
+      // frame the target depends on, but for B-frame content it can also include
+      // forward-referenced frames presented AFTER the target — the decoder emits all
+      // of these in presentation order, so we must match by timestamp, not by count.
+      if (frame.timestamp === targetTimestampUs && !capturedFrame) {
         capturedFrame = frame;
       } else {
         frame.close();
@@ -125,7 +143,7 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
 
   decoder.configure(config);
 
-  for (let i = startIdx; i <= frameIndex; i += 1) {
+  for (let i = startIdx; i <= targetIdx; i += 1) {
     const s = samples[i];
     const chunk = new EncodedVideoChunk({
       type: s.isSync ? 'key' : 'delta',
@@ -140,7 +158,11 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
   decoder.close();
 
   if (decodeError) throw new Error(`Frame ${frameIndex}: ${decodeError}`);
-  if (!capturedFrame) throw new Error(`Failed to decode frame ${frameIndex} (outputs=${outputsReceived})`);
+  if (!capturedFrame) {
+    throw new Error(
+      `Failed to decode frame ${frameIndex} (target timestamp ${targetTimestampUs}us not among decoder outputs)`,
+    );
+  }
 
   const canvas = new OffscreenCanvas(frameWidth, frameHeight);
   const ctx = canvas.getContext('2d');
