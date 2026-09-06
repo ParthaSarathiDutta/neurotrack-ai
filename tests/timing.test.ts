@@ -3,6 +3,7 @@ import {
   buildTimestampIndex,
   containerFrameRateLabel,
   ctsToMicroseconds,
+  formatPresentationTimeSeconds,
   isNonIntegerFrameRate,
   medianUniqueCtsDelta,
 } from '../src/domain/timing';
@@ -39,5 +40,9 @@ describe('timing', () => {
     expect(median).toBe(512);
     expect(containerFrameRateLabel(15360, median)).toBe('15360/512');
     expect(isNonIntegerFrameRate('15360/512')).toBe(false);
+  });
+
+  it('formatPresentationTimeSeconds preserves microsecond precision from container ticks', () => {
+    expect(formatPresentationTimeSeconds(6_700_065)).toBe('6.700065');
   });
 });

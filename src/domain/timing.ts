@@ -68,3 +68,47 @@ export function isNonIntegerFrameRate(label: string): boolean {
 export function secondsFromTimeUs(timeUs: number): number {
   return timeUs / 1_000_000;
 }
+
+/** Display container-derived presentation time with enough precision to distinguish adjacent frames. */
+export function formatPresentationTimeSeconds(timeUs: number, decimals = 6): string {
+  return secondsFromTimeUs(timeUs).toFixed(decimals);
+}
+
+export interface TimestampIndexIntegrity {
+  frameCount: number;
+  /** Count of adjacent pairs with identical timeUs (valid when container repeats composition time). */
+  duplicateAdjacentTimeUs: number;
+  /** Count of adjacent pairs where timeUs decreases (should always be 0). */
+  nonMonotonicAdjacent: number;
+  /** Adjacent pairs whose timeUs differ but collide at 3 decimal places in display. */
+  displayCollisionAt3Decimals: number;
+}
+
+/** Summarize timestamp-index integrity for regression tests and diagnostics. */
+export function analyzeTimestampIndexIntegrity(
+  index: Array<{ timeUs: number }>,
+): TimestampIndexIntegrity {
+  let duplicateAdjacentTimeUs = 0;
+  let nonMonotonicAdjacent = 0;
+  let displayCollisionAt3Decimals = 0;
+
+  for (let i = 1; i < index.length; i += 1) {
+    const prev = index[i - 1].timeUs;
+    const curr = index[i].timeUs;
+    if (curr === prev) duplicateAdjacentTimeUs += 1;
+    if (curr < prev) nonMonotonicAdjacent += 1;
+    if (
+      curr !== prev &&
+      formatPresentationTimeSeconds(prev, 3) === formatPresentationTimeSeconds(curr, 3)
+    ) {
+      displayCollisionAt3Decimals += 1;
+    }
+  }
+
+  return {
+    frameCount: index.length,
+    duplicateAdjacentTimeUs,
+    nonMonotonicAdjacent,
+    displayCollisionAt3Decimals,
+  };
+}

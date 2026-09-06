@@ -58,9 +58,9 @@ export interface TrialWindow {
 }
 
 export interface TimestampIndexEntry {
-  /** Primary temporal key — microseconds from container cts/timescale */
+  /** Presentation time from container cts/timescale (microseconds). Not guaranteed unique. */
   timeUs: number;
-  /** Convenience index for display; not authoritative */
+  /** Canonical identity for this presentation-order frame — use for lookups, corrections, and observations. */
   frameIndex: number;
   cts: number;
   timescale: number;
@@ -93,7 +93,9 @@ export type ObservationQualityFlag =
   | 'near_hole_disappearance';
 
 export interface Observation {
+  /** Container presentation time — may duplicate across distinct frameIndex values. */
   timeUs: number;
+  /** Canonical row identity — always use this for lookup, correction, and persistence keys. */
   frameIndex: number;
   bodyXY: { x: number; y: number } | null;
   noseXY: { x: number; y: number } | null;

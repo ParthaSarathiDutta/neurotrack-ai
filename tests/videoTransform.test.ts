@@ -4,7 +4,11 @@ import {
   displayToVideo,
   stepFrameIndex,
   computeLetterboxedContentRect,
+  nearestIndexEntry,
+  findByFrameIndex,
+  indexEntriesAtTimeUs,
 } from '../src/domain/videoTransform';
+import type { Observation } from '../src/domain/types';
 
 describe('videoTransform', () => {
   const box = {
@@ -54,5 +58,46 @@ describe('videoTransform', () => {
     const stepDeltaUs = timestampIndex[2].timeUs - timestampIndex[1].timeUs;
     expect(stepDeltaUs).toBe(frameIntervalUs);
     expect(stepFrameIndex(timestampIndex[1].frameIndex, 1, 5538)).toBe(2);
+  });
+
+  it('nearestIndexEntry tie-breaks duplicate timeUs by lowest frameIndex', () => {
+    const index = [
+      { timeUs: 7_066_667, frameIndex: 209, cts: 108544, timescale: 15360 },
+      { timeUs: 7_066_667, frameIndex: 210, cts: 108544, timescale: 15360 },
+    ];
+    expect(nearestIndexEntry(index, 7_066_667)?.frameIndex).toBe(209);
+    expect(indexEntriesAtTimeUs(index, 7_066_667)).toHaveLength(2);
+    expect(
+      nearestIndexEntry(index, 7_066_667, { preferredFrameIndex: 210 })?.frameIndex,
+    ).toBe(210);
+  });
+
+  it('findByFrameIndex resolves observations when timeUs duplicates', () => {
+    const sharedTimeUs = 7_066_667;
+    const observations: Observation[] = [
+      {
+        timeUs: sharedTimeUs,
+        frameIndex: 209,
+        bodyXY: { x: 1, y: 2 },
+        noseXY: null,
+        confidence: 0.8,
+        observed: 'tracked',
+        origin: 'auto',
+        qualityFlags: null,
+      },
+      {
+        timeUs: sharedTimeUs,
+        frameIndex: 210,
+        bodyXY: { x: 3, y: 4 },
+        noseXY: null,
+        confidence: 0.7,
+        observed: 'tracked',
+        origin: 'auto',
+        qualityFlags: null,
+      },
+    ];
+    expect(findByFrameIndex(observations, 209)?.bodyXY).toEqual({ x: 1, y: 2 });
+    expect(findByFrameIndex(observations, 210)?.bodyXY).toEqual({ x: 3, y: 4 });
+    expect(observations.filter((o) => o.timeUs === sharedTimeUs)).toHaveLength(2);
   });
 });

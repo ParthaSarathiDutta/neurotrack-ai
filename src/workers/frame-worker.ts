@@ -103,7 +103,17 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
   }
 
   const targetIdx = presentationOrder[frameIndex];
-  const targetTimestampUs = ctsToMicroseconds(samples[targetIdx].cts, samples[targetIdx].timescale);
+  const targetSample = samples[targetIdx];
+  const targetTimestampUs = ctsToMicroseconds(targetSample.cts, targetSample.timescale);
+
+  // When multiple presentation-order frames share the same composition timestamp,
+  // the decoder emits multiple outputs with identical frame.timestamp — pick the Nth match.
+  let sameTimestampRank = 0;
+  for (let fi = 0; fi < frameIndex; fi += 1) {
+    const si = presentationOrder[fi];
+    const ts = ctsToMicroseconds(samples[si].cts, samples[si].timescale);
+    if (ts === targetTimestampUs) sameTimestampRank += 1;
+  }
 
   // Walk backward in DECODE order (natural array index) to the nearest keyframe —
   // a keyframe always starts its GOP in decode order too, so this is safe even
@@ -123,6 +133,7 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
 
   let capturedFrame: VideoFrame | null = null;
   let decodeError: string | null = null;
+  let timestampMatchCount = 0;
 
   const decoder = new VideoDecoder({
     output: (frame) => {
@@ -130,8 +141,13 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
       // frame the target depends on, but for B-frame content it can also include
       // forward-referenced frames presented AFTER the target — the decoder emits all
       // of these in presentation order, so we must match by timestamp, not by count.
-      if (frame.timestamp === targetTimestampUs && !capturedFrame) {
-        capturedFrame = frame;
+      if (frame.timestamp === targetTimestampUs) {
+        if (timestampMatchCount === sameTimestampRank) {
+          capturedFrame = frame;
+        } else {
+          timestampMatchCount += 1;
+          frame.close();
+        }
       } else {
         frame.close();
       }

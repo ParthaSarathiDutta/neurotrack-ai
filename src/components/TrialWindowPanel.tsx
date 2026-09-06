@@ -1,5 +1,5 @@
 import type { TrialRecord } from '../domain/types';
-import { secondsFromTimeUs } from '../domain/timing';
+import { formatPresentationTimeSeconds, secondsFromTimeUs } from '../domain/timing';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
 
@@ -15,12 +15,11 @@ export function TrialWindowPanel({ trial }: TrialWindowPanelProps) {
 
   const tw = trial.trialWindow;
   const durationSec = trial.metadata?.durationSec ?? 0;
-  const displaySec = (sec: number | null) => (sec != null ? sec.toFixed(3) : null);
+  const displayTimeUs = (timeUs: number | null) =>
+    timeUs != null ? formatPresentationTimeSeconds(timeUs) : null;
 
   const startSec = tw.startTimeUs != null ? secondsFromTimeUs(tw.startTimeUs) : null;
   const endSec = tw.endTimeUs != null ? secondsFromTimeUs(tw.endTimeUs) : null;
-  const proposedStartSec =
-    tw.proposedStartTimeUs != null ? secondsFromTimeUs(tw.proposedStartTimeUs) : null;
   const trialDurationSec =
     startSec != null && endSec != null ? endSec - startSec : durationSec > 0 ? durationSec : null;
 
@@ -50,9 +49,9 @@ export function TrialWindowPanel({ trial }: TrialWindowPanelProps) {
         </div>
       )}
 
-      {proposedStartSec != null && (
+      {tw.proposedStartTimeUs != null && (
         <p data-testid="proposed-start">
-          Proposed start: {displaySec(proposedStartSec)} s
+          Proposed start: {displayTimeUs(tw.proposedStartTimeUs)} s
           {tw.motionOnsetConfidence != null
             ? ` (confidence ${tw.motionOnsetConfidence.toFixed(2)})`
             : ''}
@@ -62,7 +61,7 @@ export function TrialWindowPanel({ trial }: TrialWindowPanelProps) {
 
       {trialDurationSec != null && (
         <p data-testid="trial-duration-display">
-          Proposed trial duration: {displaySec(trialDurationSec)} s
+          Proposed trial duration: {trialDurationSec.toFixed(3)} s
         </p>
       )}
 

@@ -64,29 +64,58 @@ export function displayToVideo(point: VideoPoint, box: VideoDisplayBox): VideoPo
 }
 
 /** Find nearest timestamp index entry to a time in seconds. */
-export function nearestIndexEntry<T extends { timeUs: number }>(
+export function nearestIndexEntry<T extends { timeUs: number; frameIndex: number }>(
   index: T[],
   timeUs: number,
+  options?: { preferredFrameIndex?: number },
 ): T | null {
   if (index.length === 0) return null;
   let best = index[0];
   let bestDist = Math.abs(best.timeUs - timeUs);
+
   for (const entry of index) {
     const dist = Math.abs(entry.timeUs - timeUs);
     if (dist < bestDist) {
       best = entry;
       bestDist = dist;
+    } else if (dist === bestDist) {
+      const preferred = options?.preferredFrameIndex;
+      if (preferred != null) {
+        if (entry.frameIndex === preferred) {
+          best = entry;
+        } else if (best.frameIndex !== preferred && entry.frameIndex < best.frameIndex) {
+          best = entry;
+        }
+      } else if (entry.frameIndex < best.frameIndex) {
+        best = entry;
+      }
     }
   }
   return best;
 }
 
-/** Find index entry by frame index. */
+/** All index entries sharing an exact presentation time (0, 1, or more). */
+export function indexEntriesAtTimeUs<T extends { timeUs: number }>(
+  index: T[],
+  timeUs: number,
+): T[] {
+  return index.filter((e) => e.timeUs === timeUs);
+}
+
+/** Find index entry by canonical frame identity. */
 export function indexEntryByFrameIndex<T extends { frameIndex: number }>(
   index: T[],
   frameIndex: number,
 ): T | null {
   return index.find((e) => e.frameIndex === frameIndex) ?? null;
+}
+
+/** Find observation (or any row keyed by frameIndex) — never use timeUs alone as a unique key. */
+export function findByFrameIndex<T extends { frameIndex: number }>(
+  rows: T[],
+  frameIndex: number,
+): T | null {
+  return rows.find((r) => r.frameIndex === frameIndex) ?? null;
 }
 
 /** Step frame index forward/backward, clamped to valid range. */

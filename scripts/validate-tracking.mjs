@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /**
  * Offline tracking validation — streams frames from ffmpeg, processes incrementally.
+ * Uses container-derived timestamps (mp4box) and motion-onset trial window (same as live UI).
  * Run: npm run validate:tracking
  */
 import { execSync, spawn } from 'child_process';
 import { readFileSync, unlinkSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { extractMp4TimestampIndex } from './lib/mp4TimestampIndex.mjs';
+import { proposeTrialWindowOffline } from './lib/offlineTrialWindow.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -30,27 +33,13 @@ const {
 const { defaultTrackingParams } = await import(
   new URL('../src/domain/trialFactory.ts', import.meta.url).href
 );
-const { buildTimestampIndex } = await import(
-  new URL('../src/domain/timing.ts', import.meta.url).href
-);
 
-function ffprobeJson(videoPath) {
-  const out = execSync(
-    `ffprobe -v error -select_streams v:0 -show_entries stream=nb_frames,r_frame_rate -of json "${videoPath}"`,
-    { encoding: 'utf8' },
-  );
-  return JSON.parse(out).streams[0];
-}
-
-function buildIndexFromProbe(stream) {
-  const nb = Number(stream.nb_frames);
-  const [num, den] = stream.r_frame_rate.split('/').map(Number);
-  return buildTimestampIndex(
-    Array.from({ length: nb }, (_, i) => ({ cts: i * num, timescale: den })),
-  );
-}
+const frameCache = new Map();
 
 function extractFrame(videoName, frameIndex) {
+  const key = `${videoName}:${frameIndex}`;
+  if (frameCache.has(key)) return frameCache.get(key);
+
   const videoPath = join(DATA, `${videoName}.mp4`);
   const rawPath = join(DATA, `.validate-track-${videoName}-${frameIndex}.raw`);
   execSync(
@@ -59,7 +48,9 @@ function extractFrame(videoName, frameIndex) {
   );
   const buf = readFileSync(rawPath);
   unlinkSync(rawPath);
-  return new Uint8ClampedArray(buf.buffer, buf.byteOffset, buf.byteLength);
+  const pixels = new Uint8ClampedArray(buf.buffer, buf.byteOffset, buf.byteLength);
+  frameCache.set(key, pixels);
+  return pixels;
 }
 
 function trackVideoStreaming(videoName, ctx, timestampIndex) {
@@ -138,14 +129,14 @@ const MANUAL_SPOT_CHECKS = {
 
 for (const name of ['test53', 'test51', 'test50']) {
   console.log(`Tracking ${name}…`);
+  frameCache.clear();
   const videoPath = join(DATA, `${name}.mp4`);
   if (!existsSync(videoPath)) {
     failures.push(`${name}: missing video`);
     continue;
   }
 
-  const probe = ffprobeJson(videoPath);
-  const timestampIndex = buildIndexFromProbe(probe);
+  const timestampIndex = await extractMp4TimestampIndex(videoPath);
 
   const det = detectMazeFromFrames([extractFrame(name, 0)], WIDTH, HEIGHT);
   if ((det.geometry.holes?.length ?? 0) !== 20) {
@@ -164,7 +155,23 @@ for (const name of ['test53', 'test51', 'test50']) {
     failures.push(`${name}: incomplete platform geometry`);
     continue;
   }
-  const startTimeUs = 5_000_000;
+
+  const windowProposal = proposeTrialWindowOffline({
+    timestampIndex,
+    geometry,
+    width: WIDTH,
+    height: HEIGHT,
+    getFramePixels: (idx) => extractFrame(name, idx),
+  });
+
+  if (!windowProposal.success || windowProposal.startTimeUs == null) {
+    failures.push(
+      `${name}: trial window detection failed (${windowProposal.failureReason ?? 'unknown'})`,
+    );
+    continue;
+  }
+
+  const startTimeUs = windowProposal.startTimeUs;
   const endTimeUs = timestampIndex[timestampIndex.length - 1].timeUs;
   const trialWindow = {
     startTimeUs,
@@ -174,9 +181,13 @@ for (const name of ['test53', 'test51', 'test50']) {
     proposedStartTimeUs: startTimeUs,
     proposedEndTimeUs: endTimeUs,
     confirmedAt: new Date().toISOString(),
-    motionOnsetConfidence: 1,
+    motionOnsetConfidence: windowProposal.confidence,
     detectionFailureReason: null,
   };
+
+  console.log(
+    `  ${name}: trial start ${(startTimeUs / 1e6).toFixed(6)} s (confidence ${windowProposal.confidence?.toFixed(3) ?? '—'})`,
+  );
 
   const bgIndices = sampleBackgroundFrameIndices(
     timestampIndex,
@@ -215,6 +226,10 @@ for (const name of ['test53', 'test51', 'test50']) {
     lostFraction: Number(quality.lostFraction.toFixed(4)),
     absentInHole: quality.absentInHoleCount,
     assessment: quality.overallAssessment,
+    trialStartSec: Number((startTimeUs / 1e6).toFixed(6)),
+    motionOnsetConfidence: windowProposal.confidence != null
+      ? Number(windowProposal.confidence.toFixed(3))
+      : null,
     speedOutlierRate: quality.trackedCount
       ? Number((quality.speedOutlierCount / quality.trackedCount).toFixed(4))
       : 0,

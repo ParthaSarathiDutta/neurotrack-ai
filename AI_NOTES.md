@@ -99,3 +99,35 @@ Scientist-facing review panel collapsed from six granular categories to three br
 ### Validated
 All manual spot-check frames pass in `validate:tracking`. test53 unchanged at 100% tracked (high). Full lint/test/build + all validation scripts PASS.
 
+## MS-3 final diagnostic — metric consistency + timestamp integrity (2026-09-06)
+
+### Problem 1 — live UI 100% tracked vs offline validate:tracking ~90%/97%
+**Root cause (offline script stale setup, not live UI inflation):**
+1. `buildIndexFromProbe()` synthesized timestamps from `ffprobe r_frame_rate` as if `cts = i * num, timescale = den`. That is wrong — `r_frame_rate` is a display rate label, not the sample-table tick pattern. For test50 (`time_base 1/15360`, delta 512) this produced ~30 s per frame instead of ~33 ms; for test51 (`15000/1001`) ~15 s per frame instead of ~66.7 ms.
+2. Hardcoded `startTimeUs = 5_000_000` instead of motion-onset detection (~5.067 s test50/test53, ~5.205 s test51). Wrong timestamps shifted which frames counted as in-trial and which were sampled for background.
+
+**Fix:** shared `scripts/lib/mp4TimestampIndex.mjs` (mp4box + `buildTimestampIndex`, same as ingest-worker) and `scripts/lib/offlineTrialWindow.mjs` (same motion-onset path as live UI). After fix, offline metrics match live UI: **100% tracked / 0 lost / 0 absent_in_hole** on all three clips.
+
+**Rejected:** lowering offline thresholds to match UI without fixing the validation path.
+
+### Problem 2 — adjacent frames showing identical timestamps in review UI
+**Findings (both causes present):**
+- **Real duplicates:** container has multiple samples with identical `cts` (test50: 162 adjacent duplicate `timeUs` pairs; test51: 17; test53: 25). Index is still monotonic non-decreasing; duplicates are valid container behavior, not rounding.
+- **Display-only collisions:** e.g. test50 frames 199/200 have distinct `timeUs` (6700000 vs 6700065) but both showed "6.700 s" at 3-decimal formatting in flagged-frame list.
+
+**Fix:** `formatPresentationTimeSeconds()` (6 decimals) in flagged-frame list and proposed trial-start display; `frame-worker.ts` disambiguates duplicate-CTS frames when matching decoder output (Nth timestamp match). Regression tests in `tests/timestampIntegrity.test.ts`.
+
+### test51 trial start shift (~5.07 s / 0.91 → ~5.205 s / 0.74)
+
+**Git-bisected cause (same branch, reproducible):**
+- `653fd83` (parent of frame-worker fix): `validate:ms2` → test51 **5.072 s / confidence 0.91**
+- `8eb266b` (`Fix frame-worker.ts: feed VideoDecoder in decode order`): `validate:ms2` → test51 **5.205 s / confidence 0.74**
+- Current HEAD matches `8eb266b` onward.
+
+**Mechanism:** Motion-onset detection decodes ~48 evenly spaced frames in 0–7 s via `frame-worker` (`trialWindowService.captureFramesForTrialWindow`). Before `8eb266b`, samples were sorted by CTS before decode, corrupting B-frame GOP output for test51. False/spurious pixel diffs in the 4.5–5.1 s window triggered onset ~5.07 s with high confidence. After the fix, decoded pixels are correct; the first sustained rim motion for test51 appears ~5.205 s (cylinder drop), and confidence drops because that timing is farther from the expected ~5.0 s prior.
+
+**5.205200 s is the intended current detector output** — not a regression. test50/test53 remain ~5.067 s / ~0.92 because their motion onset is less affected by the decode bug.
+
+### Validated
+lint/test/build PASS; validate:calibration, validate:ms1, validate:ms2, validate:ms3, validate:tracking all PASS. MS-3 **not merged / not marked complete** — stopped for review.
+

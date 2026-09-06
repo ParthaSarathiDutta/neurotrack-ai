@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatPresentationTimeSeconds } from '../domain/timing';
 import {
   formatReviewReasons,
   groupFlaggedFrames,
@@ -39,7 +40,7 @@ function CategoryFrameList({
               onClick={() => onSeekToFrame(f.frameIndex)}
               data-testid={`flagged-frame-${f.frameIndex}`}
             >
-              Frame {f.frameIndex + 1} ({(f.timeUs / 1_000_000).toFixed(3)} s)
+              Frame {f.frameIndex + 1} ({formatPresentationTimeSeconds(f.timeUs)} s)
               <span className={styles.mono}> — {formatReviewReasons(f.specificReasons)}</span>
             </button>
           </li>

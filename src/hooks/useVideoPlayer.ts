@@ -103,7 +103,9 @@ export function useVideoPlayer({
 
   const seekToTimeUs = useCallback(
     (timeUs: number) => {
-      const entry = nearestIndexEntry(timestampIndex, timeUs);
+      const entry = nearestIndexEntry(timestampIndex, timeUs, {
+        preferredFrameIndex: currentFrameIndexRef.current,
+      });
       if (entry) void loadFrame(entry.frameIndex);
     },
     [timestampIndex, loadFrame],
@@ -139,6 +141,7 @@ export function useVideoPlayer({
       const entry = nearestIndexEntry(
         timestampIndex,
         Math.round(metadata.mediaTime * 1_000_000),
+        { preferredFrameIndex: currentFrameIndexRef.current },
       );
       if (entry) setCurrentFrameIndex(entry.frameIndex);
       if (!video.paused) {
