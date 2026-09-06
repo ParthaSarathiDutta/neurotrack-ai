@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { Geometry, Observation, TimestampIndexEntry, TrialWindow } from '../domain/types';
 import { secondsFromTimeUs } from '../domain/timing';
 import { computeLetterboxedContentRect } from '../domain/videoTransform';
@@ -50,6 +50,29 @@ export function VideoPlayer({
   });
 
   const player = useVideoPlayer({ fingerprint, timestampIndex, videoWidth, videoHeight });
+  const [gotoFrameInput, setGotoFrameInput] = useState('');
+
+  // Keep the "go to frame" field showing the current frame when it isn't being edited,
+  // so it doubles as a live readout that stays synchronized with stepping/slider/seek.
+  useEffect(() => {
+    setGotoFrameInput(String(player.currentFrameIndex + 1));
+  }, [player.currentFrameIndex]);
+
+  const commitGotoFrame = useCallback(() => {
+    const n = Number(gotoFrameInput);
+    if (Number.isFinite(n)) {
+      void player.loadFrame(Math.round(n) - 1);
+    } else {
+      setGotoFrameInput(String(player.currentFrameIndex + 1));
+    }
+  }, [gotoFrameInput, player]);
+
+  const handleGotoFrameKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitGotoFrame();
+    }
+  };
 
   useEffect(() => {
     onRegisterSeek?.({
@@ -180,7 +203,12 @@ export function VideoPlayer({
           />
         )}
         {player.mode === 'frame' && (
-          <canvas ref={frameCanvasRef} className={styles.playerFrameCanvas} aria-hidden="true" />
+          <canvas
+            ref={frameCanvasRef}
+            className={styles.playerFrameCanvas}
+            aria-hidden="true"
+            data-testid="player-frame-canvas"
+          />
         )}
         <VideoOverlay
           geometry={geometry}
@@ -226,6 +254,29 @@ export function VideoPlayer({
         <span className={styles.frameLabel} data-testid="current-frame-index">
           Frame {player.currentFrameIndex + 1}/{player.maxFrameIndex + 1}
         </span>
+        <label className={styles.gotoFrameLabel} htmlFor="goto-frame-input">
+          Go to frame
+        </label>
+        <input
+          id="goto-frame-input"
+          type="number"
+          min={1}
+          max={player.maxFrameIndex + 1}
+          className={styles.gotoFrameInput}
+          value={gotoFrameInput}
+          onChange={(e) => setGotoFrameInput(e.target.value)}
+          onKeyDown={handleGotoFrameKeyDown}
+          onBlur={commitGotoFrame}
+          data-testid="goto-frame-input"
+        />
+        <button
+          type="button"
+          className={styles.button}
+          onClick={commitGotoFrame}
+          data-testid="goto-frame-btn"
+        >
+          Go
+        </button>
       </div>
 
       <div className={styles.timelineWrap}>

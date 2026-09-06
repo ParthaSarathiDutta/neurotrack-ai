@@ -22,6 +22,7 @@ export function CalibrationPanel({
   const confirmGeometry = useSessionStore((s) => s.confirmGeometry);
   const setTargetHole = useSessionStore((s) => s.setTargetHole);
   const confirmTargetHole = useSessionStore((s) => s.confirmTargetHole);
+  const clearTargetHole = useSessionStore((s) => s.clearTargetHole);
   const setDiameterCm = useSessionStore((s) => s.setDiameterCm);
   const nudgeHole = useSessionStore((s) => s.nudgeHole);
   const setManualGeometry = useSessionStore((s) => s.setManualGeometry);
@@ -193,7 +194,7 @@ export function CalibrationPanel({
               }}
               data-testid="target-hole-select"
             >
-              <option value="">— select —</option>
+              <option value="">Unknown — not yet selected</option>
               {geo.holes.map((h) => (
                 <option key={h.id} value={h.id}>
                   Hole {h.id + 1}
@@ -206,17 +207,34 @@ export function CalibrationPanel({
             <button
               type="button"
               className={styles.buttonPrimary}
+              disabled={geo.targetHoleId == null && geo.proposedTargetHoleId == null}
               onClick={() => confirmTargetHole(trial.id)}
               data-testid="confirm-target-btn"
             >
               Confirm target hole
             </button>
+            {(geo.targetHoleId != null || geo.proposedTargetHoleId != null) && (
+              <button
+                type="button"
+                className={styles.button}
+                onClick={() => clearTargetHole(trial.id)}
+                data-testid="clear-target-btn"
+              >
+                Clear target (unknown)
+              </button>
+            )}
             {geo.targetHoleConfirmedAt && (
               <span className={styles.confirmedMarker} data-testid="target-confirmed">
                 Target confirmed
               </span>
             )}
           </div>
+          {geo.targetHoleId == null && (
+            <p className={styles.hint} data-testid="target-hole-unknown-hint">
+              Target hole identity is a protocol fact, not detectable from the video — tracking
+              treats any hole as a candidate escape site until you confirm the real target.
+            </p>
+          )}
 
           <div className={styles.labelField}>
             <label htmlFor="diameter-cm">Platform diameter (cm)</label>

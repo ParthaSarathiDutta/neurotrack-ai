@@ -42,6 +42,7 @@ interface SessionState {
   confirmGeometry: (trialId: string) => void;
   setTargetHole: (trialId: string, holeId: number) => void;
   confirmTargetHole: (trialId: string) => void;
+  clearTargetHole: (trialId: string) => void;
   setDiameterCm: (trialId: string, diameterCm: number) => void;
   nudgeHole: (trialId: string, holeId: number, x: number, y: number) => void;
   setManualGeometry: (
@@ -126,6 +127,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   selectTrial: (id) => {
+    // Re-selecting the trial that is already active must be a no-op for the frame
+    // decoder: clearing the cache here would null out currentFingerprint without
+    // anything re-running initFrameDecoder (the player only re-inits when the
+    // fingerprint prop actually changes), permanently breaking frame stepping.
+    if (id === get().selectedTrialId) {
+      return;
+    }
     clearFrameCache();
     set({ selectedTrialId: id, templateWarning: null });
     scheduleSave(get);
@@ -282,16 +290,47 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   confirmTargetHole: (trialId) => {
+    const trial = get().trials.find((t) => t.id === trialId);
+    // Target identity is a scientist decision, never inferred from geometry — an
+    // unselected target must stay unknown rather than silently defaulting to Hole 1.
+    const resolvedId = trial
+      ? trial.geometry.targetHoleId ?? trial.geometry.proposedTargetHoleId
+      : null;
+    if (resolvedId == null) {
+      set({
+        statusMessage:
+          'Select a target hole before confirming — target identity is not auto-detected.',
+      });
+      return;
+    }
     set((state) => ({
       trials: patchTrial(state.trials, trialId, (t) => ({
         ...t,
         geometry: {
           ...t.geometry,
           targetHoleConfirmedAt: new Date().toISOString(),
-          targetHoleId: t.geometry.targetHoleId ?? t.geometry.proposedTargetHoleId ?? 0,
+          targetHoleId: resolvedId,
         },
       })),
       statusMessage: 'Target hole confirmed.',
+    }));
+    scheduleSave(get);
+  },
+
+  clearTargetHole: (trialId) => {
+    set((state) => ({
+      trials: patchTrial(state.trials, trialId, (t) => ({
+        ...t,
+        geometry: {
+          ...t.geometry,
+          targetHoleId: null,
+          targetHoleConfirmedAt: null,
+          // Also drop any unconfirmed template-carried proposal — "clear" must fully
+          // return to unknown, not leave a suggested hole pre-selected in the dropdown.
+          proposedTargetHoleId: null,
+        },
+      })),
+      statusMessage: 'Target hole cleared — target is now unknown.',
     }));
     scheduleSave(get);
   },

@@ -410,6 +410,19 @@
   color: var(--color-text-muted);
 }
 
+.gotoFrameLabel {
+  font-size: 0.875rem;
+  margin-left: var(--space-sm);
+}
+
+.gotoFrameInput {
+  width: 5.5rem;
+  min-height: var(--min-touch);
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
 .timelineWrap {
   position: relative;
   margin-top: var(--space-md);

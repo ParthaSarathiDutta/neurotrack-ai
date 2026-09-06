@@ -1,4 +1,6 @@
-import type { TrialRecord } from '../domain/types';
+import { useState } from 'react';
+import { groupFlaggedFrames } from '../domain/tracking/trackQuality';
+import type { FlaggedFrame, TrialRecord } from '../domain/types';
 import { canRunTracking } from '../services/trackingService';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
@@ -6,6 +8,49 @@ import styles from '../styles/app.module.css';
 interface TrackQualityPanelProps {
   trial: TrialRecord;
   onSeekToFrame: (frameIndex: number) => void;
+}
+
+/** How many frames a category shows before "Show all N" must be clicked. */
+const CATEGORY_PAGE_SIZE = 25;
+
+function CategoryFrameList({
+  frames,
+  onSeekToFrame,
+}: {
+  frames: FlaggedFrame[];
+  onSeekToFrame: (frameIndex: number) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? frames : frames.slice(0, CATEGORY_PAGE_SIZE);
+
+  return (
+    <div>
+      <ul className={styles.flaggedFrameList}>
+        {visible.map((f) => (
+          <li key={`${f.frameIndex}-${f.reason}`}>
+            <button
+              type="button"
+              className={styles.linkButton}
+              onClick={() => onSeekToFrame(f.frameIndex)}
+              data-testid={`flagged-frame-${f.frameIndex}`}
+            >
+              Frame {f.frameIndex + 1} ({(f.timeUs / 1_000_000).toFixed(3)} s)
+            </button>
+          </li>
+        ))}
+      </ul>
+      {!expanded && frames.length > CATEGORY_PAGE_SIZE && (
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() => setExpanded(true)}
+          data-testid="expand-category-btn"
+        >
+          Show all {frames.length} frames
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelProps) {
@@ -17,6 +62,7 @@ export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelPro
   const gate = canRunTracking(trial);
   const track = trial.track;
   const quality = track?.quality;
+  const categories = quality ? groupFlaggedFrames(quality.flaggedFrames) : [];
 
   const progressPct =
     trackingProgress && trackingProgress.total > 0
@@ -140,28 +186,30 @@ export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelPro
             </p>
           </details>
 
-          {quality.flaggedFrames.length > 0 && (
-            <div data-testid="flagged-frames-list">
-              <h3>Frames requiring review</h3>
-              <ul className={styles.flaggedFrameList}>
-                {quality.flaggedFrames.slice(0, 50).map((f) => (
-                  <li key={`${f.frameIndex}-${f.reason}`}>
-                    <button
-                      type="button"
-                      className={styles.linkButton}
-                      onClick={() => onSeekToFrame(f.frameIndex)}
-                      data-testid={`flagged-frame-${f.frameIndex}`}
-                    >
-                      Frame {f.frameIndex + 1} — {f.reason.replace(/_/g, ' ')}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {quality.flaggedFrames.length > 50 && (
-                <p>…and {quality.flaggedFrames.length - 50} more (see Technical details).</p>
-              )}
-            </div>
-          )}
+          <div data-testid="flagged-review-categories">
+            <h3>Frames requiring review, by category</h3>
+            <p className={styles.hint}>
+              Each category lists every matching frame — a busy category never hides frames from
+              a rarer one. Click a frame to seek the player to it exactly.
+            </p>
+            {categories.map((cat) => (
+              <details
+                key={cat.key}
+                className={styles.details}
+                data-testid={`flagged-category-${cat.key}`}
+                open={cat.frames.length > 0 && cat.frames.length <= CATEGORY_PAGE_SIZE}
+              >
+                <summary data-testid={`flagged-category-summary-${cat.key}`}>
+                  {cat.label} ({cat.frames.length})
+                </summary>
+                {cat.frames.length > 0 ? (
+                  <CategoryFrameList frames={cat.frames} onSeekToFrame={onSeekToFrame} />
+                ) : (
+                  <p className={styles.hint}>No frames in this category.</p>
+                )}
+              </details>
+            ))}
+          </div>
         </>
       )}
     </section>
