@@ -98,3 +98,8 @@ export const TRACKING_NOSE_WIDTH_INSET_PX = 5;
 /** Frame-edge margin (px) — blobs clipped this close to the border have truncated
  * extremities, so their "tip" may be off-frame and is never trusted for nose estimation. */
 export const TRACKING_NOSE_RIM_MARGIN_PX = 3;
+
+/** Trajectory cleaning (MS-4) — conservative defaults. */
+export const CLEANING_MAX_GAP_FRAMES_DEFAULT = 3;
+export const CLEANING_SMOOTHING_WINDOW_DEFAULT = 3;
+export const CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT = 2.0;

@@ -1,4 +1,7 @@
 import {
+  CLEANING_MAX_GAP_FRAMES_DEFAULT,
+  CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT,
+  CLEANING_SMOOTHING_WINDOW_DEFAULT,
   DEFAULT_CUTOFF_SECONDS,
   TRACKING_BACKGROUND_SAMPLE_COUNT,
   TRACKING_LOW_CONFIDENCE_THRESHOLD,
@@ -6,9 +9,17 @@ import {
   TRACKING_MAX_PLAUSIBLE_SPEED_PX_PER_SEC,
   TRACKING_MIN_BLOB_AREA_FRACTION,
 } from './constants';
-import type { Geometry, TrialRecord, TrialWindow, Track, TrackingParams, VideoMetadata } from './types';
+import type {
+  CleaningParams,
+  Geometry,
+  TrialRecord,
+  TrialWindow,
+  Track,
+  TrackingParams,
+  VideoMetadata,
+} from './types';
 
-export const TOOL_VERSION = '0.3.0-ms3';
+export const TOOL_VERSION = '0.4.0-ms4';
 
 export function defaultTrackingParams(): TrackingParams {
   return {
@@ -21,10 +32,21 @@ export function defaultTrackingParams(): TrackingParams {
   };
 }
 
+export function defaultCleaningParams(): CleaningParams {
+  return {
+    maxGapFrames: CLEANING_MAX_GAP_FRAMES_DEFAULT,
+    smoothingWindow: CLEANING_SMOOTHING_WINDOW_DEFAULT,
+    outlierSpeedMultiplier: CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT,
+    toolVersion: TOOL_VERSION,
+  };
+}
+
 export function createEmptyTrack(params: TrackingParams = defaultTrackingParams()): Track {
   return {
     status: 'idle',
     observations: [],
+    manualCorrections: [],
+    appliedCleaning: null,
     quality: null,
     params,
     computedAt: null,

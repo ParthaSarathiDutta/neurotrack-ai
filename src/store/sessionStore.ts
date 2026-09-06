@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { AnalysisParams, Geometry, Hole, TrialRecord, TrialWindow } from '../domain/types';
+import type { AnalysisParams, CleaningParams, Geometry, Hole, ManualCorrection, Observation, TrialRecord, TrialWindow } from '../domain/types';
+import { computeCleanedTrajectory } from '../domain/trajectory/cleaning';
+import {
+  applyManualCorrections,
+  removeManualCorrection,
+  upsertManualCorrection,
+} from '../domain/trajectory/manualCorrection';
 import { computePxPerCm } from '../domain/calibration/detectMaze';
 import { holesFromAnchor } from '../domain/calibration/ringFit';
 import { HOLE_COUNT } from '../domain/constants';
@@ -19,6 +25,8 @@ import { cancelTracking as cancelTrackingJob, runTracking } from '../services/tr
 import { clearFrameCache } from '../services/frameService';
 import { evictAllFromCache } from '../db/videoCache';
 
+export type CorrectionMode = 'off' | 'body' | 'nose' | 'remove-nose';
+
 interface SessionState {
   hydrated: boolean;
   saving: boolean;
@@ -26,6 +34,8 @@ interface SessionState {
   calibrationBusy: boolean;
   trackingBusy: boolean;
   trackingProgress: { phase: string; framesProcessed: number; total: number } | null;
+  correctionMode: CorrectionMode;
+  cleaningPreviewByTrialId: Record<string, Observation[] | null>;
   templateWarning: string | null;
   trials: TrialRecord[];
   selectedTrialId: string | null;
@@ -59,6 +69,15 @@ interface SessionState {
   updateTrialGeometry: (trialId: string, patch: Partial<Geometry>) => void;
   runTracking: (trialId: string) => Promise<void>;
   cancelTracking: (trialId: string) => void;
+  setCorrectionMode: (mode: CorrectionMode) => void;
+  applyManualBodyCorrection: (trialId: string, frameIndex: number, x: number, y: number) => void;
+  applyManualNoseCorrection: (trialId: string, frameIndex: number, x: number, y: number) => void;
+  removeManualNoseCorrection: (trialId: string, frameIndex: number) => void;
+  resetManualCorrection: (trialId: string, frameIndex: number) => void;
+  updateCleaningParams: (patch: Partial<CleaningParams>) => void;
+  previewCleaning: (trialId: string) => void;
+  applyCleaning: (trialId: string) => void;
+  discardCleaningPreview: (trialId: string) => void;
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -109,6 +128,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   calibrationBusy: false,
   trackingBusy: false,
   trackingProgress: null,
+  correctionMode: 'off',
+  cleaningPreviewByTrialId: {},
   templateWarning: null,
   trials: [],
   selectedTrialId: null,
@@ -567,6 +588,198 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       trackingProgress: null,
       statusMessage: 'Tracking cancelled.',
     });
+  },
+
+  setCorrectionMode: (mode) => {
+    set({ correctionMode: mode });
+  },
+
+  applyManualBodyCorrection: (trialId, frameIndex, x, y) => {
+    set((state) => {
+      const trial = state.trials.find((t) => t.id === trialId);
+      if (!trial?.track?.observations.length) return state;
+      const entry = trial.timestampIndex[frameIndex];
+      if (!entry) return state;
+      const existing = trial.track.manualCorrections.find((c) => c.frameIndex === frameIndex);
+      const correction: ManualCorrection = {
+        frameIndex,
+        timeUs: entry.timeUs,
+        bodyXY: { x, y },
+        noseXY: existing?.noseXY ?? null,
+        correctedAt: new Date().toISOString(),
+      };
+      return {
+        correctionMode: state.correctionMode,
+        cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
+        trials: patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          track: t.track
+            ? {
+                ...t.track,
+                manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
+              }
+            : t.track,
+        })),
+        statusMessage: `Manual body correction saved for frame ${frameIndex + 1}.`,
+      };
+    });
+    scheduleSave(get);
+  },
+
+  applyManualNoseCorrection: (trialId, frameIndex, x, y) => {
+    set((state) => {
+      const trial = state.trials.find((t) => t.id === trialId);
+      if (!trial?.track?.observations.length) return state;
+      const entry = trial.timestampIndex[frameIndex];
+      if (!entry) return state;
+      const raw = trial.track.observations.find((o) => o.frameIndex === frameIndex);
+      const existing = trial.track.manualCorrections.find((c) => c.frameIndex === frameIndex);
+      const body = existing?.bodyXY ?? raw?.bodyXY;
+      if (!body) return { ...state, statusMessage: 'Set a body position before placing the nose.' };
+      const correction: ManualCorrection = {
+        frameIndex,
+        timeUs: entry.timeUs,
+        bodyXY: body,
+        noseXY: { x, y },
+        correctedAt: new Date().toISOString(),
+      };
+      return {
+        cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
+        trials: patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          track: t.track
+            ? {
+                ...t.track,
+                manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
+              }
+            : t.track,
+        })),
+        statusMessage: `Manual nose correction saved for frame ${frameIndex + 1}.`,
+      };
+    });
+    scheduleSave(get);
+  },
+
+  removeManualNoseCorrection: (trialId, frameIndex) => {
+    set((state) => {
+      const trial = state.trials.find((t) => t.id === trialId);
+      if (!trial?.track) return state;
+      const existing = trial.track.manualCorrections.find((c) => c.frameIndex === frameIndex);
+      const entry = trial.timestampIndex[frameIndex];
+      if (!existing?.bodyXY || !entry) {
+        return { ...state, statusMessage: 'No manual nose to remove on this frame.' };
+      }
+      const correction: ManualCorrection = {
+        ...existing,
+        noseXY: null,
+        correctedAt: new Date().toISOString(),
+      };
+      return {
+        cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
+        trials: patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          track: t.track
+            ? {
+                ...t.track,
+                manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
+              }
+            : t.track,
+        })),
+        statusMessage: `Nose removed for frame ${frameIndex + 1}.`,
+      };
+    });
+    scheduleSave(get);
+  },
+
+  resetManualCorrection: (trialId, frameIndex) => {
+    set((state) => ({
+      cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
+      trials: patchTrial(state.trials, trialId, (t) => ({
+        ...t,
+        track: t.track
+          ? {
+              ...t.track,
+              manualCorrections: removeManualCorrection(t.track.manualCorrections, frameIndex),
+            }
+          : t.track,
+      })),
+      statusMessage: `Frame ${frameIndex + 1} restored to automatic tracking.`,
+    }));
+    scheduleSave(get);
+  },
+
+  updateCleaningParams: (patch) => {
+    set((state) => ({
+      analysisParams: {
+        ...state.analysisParams,
+        cleaning: { ...state.analysisParams.cleaning, ...patch },
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+    scheduleSave(get);
+  },
+
+  previewCleaning: (trialId) => {
+    const state = get();
+    const trial = state.trials.find((t) => t.id === trialId);
+    if (!trial?.track?.observations.length) return;
+    const corrected = applyManualCorrections(
+      trial.track.observations,
+      trial.track.manualCorrections,
+    );
+    const preview = computeCleanedTrajectory(
+      corrected,
+      state.analysisParams.cleaning,
+      trial.track.params.maxPlausibleSpeedPxPerSec,
+    );
+    set({
+      cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: preview },
+      statusMessage: 'Cleaning preview ready — review overlay, then Apply or Discard.',
+    });
+  },
+
+  applyCleaning: (trialId) => {
+    const state = get();
+    const trial = state.trials.find((t) => t.id === trialId);
+    if (!trial?.track?.observations.length) return;
+    let preview = state.cleaningPreviewByTrialId[trialId];
+    if (!preview) {
+      const corrected = applyManualCorrections(
+        trial.track.observations,
+        trial.track.manualCorrections,
+      );
+      preview = computeCleanedTrajectory(
+        corrected,
+        state.analysisParams.cleaning,
+        trial.track.params.maxPlausibleSpeedPxPerSec,
+      );
+    }
+    const params = state.analysisParams.cleaning;
+    set({
+      cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
+      trials: patchTrial(state.trials, trialId, (t) => ({
+        ...t,
+        track: t.track
+          ? {
+              ...t.track,
+              appliedCleaning: {
+                observations: preview!,
+                params: { ...params },
+                appliedAt: new Date().toISOString(),
+              },
+            }
+          : t.track,
+      })),
+      statusMessage: 'Trajectory cleaning applied.',
+    });
+    scheduleSave(get);
+  },
+
+  discardCleaningPreview: (trialId) => {
+    set((state) => ({
+      cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
+      statusMessage: 'Cleaning preview discarded.',
+    }));
   },
 }));
 

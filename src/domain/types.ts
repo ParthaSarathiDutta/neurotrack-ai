@@ -116,6 +116,27 @@ export interface TrackingParams {
   toolVersion: string;
 }
 
+export interface ManualCorrection {
+  frameIndex: number;
+  timeUs: number;
+  bodyXY: { x: number; y: number } | null;
+  noseXY: { x: number; y: number } | null;
+  correctedAt: string;
+}
+
+export interface CleaningParams {
+  maxGapFrames: number;
+  smoothingWindow: number;
+  outlierSpeedMultiplier: number;
+  toolVersion: string;
+}
+
+export interface AppliedCleaning {
+  observations: Observation[];
+  params: CleaningParams;
+  appliedAt: string;
+}
+
 export interface FlaggedFrame {
   frameIndex: number;
   timeUs: number;
@@ -142,7 +163,10 @@ export interface TrackQuality {
 
 export interface Track {
   status: TrackStatus;
+  /** Raw automatic tracking output — never mutated by MS-4 correction/cleaning. */
   observations: Observation[];
+  manualCorrections: ManualCorrection[];
+  appliedCleaning: AppliedCleaning | null;
   quality: TrackQuality | null;
   params: TrackingParams;
   computedAt: string | null;
@@ -174,6 +198,7 @@ export interface AnalysisParams {
   id: 'default';
   toolVersion: string;
   tracking: TrackingParams;
+  cleaning: CleaningParams;
   updatedAt: string;
 }
 

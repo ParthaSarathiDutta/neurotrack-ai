@@ -1,5 +1,5 @@
 import type { AnalysisParams, Geometry, Hole, Track, TrialRecord, TrialWindow } from './types';
-import { defaultTrackingParams } from './trialFactory';
+import { defaultCleaningParams, defaultTrackingParams } from './trialFactory';
 
 export type TrialReviewStatus =
   | 'needs_review'
@@ -46,6 +46,8 @@ function migrateTrack(track: Track | null | undefined): Track | null {
   return {
     status: track.status ?? 'idle',
     observations: track.observations ?? [],
+    manualCorrections: track.manualCorrections ?? [],
+    appliedCleaning: track.appliedCleaning ?? null,
     quality: track.quality ?? null,
     params: { ...defaultTrackingParams(), ...track.params },
     computedAt: track.computedAt ?? null,
@@ -57,6 +59,7 @@ export function migrateAnalysisParams(params: AnalysisParams): AnalysisParams {
   return {
     ...params,
     tracking: params.tracking ?? defaultTrackingParams(),
+    cleaning: params.cleaning ?? defaultCleaningParams(),
   };
 }
 

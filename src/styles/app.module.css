@@ -564,3 +564,62 @@
 .trackSegmentPreTrial {
   background: rgba(128, 128, 128, 0.4);
 }
+
+.subheading {
+  font-size: 1rem;
+  margin: var(--space-md) 0 var(--space-xs);
+}
+
+.hint {
+  font-size: 0.9rem;
+  color: var(--color-muted, #555);
+  margin: var(--space-xs) 0;
+}
+
+.legendList {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-sm) 0;
+  font-size: 0.9rem;
+}
+
+.legendList li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: 4px;
+}
+
+.legendAuto,
+.legendManual,
+.legendInterpolated,
+.legendSmoothed {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.legendAuto {
+  border-radius: 50%;
+  background: #111;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #111;
+}
+
+.legendManual {
+  background: #111;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #0066cc;
+}
+
+.legendInterpolated {
+  border-radius: 50%;
+  border: 2px dashed #111;
+}
+
+.legendSmoothed {
+  border-radius: 50%;
+  border: 2px solid #111;
+  box-shadow: inset 0 0 0 3px #111;
+}

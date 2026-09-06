@@ -1,10 +1,12 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { TrialRecord } from '../domain/types';
+import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
 import { getTrialReviewStatus, reviewStatusLabel } from '../domain/migration';
 import { VideoPlayer } from './VideoPlayer';
 import { CalibrationPanel } from './CalibrationPanel';
 import { TrialWindowPanel } from './TrialWindowPanel';
 import { TrackQualityPanel } from './TrackQualityPanel';
+import { CorrectionCleaningPanel } from './CorrectionCleaningPanel';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
 
@@ -15,7 +17,12 @@ interface ReviewViewProps {
 
 export function ReviewView({ trial, allTrials }: ReviewViewProps) {
   const setTargetHole = useSessionStore((s) => s.setTargetHole);
+  const correctionMode = useSessionStore((s) => s.correctionMode);
+  const applyManualBodyCorrection = useSessionStore((s) => s.applyManualBodyCorrection);
+  const applyManualNoseCorrection = useSessionStore((s) => s.applyManualNoseCorrection);
+  const cleaningPreview = useSessionStore((s) => s.cleaningPreviewByTrialId[trial.id] ?? null);
   const [selectedHoleId, setSelectedHoleId] = useState<number | null>(null);
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const manualClickRef = useRef<((x: number, y: number) => void) | null>(null);
   const seekApiRef = useRef<{ loadFrame: (i: number) => void } | null>(null);
 
@@ -29,6 +36,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
 
   useEffect(() => {
     setSelectedHoleId(null);
+    setCurrentFrameIndex(0);
   }, [trial.id]);
 
   if (!trial.metadata || !trial.videoCached) {
@@ -42,6 +50,19 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
 
   const status = getTrialReviewStatus(trial);
   const meta = trial.metadata;
+  const effectiveObservations = resolveEffectiveObservations(trial.track, { cleaningPreview });
+
+  const handleCanvasClick = (x: number, y: number) => {
+    if (correctionMode === 'body') {
+      applyManualBodyCorrection(trial.id, currentFrameIndex, x, y);
+      return;
+    }
+    if (correctionMode === 'nose') {
+      applyManualNoseCorrection(trial.id, currentFrameIndex, x, y);
+      return;
+    }
+    manualClickRef.current?.(x, y);
+  };
 
   return (
     <div key={trial.id} className={styles.reviewView} data-testid="review-view" data-trial-id={trial.id}>
@@ -61,8 +82,9 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
         durationSec={meta.durationSec}
         geometry={trial.geometry}
         trialWindow={trial.trialWindow}
-        observations={trial.track?.observations ?? []}
+        observations={effectiveObservations}
         selectedHoleId={selectedHoleId}
+        onFrameIndexChange={setCurrentFrameIndex}
         onRegisterSeek={(api) => {
           seekApiRef.current = api;
         }}
@@ -70,9 +92,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
           setSelectedHoleId(holeId);
           setTargetHole(trial.id, holeId);
         }}
-        onCanvasClick={(x, y) => {
-          manualClickRef.current?.(x, y);
-        }}
+        onCanvasClick={handleCanvasClick}
       />
 
       <CalibrationPanel
@@ -85,7 +105,8 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
 
       <TrackQualityPanel trial={trial} onSeekToFrame={handleSeekToFrame} />
 
-      {/* MS-1 validation compatibility — metadata testids */}
+      <CorrectionCleaningPanel trial={trial} currentFrameIndex={currentFrameIndex} />
+
       <div hidden aria-hidden="true" data-testid="trial-metadata-compat">
         <span data-testid="meta-frame-rate">{meta.containerFrameRateLabel}</span>
         <span data-testid="meta-timescale">{meta.trackTimescale}</span>

@@ -115,7 +115,37 @@ export function VideoOverlay({
     if (observation?.bodyXY) {
       const body = videoToDisplay(observation.bodyXY, displayBox);
       ctx.beginPath();
-      if (observation.observed === 'tracked') {
+      const origin = observation.origin;
+      if (origin === 'manual') {
+        ctx.rect(body.x - 7, body.y - 7, 14, 14);
+        ctx.fillStyle = '#111111';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.strokeStyle = '#0066cc';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(body.x - 8.5, body.y - 8.5, 17, 17);
+      } else if (origin === 'interpolated') {
+        ctx.setLineDash([4, 3]);
+        ctx.arc(body.x, body.y, 7, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (origin === 'smoothed') {
+        ctx.arc(body.x, body.y, 8, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#111111';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(body.x, body.y, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = '#111111';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else if (observation.observed === 'tracked') {
         ctx.arc(body.x, body.y, 7, 0, 2 * Math.PI);
         ctx.fillStyle = '#111111';
         ctx.fill();
@@ -137,7 +167,7 @@ export function VideoOverlay({
       ctx.lineTo(nose.x + 7, nose.y + 6);
       ctx.lineTo(nose.x - 7, nose.y + 6);
       ctx.closePath();
-      ctx.fillStyle = '#111111';
+      ctx.fillStyle = observation.origin === 'manual' ? '#0066cc' : '#111111';
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;

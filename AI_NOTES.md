@@ -131,3 +131,19 @@ All manual spot-check frames pass in `validate:tracking`. test53 unchanged at 10
 ### Validated
 lint/test/build PASS; validate:calibration, validate:ms1, validate:ms2, validate:ms3, validate:tracking all PASS. MS-3 **not merged / not marked complete** — stopped for review.
 
+## MS-4 manual correction & trajectory cleaning (2026-09-06)
+
+### Architecture
+Three-layer trajectory: immutable `track.observations` (auto), `track.manualCorrections[]` keyed by `frameIndex`, optional `track.appliedCleaning` (interpolated/smoothed body only). Session-only `cleaningPreviewByTrialId` until Apply. Effective path: `resolveEffectiveObservations()` — manual always wins over cleaning at the same `frameIndex`.
+
+### Agent mistakes / rejected
+- Initially considered mutating raw observations in place — rejected (violates provenance).
+- Playwright `validate:ms4` used fixed port 8780 without `server.on('error')`; orphaned servers caused `EADDRINUSE` / hung listens. Fixed with dynamic port 0 + error handler.
+- Post-reload frame-100 seek in Playwright hung (sequential decode load); persistence check switched to `correction-summary` count instead of deep seek.
+
+### MS-5 boundary
+No event detection/editing; UI note only. Manual event editing deferred to MS-5.
+
+### Validated
+`npm run lint`, `npm test` (72), `npm run build`, `validate:calibration`, `validate:ms1`, `validate:ms2`, `validate:ms3` PASS. Unit tests: `tests/trajectory.test.ts`, migration MS-4 fields. `validate:ms4` script added — run locally after killing orphaned `validate-ms4` node processes if port hangs.
+

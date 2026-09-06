@@ -18,6 +18,7 @@ interface VideoPlayerProps {
   selectedHoleId: number | null;
   onHoleClick?: (holeId: number) => void;
   onCanvasClick?: (x: number, y: number) => void;
+  onFrameIndexChange?: (frameIndex: number) => void;
   onSeek?: (timeUs: number) => void;
   onRegisterSeek?: (api: {
     loadFrame: (frameIndex: number) => void;
@@ -37,6 +38,7 @@ export function VideoPlayer({
   selectedHoleId,
   onHoleClick,
   onCanvasClick,
+  onFrameIndexChange,
   onSeek,
   onRegisterSeek,
 }: VideoPlayerProps) {
@@ -73,6 +75,10 @@ export function VideoPlayer({
       commitGotoFrame();
     }
   };
+
+  useEffect(() => {
+    onFrameIndexChange?.(player.currentFrameIndex);
+  }, [player.currentFrameIndex, onFrameIndexChange]);
 
   useEffect(() => {
     onRegisterSeek?.({
@@ -218,6 +224,12 @@ export function VideoPlayer({
           onHoleClick={onHoleClick}
           onCanvasClick={onCanvasClick}
         />
+      </div>
+
+      <div hidden aria-hidden="true" data-testid="observation-debug">
+        <span data-testid="observation-origin">{currentObservation?.origin ?? 'none'}</span>
+        <span data-testid="observation-body-x">{currentObservation?.bodyXY?.x ?? ''}</span>
+        <span data-testid="observation-body-y">{currentObservation?.bodyXY?.y ?? ''}</span>
       </div>
 
       <div className={styles.playerControls}>

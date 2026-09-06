@@ -89,10 +89,10 @@ export async function runTracking(
         w.removeEventListener('message', onMessage);
         if (activeJobId === jobId) activeJobId = null;
         resolve({
+          ...createEmptyTrack(params),
           status: 'done',
           observations: ev.data.result.observations,
           quality: ev.data.result.quality,
-          params,
           computedAt: new Date().toISOString(),
           error: null,
         });
