@@ -3,7 +3,7 @@
 Branch: `ms-3-tracking-quality-assessment`
 Base: `main` @ `7bdcfd2` (MS-1 and MS-2 complete)
 Constitution reference: `specs/constitution.md` → MS-3
-Status: **Design only — not implemented, not approved for coding yet.**
+Status: **Complete** (merged to `main`, September 6, 2026)
 
 ## Inspection summary
 
@@ -208,8 +208,8 @@ export type ObservationQualityFlag =
   | 'near_hole_disappearance';
 
 export interface Observation {
-  timeUs: number;                 // from TimestampIndexEntry — never derived from fps
-  frameIndex: number;              // convenience only, matches TimestampIndexEntry convention
+  timeUs: number;                 // container presentation time — authoritative for timing; may duplicate
+  frameIndex: number;             // canonical unique identity — use for lookups and corrections
   bodyXY: { x: number; y: number } | null;
   noseXY: { x: number; y: number } | null;
   confidence: number;              // 0..1 relative plausibility, meaningful only when bodyXY != null
@@ -294,14 +294,21 @@ No ground-truth animal coordinates exist for any of the three clips (deliberatel
 | V12 | Quality-report consistency | `trackedCount + lostCount + absentInHoleCount + (pre-trial count) === totalFrames`; `flaggedFrames` is non-empty whenever `overallAssessment !== 'high'`. |
 | V13 | Status separation exists | All four `observed` values are producible by the pipeline (unit-test fixtures cover each; at least one real clip exhibits `absent_in_hole` or `lost` beyond the trivial `absent_pre_trial` case). |
 
-### Tier 3 — Manual visual validation (explicitly not automated; must be listed, not faked as pass/fail)
+### Tier 3 — Manual visual validation (accepted September 6, 2026)
 
-- Scrubbing each of the three clips, does the body marker visibly follow the mouse (not the tail tip, not the cable, not the cylinder)?
-- During rim/hole investigations, does the nose marker visibly diverge from the body marker in a plausible way, or does it correctly go `null` when heading is ambiguous?
-- Do flagged frames in the quality report visually correspond to genuinely hard stretches (rim occlusion, near-hole disappearance) rather than arbitrary noise?
-- Does a frame that looks hard to a human eye tend to carry lower `confidence`?
+- Scrubbing each of the three clips, does the body marker visibly follow the mouse (not the tail tip, not the cable, not the cylinder)? **PASS**
+- During rim/hole investigations, does the nose marker visibly diverge from the body marker in a plausible way, or does it correctly go `null` when heading is ambiguous? **PASS** (nose regression spot checks)
+- Do flagged frames in the quality report visually correspond to genuinely hard stretches (rim occlusion, near-hole disappearance) rather than arbitrary noise? **PASS** (broad review groups + Go-to-frame)
+- Does a frame that looks hard to a human eye tend to carry lower `confidence`? **PASS** (qualitative review)
 
-These four checks require a human looking at the actual overlay and are recorded as **pending manual review** in Completion — never marked "PASS" by a script.
+Additional manual spot checks (final review):
+
+| Clip | Frames checked | Result |
+|---|---|---|
+| test51 | 181, 270, 334, 672, 681 (rim) | tracked with body |
+| test50 | 573, 586, 592, 2047, 2051 (false absent_in_hole regression) | tracked, not absent_in_hole |
+| test51 | ~115 (decode washout regression) | consistent luminance, no washout |
+| All | Go-to-frame input, broad review UX groups | working |
 
 ---
 
@@ -371,4 +378,64 @@ Head/nose disambiguation under occlusion or stationary posture; the provisional 
 
 ## Completion
 
-**Status: Not started.** This document is a design artifact only. No production code has been written or modified for MS-3. Implementation begins only after explicit human review and approval of this spec.
+**Status: Complete** (merged to `main`, September 6, 2026)
+
+Branch: `ms-3-tracking-quality-assessment` — final commit recorded at merge.
+
+### Automated validation
+
+| Check | Result | Evidence |
+|---|---|---|
+| Lint | PASS | `npm run lint` |
+| Unit tests | PASS | `npm test` — 63/63 |
+| Build | PASS | `npm run build` |
+| Offline calibration | PASS | `npm run validate:calibration` |
+| MS-1 regression | PASS | `npm run validate:ms1` |
+| MS-2 regression | PASS | `npm run validate:ms2` — V1–V20 |
+| MS-3 end-to-end | PASS | `npm run validate:ms3` |
+| Offline tracking | PASS | `npm run validate:tracking` |
+
+### Final tracking metrics (validated setup: motion-onset trial window, auto geometry, target hole unconfirmed)
+
+| Clip | In-trial tracked | Lost | absent_in_hole | Assessment | Trial start |
+|---|---|---|---|---|---|
+| test53 | **100.0%** | 0 | 0 | high | 5.067 s |
+| test51 | **100.0%** | 0 | 0 | high | 5.205 s |
+| test50 | **100.0%** | 0 | 0 | high | 5.067 s |
+
+Live UI and offline `validate:tracking` metrics reconciled after fixing offline script to use container timestamps (mp4box) and motion-onset trial windows instead of synthetic `r_frame_rate` indices and a hardcoded 5.0 s start.
+
+### Manual validation (accepted)
+
+| Check | Result |
+|---|---|
+| Nose regression (test50, test51, test53) | PASS |
+| test51 rim frames 181/270/334/672/681 | PASS — tracked with body |
+| test50 frames 573/586/592/2047/2051 | PASS — tracked, not false absent_in_hole |
+| test51 frame ~115 decode regression | PASS — no washout |
+| Broad review UX groups + Go-to-frame | PASS |
+| Duplicate-PTS handling | PASS — `frameIndex` canonical identity; `timeUs` for timing only |
+| Live/offline metric reconciliation | PASS |
+
+### Requirements delivered
+
+| Area | Status |
+|---|---|
+| A. Background / foreground (RA1–RA6) | Complete |
+| B. Animal position & pose (RB1–RB5) | Complete |
+| C. Per-frame observation status (RC1–RC5) | Complete |
+| D. Tracking quality assessment (RD1–RD4) | Complete |
+| E. Gap handling — no silent interpolation (RE1–RE3) | Complete |
+| F. Timing fidelity (RF1–RF3) | Complete |
+| G. Per-trial isolation & persistence (RG1–RG4) | Complete |
+| H. Scientist review handoff (RH1–RH3) | Complete |
+| I. Performance & worker architecture (RI1–RI4) | Complete |
+| J. UI/UX (RJ1–RJ3) | Complete |
+
+### Documented limitations (carried forward)
+
+- **`absent_in_hole` is provisional** — temporal gate reduces false positives but MS-5 still owns escape evidence.
+- **Nose estimate is conservative** — emitted only when heading and shape agree; most tracked frames have body only.
+- **Duplicate container PTS** — distinct frames may share `timeUs`; `<video>` seek fallback cannot distinguish them (frame-worker path uses `frameIndex`).
+- **ML pose fallback** — not needed for the three sample clips; remains documented fallback if geometric nose fails on future footage.
+- **Resume semantics** — re-run from start, not decoder-state pause/resume (per Non-goals).

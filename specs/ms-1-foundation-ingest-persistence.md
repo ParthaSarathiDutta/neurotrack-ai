@@ -12,7 +12,7 @@ Constitution reference: `specs/constitution.md` → MS-1
 | R3 | Accessibility baseline: keyboard-reachable controls, labeled inputs, visible focus, contrast-safe design tokens, layout usable at 200% zoom. |
 | R4 | Drag-and-drop multi-video loading and folder selection (`webkitdirectory` fallback). |
 | R5 | Ingest via validated WebCodecs `VideoDecoder` + `mp4box.js` in a dedicated Worker — no per-filename logic, no assumed frame rate. |
-| R6 | Per-video metadata and a presentation-timestamp index keyed on `timeUs` from container `cts / timescale`. |
+| R6 | Per-video metadata and a presentation-timestamp index: each row carries container-derived `timeUs` (authoritative for timing) and a unique presentation-order `frameIndex` (authoritative for identity). |
 | R7 | Dexie/IndexedDB persistence for trials, analysis parameters, geometry/track/event/measure placeholders, and ingest progress — autosaved. |
 | R8 | Content-fingerprint video identity with bounded blob cache; reselecting an evicted file re-associates the same trial without losing analysis state. |
 | R9 | No backend, no data egress, no sample `.mp4` files in the repository. |
@@ -20,7 +20,7 @@ Constitution reference: `specs/constitution.md` → MS-1
 ## Decisions
 
 - **D1 — Reuse Phase 0 decode architecture.** Worker demuxes with `mp4box.js`, configures `VideoDecoder` from dynamic `avcC` extraction (`src/workers/mp4-utils.ts`), and builds the timestamp index from sample `cts` converted to `timeUs`. Decoder runs to completion to verify frame counts; frames are closed immediately (index + metadata only, no pixel retention).
-- **D2 — `timeUs` is the primary temporal key.** Frame index is derived for display convenience only. All ingest validation compares container timescale and tick deltas, never literal `15` or `30` fps constants.
+- **D2 — Container timing vs frame identity.** `timeUs` comes from sample `cts / timescale` and is the authoritative presentation time for all scientific timing (deltas, trial-window boundaries, measures). It is **not** guaranteed unique — distinct frames may share the same container timestamp. **`frameIndex`** is the unique presentation-order identity for a frame, observation, correction, or lookup. Never synthesize scientific timing from `frameIndex` or an assumed FPS. Ingest validation compares container timescale and tick deltas, never literal `15` or `30` fps constants.
 - **D3 — Fingerprint = SHA-256 of file bytes.** Trials are keyed by fingerprint; display name is editable independently.
 - **D4 — Bounded blob cache in Dexie.** Default budget 50 MB, LRU eviction by `lastAccessedAt`. Trial records persist independently of cached blobs.
 - **D5 — Zustand + debounced Dexie writes** for session state; hydrate from IndexedDB on startup.

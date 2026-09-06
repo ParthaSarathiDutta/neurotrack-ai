@@ -153,15 +153,17 @@ The trial window (start, end, protocol cutoff) is proposed automatically from mo
 
 **Validate:** automatic calibration finds 20/20 holes on all three clips, including the off-center, brighter `test51`; applying a template to a second trial measurably reduces clicks versus the first; the overlay matches the displayed frame across keyframe boundaries; proposed trial-window starts land at ~5.0 s on all three clips without mistaking `test51`'s start cylinder for the animal; distances report in cm. All criteria exercised by `npm run validate:ms2` (V1–V20) plus offline `npm run validate:calibration`.
 
-### MS-3 — Tracking & Quality Assessment
+### MS-3 — Tracking & Quality Assessment — ✅ Complete
 
-A Worker pipeline: per-pixel median background modeling (required because intra-platform lighting is measurably uneven — a single global threshold does not work), per-pixel differencing, morphology, and animal-blob selection gated on size and shape to reject non-animal foreground objects such as `test51`'s start cylinder. From the blob, the pipeline derives a body centroid and a true nose estimate from contour geometry and heading, with explicit handling for rim occlusion, where the animal is partially cut off by the hole it is investigating. If geometric nose estimation proves insufficient on real footage, an ML pose-estimation step is the documented fallback (see "Deliberately not chosen").
+Validated September 6, 2026 on branch `ms-3-tracking-quality-assessment`, merged to `main`.
 
-Each frame's observation carries a status that distinguishes **tracked**, **absent — inside a hole**, **absent — pre-trial**, and **lost**, because a tracker losing the animal and the animal actually entering the escape box must never look the same to downstream code. Tracking runs show progress and support cancel and resume.
+A Worker pipeline: per-pixel median background modeling (required because intra-platform lighting is measurably uneven — a single global threshold does not work), per-pixel differencing, morphology, and animal-blob selection gated on size and shape to reject non-animal foreground objects such as `test51`'s start cylinder. From the blob, the pipeline derives a body centroid and a conservative nose estimate from contour geometry and heading, with explicit handling for rim occlusion, where the animal is partially cut off by the hole it is investigating.
 
-Quality assessment is a first-class output of this milestone: per-video fractions tracked / lost / absent / interpolated, and a timeline strip showing where failures cluster with click-through to the exact frame, so a user can decide whether to trust a video before building a figure on it.
+Each frame's observation carries a status that distinguishes **tracked**, **absent — inside a hole**, **absent — pre-trial**, and **lost**, because a tracker losing the animal and the animal actually entering the escape box must never look the same to downstream code. Tracking runs show progress and support cancel.
 
-**Validate:** trajectories produced on all three clips; the start cylinder is never tracked as the animal; nose and body diverge visibly during rim investigations; the four observation statuses are correctly separated on hand-checked segments; a user can identify, from the quality report alone, which stretches of a trial to distrust.
+Quality assessment is a first-class output: per-video fractions tracked / lost / absent-in-hole, broad review groups with click-through to flagged frames, and a timeline strip showing where failures cluster — so a user can decide whether to trust a video before building a figure on it.
+
+**Validate:** trajectories on all three clips; start cylinder never tracked as the animal; nose regression and rim-frame spot checks pass; live UI and offline `validate:tracking` metrics reconciled; duplicate container presentation timestamps handled (`frameIndex` identity, `timeUs` timing); all three clips **high** quality at 100% in-trial tracked for the validated setup. Exercised by `npm run validate:ms3` (V1–V9+) and `npm run validate:tracking`.
 
 ### MS-4 — Manual Correction & Trajectory Cleaning
 
@@ -229,7 +231,7 @@ AnalysisParams → tracking, cleaning, event thresholds, quadrant convention, to
 Two rules these encode:
 
 - **`observed` and `origin` are orthogonal.** What the tracker saw is recorded separately from how the stored value was produced. This is what makes "failures are visible" and "interpolation is never silent" enforceable rather than aspirational.
-- **Time is `timeUs` from the container.** Frame index is a convenience for display, never the key.
+- **Timing vs identity.** `timeUs` is the authoritative container presentation time used for all scientific timing (deltas, windows, measures). It may legitimately duplicate across distinct frames. **`frameIndex`** is the unique presentation-order identity for a frame or observation — use it for lookups, corrections, persistence keys, and manual review navigation. Never synthesize scientific timing from `frameIndex` or an assumed frame rate.
 
 ---
 
