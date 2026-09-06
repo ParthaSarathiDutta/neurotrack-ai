@@ -117,7 +117,7 @@ export interface TrackingParams {
 export interface FlaggedFrame {
   frameIndex: number;
   timeUs: number;
-  reason: ObservationQualityFlag | 'lost';
+  reason: ObservationQualityFlag | 'lost' | 'absent_in_hole';
 }
 
 export interface TrackQuality {

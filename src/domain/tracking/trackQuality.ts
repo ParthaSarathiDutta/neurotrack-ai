@@ -1,6 +1,3 @@
-import {
-  TRACKING_FLAGGED_FRAME_CAP,
-} from '../constants';
 import type {
   FlaggedFrame,
   Observation,
@@ -49,20 +46,55 @@ function computeLongestLostGap(observations: Observation[]): {
   return { frames: longest, timeUs: longestUs };
 }
 
+/**
+ * Every review-worthy frame, uncapped — a busy category (e.g. many `lost` frames) must
+ * never crowd out or hide frames from a rarer category. The review UI groups and paginates
+ * this list per category (see `FLAGGED_FRAME_CATEGORIES`/`groupFlaggedFrames` below).
+ */
 function collectFlaggedFrames(observations: Observation[]): FlaggedFrame[] {
   const flagged: FlaggedFrame[] = [];
   for (const obs of observations) {
     if (obs.observed === 'lost') {
       flagged.push({ frameIndex: obs.frameIndex, timeUs: obs.timeUs, reason: 'lost' });
-      continue;
+    }
+    if (obs.observed === 'absent_in_hole') {
+      flagged.push({ frameIndex: obs.frameIndex, timeUs: obs.timeUs, reason: 'absent_in_hole' });
     }
     if (obs.qualityFlags) {
       for (const flag of obs.qualityFlags) {
+        // `near_hole_disappearance` is redundant with the `absent_in_hole` bucket above
+        // (classifyMissingObservation only ever sets it alongside that status) — surfaced
+        // in the raw list for technical detail, but not a separate review category.
         flagged.push({ frameIndex: obs.frameIndex, timeUs: obs.timeUs, reason: flag });
       }
     }
   }
-  return flagged.slice(0, TRACKING_FLAGGED_FRAME_CAP);
+  return flagged;
+}
+
+/** Named review categories shown in the UI, in display order. */
+export const FLAGGED_FRAME_CATEGORIES: Array<{ key: FlaggedFrame['reason']; label: string }> = [
+  { key: 'lost', label: 'Lost' },
+  { key: 'absent_in_hole', label: 'Provisional absent-in-hole' },
+  { key: 'ambiguous_head_tail', label: 'Ambiguous head/tail (no nose)' },
+  { key: 'low_confidence', label: 'Low confidence' },
+  { key: 'speed_outlier', label: 'Speed outlier' },
+  { key: 'possible_occlusion', label: 'Possible occlusion' },
+];
+
+export interface FlaggedFrameCategory {
+  key: FlaggedFrame['reason'];
+  label: string;
+  frames: FlaggedFrame[];
+}
+
+/** Group the flat flagged-frame list into named categories for review UX. */
+export function groupFlaggedFrames(flaggedFrames: FlaggedFrame[]): FlaggedFrameCategory[] {
+  return FLAGGED_FRAME_CATEGORIES.map(({ key, label }) => ({
+    key,
+    label,
+    frames: flaggedFrames.filter((f) => f.reason === key),
+  }));
 }
 
 function assessOverall(

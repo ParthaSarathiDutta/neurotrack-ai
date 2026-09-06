@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { estimatePose } from '../src/domain/tracking/animalPose';
 import type { Blob } from '../src/domain/calibration/connectedComponents';
 import { classifyMissingObservation } from '../src/domain/tracking/observationStatus';
-import { computeTrackQuality } from '../src/domain/tracking/trackQuality';
+import { computeTrackQuality, groupFlaggedFrames } from '../src/domain/tracking/trackQuality';
 import { processTrackingFrame, buildTrackingFrameContext } from '../src/domain/tracking/trackPipeline';
 import { createInitialTrackerState } from '../src/domain/tracking/trackPipeline';
 import { defaultTrackingParams } from '../src/domain/trialFactory';
-import type { Geometry, Observation, TimestampIndexEntry } from '../src/domain/types';
+import type { FlaggedFrame, Geometry, Observation, TimestampIndexEntry } from '../src/domain/types';
 
 function elongatedBlob(cx: number, cy: number): Blob {
   const pixels: { x: number; y: number }[] = [];
@@ -21,6 +21,34 @@ function elongatedBlob(cx: number, cy: number): Blob {
     centroid: { x: cx + 8, y: cy },
     pixels,
     compactness: 0.35,
+  };
+}
+
+/** Wide block (x 92-99) fused to a thin strip (x 100-124) — a shape with a genuine
+ *  wide/thin asymmetry, used to test heading-vs-shape agreement/contradiction. */
+function wedgeBlob(): Blob {
+  const pixels: { x: number; y: number }[] = [];
+  for (let x = 92; x <= 99; x += 1) {
+    for (let y = 94; y <= 106; y += 1) pixels.push({ x, y });
+  }
+  for (let x = 100; x <= 124; x += 1) {
+    for (let y = 99; y <= 101; y += 1) pixels.push({ x, y });
+  }
+  return {
+    label: 0,
+    area: pixels.length,
+    centroid: { x: 108, y: 100 },
+    pixels,
+    compactness: 0.3,
+  };
+}
+
+/** Same wedge shape but clipped against the frame edge (x <= 3). */
+function rimClippedWedgeBlob(): Blob {
+  const blob = wedgeBlob();
+  return {
+    ...blob,
+    pixels: blob.pixels.map((p) => ({ x: p.x - 90, y: p.y })),
   };
 }
 
@@ -41,6 +69,43 @@ describe('animalPose', () => {
     ];
     const pose = estimatePose(blob, history, 640, 480);
     expect(pose.noseXY).not.toBeNull();
+  });
+
+  it('estimates nose when heading agrees with the wide/thin shape asymmetry', () => {
+    const blob = wedgeBlob();
+    // Moving toward the wide end (decreasing x) — heading and shape agree.
+    const history = [
+      { x: 150, y: 100 },
+      { x: 130, y: 100 },
+    ];
+    const pose = estimatePose(blob, history, 640, 480);
+    expect(pose.noseXY).not.toBeNull();
+    expect(pose.noseXY?.x).toBeLessThan(108);
+  });
+
+  it('returns null nose when heading contradicts the wide/thin shape asymmetry', () => {
+    const blob = wedgeBlob();
+    // Moving toward the thin end (increasing x) while shape says that end is thin —
+    // independent signals disagree, so no nose should be guessed.
+    const history = [
+      { x: 70, y: 100 },
+      { x: 90, y: 100 },
+    ];
+    const pose = estimatePose(blob, history, 640, 480);
+    expect(pose.noseXY).toBeNull();
+    expect(pose.qualityFlags).toContain('ambiguous_head_tail');
+  });
+
+  it('returns null nose for a rim-clipped blob even with strong heading', () => {
+    const blob = rimClippedWedgeBlob();
+    const history = [
+      { x: 60, y: 100 },
+      { x: 40, y: 100 },
+    ];
+    const pose = estimatePose(blob, history, 640, 480);
+    expect(pose.noseXY).toBeNull();
+    expect(pose.qualityFlags).toContain('possible_occlusion');
+    expect(pose.qualityFlags).toContain('ambiguous_head_tail');
   });
 });
 
@@ -78,6 +143,80 @@ describe('observationStatus', () => {
       recentCentroids: [],
     });
     expect(result.observed).toBe('lost');
+  });
+
+  it('classifies disappearance near a confirmed non-target hole as lost', () => {
+    const confirmedGeometry: Geometry = {
+      ...geometry,
+      holes: [
+        { id: 0, x: 520, y: 240, source: 'detected', confidence: 1 },
+        { id: 1, x: 120, y: 240, source: 'detected', confidence: 1 },
+      ],
+      targetHoleId: 1,
+      targetHoleConfirmedAt: '2026-01-01T00:00:00.000Z',
+    };
+    // Disappearance is near hole 0 (a known non-target, dead-end hole per task reference),
+    // not near the confirmed target (hole 1) — must not become absent_in_hole.
+    const result = classifyMissingObservation(confirmedGeometry, {
+      lastPosition: { x: 510, y: 240 },
+      recentAreas: [800, 700, 550, 400],
+      recentCentroids: [],
+    });
+    expect(result.observed).toBe('lost');
+  });
+
+  it('classifies disappearance near the confirmed target hole as absent_in_hole', () => {
+    const confirmedGeometry: Geometry = {
+      ...geometry,
+      targetHoleConfirmedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const result = classifyMissingObservation(confirmedGeometry, {
+      lastPosition: { x: 510, y: 240 },
+      recentAreas: [800, 700, 550, 400],
+      recentCentroids: [],
+    });
+    expect(result.observed).toBe('absent_in_hole');
+  });
+
+  it('classifies disappearance away from any real hole as lost, even with shrink evidence', () => {
+    // A point out near the platform rim but not close to any actual hole opening —
+    // must not be treated as generic rim proximity (non-target holes are dead ends;
+    // "somewhere on the rim" is not evidence of a hole entry).
+    const result = classifyMissingObservation(geometry, {
+      lastPosition: { x: 320, y: 430 },
+      recentAreas: [800, 700, 550, 400],
+      recentCentroids: [],
+    });
+    expect(result.observed).toBe('lost');
+  });
+
+  it('classifies disappearance near a hole with no shrink/slow evidence as lost', () => {
+    const result = classifyMissingObservation(geometry, {
+      lastPosition: { x: 510, y: 240 },
+      recentAreas: [700, 690, 685, 680],
+      recentCentroids: [],
+    });
+    expect(result.observed).toBe('lost');
+  });
+});
+
+describe('groupFlaggedFrames', () => {
+  it('separates absent_in_hole from lost and does not let one category crowd another', () => {
+    const frames: FlaggedFrame[] = [
+      { frameIndex: 1, timeUs: 1_000_000, reason: 'lost' },
+      { frameIndex: 2, timeUs: 2_000_000, reason: 'absent_in_hole' },
+      { frameIndex: 2, timeUs: 2_000_000, reason: 'near_hole_disappearance' },
+      { frameIndex: 3, timeUs: 3_000_000, reason: 'ambiguous_head_tail' },
+      { frameIndex: 4, timeUs: 4_000_000, reason: 'low_confidence' },
+      { frameIndex: 5, timeUs: 5_000_000, reason: 'speed_outlier' },
+    ];
+    const categories = groupFlaggedFrames(frames);
+    const byKey = Object.fromEntries(categories.map((c) => [c.key, c.frames.length]));
+    expect(byKey.lost).toBe(1);
+    expect(byKey.absent_in_hole).toBe(1);
+    expect(byKey.ambiguous_head_tail).toBe(1);
+    expect(byKey.low_confidence).toBe(1);
+    expect(byKey.speed_outlier).toBe(1);
   });
 });
 

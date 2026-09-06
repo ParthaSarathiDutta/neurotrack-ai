@@ -44,11 +44,37 @@ export const TRACKING_MAX_BLOB_AREA_FRACTION = 0.012;
 /** Max centroid jump speed (px/s) before flagging speed_outlier. */
 export const TRACKING_MAX_PLAUSIBLE_SPEED_PX_PER_SEC = 800;
 export const TRACKING_LOW_CONFIDENCE_THRESHOLD = 0.45;
-export const TRACKING_FLAGGED_FRAME_CAP = 200;
 /** Recent frames for heading / disappearance heuristics. */
 export const TRACKING_HEADING_HISTORY = 5;
 export const TRACKING_DISAPPEARANCE_LOOKBACK = 4;
-/** Rim band: fraction of platform radius where hole-proximity applies. */
-export const TRACKING_RIM_BAND_FRACTION = 0.82;
-/** Hole proximity: fraction of platform radius from hole center. */
+/** Hole proximity: fraction of platform radius from hole center — an actual opening,
+ * not a broad rim band, since non-target holes are dead ends and a disappearance must
+ * be near a *specific* hole to count as evidence, never "anywhere on the rim." */
 export const TRACKING_HOLE_PROXIMITY_FRACTION = 0.12;
+/** Blob area/speed must drop to this fraction (or below) over the lookback window to
+ * count as "shrinking/slowing" disappearance evidence (D7) — conservative by design so
+ * ordinary rim exploration near non-target holes doesn't masquerade as a hole entry. */
+export const TRACKING_DISAPPEARANCE_SHRINK_RATIO = 0.75;
+
+/** Nose/head estimation (D6) — deliberately conservative: emit noseXY only when
+ * independent geometric signals agree, otherwise null rather than a guessed point. */
+/** Minimum blob elongation (major axis length / equivalent circular diameter) before a
+ * principal axis is considered reliable at all. */
+export const TRACKING_NOSE_MIN_AXIS_RATIO = 1.35;
+/** Minimum recent-centroid displacement (px) before heading is trusted as directional. */
+export const TRACKING_NOSE_MIN_HEADING_DISPLACEMENT_PX = 1.5;
+/** Cosine of the angle between heading and the body's principal axis — below this,
+ * motion is too perpendicular to the body axis to reliably imply which end is the head. */
+export const TRACKING_NOSE_MIN_HEADING_AXIS_ALIGNMENT = 0.55;
+/** If the heading-preferred extremity's local width is below this fraction of the
+ * opposite extremity's width, shape evidence contradicts heading — treat as unreliable. */
+export const TRACKING_NOSE_WIDTH_CONTRADICTION_RATIO = 0.6;
+export const TRACKING_NOSE_WIDTH_HALF_WINDOW_PX = 8;
+/** Local width is sampled this many px inward from the extremity (toward the blob's
+ * center) rather than exactly at the tip — an extremity pixel is often a corner of the
+ * blob's outline, whose own perpendicular cross-section under-measures true local
+ * thickness; sampling slightly inward gives a representative body cross-section. */
+export const TRACKING_NOSE_WIDTH_INSET_PX = 5;
+/** Frame-edge margin (px) — blobs clipped this close to the border have truncated
+ * extremities, so their "tip" may be off-frame and is never trusted for nose estimation. */
+export const TRACKING_NOSE_RIM_MARGIN_PX = 3;

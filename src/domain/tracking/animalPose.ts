@@ -1,4 +1,13 @@
 import type { Blob, Point } from '../calibration/connectedComponents';
+import {
+  TRACKING_NOSE_MIN_AXIS_RATIO,
+  TRACKING_NOSE_MIN_HEADING_AXIS_ALIGNMENT,
+  TRACKING_NOSE_MIN_HEADING_DISPLACEMENT_PX,
+  TRACKING_NOSE_RIM_MARGIN_PX,
+  TRACKING_NOSE_WIDTH_CONTRADICTION_RATIO,
+  TRACKING_NOSE_WIDTH_HALF_WINDOW_PX,
+  TRACKING_NOSE_WIDTH_INSET_PX,
+} from '../constants';
 import type { ObservationQualityFlag } from '../types';
 
 export interface PoseEstimate {
@@ -70,7 +79,7 @@ function localWidthAtExtremity(
   blob: Blob,
   extremity: Point,
   axisAngle: number,
-  halfWidth = 8,
+  halfWidth = TRACKING_NOSE_WIDTH_HALF_WINDOW_PX,
 ): number {
   const perpCos = Math.cos(axisAngle + Math.PI / 2);
   const perpSin = Math.sin(axisAngle + Math.PI / 2);
@@ -91,11 +100,16 @@ function headingFromHistory(recentCentroids: Point[]): Point | null {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const mag = Math.hypot(dx, dy);
-  if (mag < 1.5) return null;
+  if (mag < TRACKING_NOSE_MIN_HEADING_DISPLACEMENT_PX) return null;
   return { x: dx / mag, y: dy / mag };
 }
 
-function isRimClipped(blob: Blob, width: number, height: number, margin = 3): boolean {
+function isRimClipped(
+  blob: Blob,
+  width: number,
+  height: number,
+  margin = TRACKING_NOSE_RIM_MARGIN_PX,
+): boolean {
   for (const p of blob.pixels) {
     if (p.x <= margin || p.y <= margin || p.x >= width - 1 - margin || p.y >= height - 1 - margin) {
       return true;
@@ -104,57 +118,99 @@ function isRimClipped(blob: Blob, width: number, height: number, margin = 3): bo
   return false;
 }
 
-/** Body centroid + nose from axis extremities; null nose when unreliable. */
+function noNose(bodyXY: Point, axisRatio: number, extraFlags: ObservationQualityFlag[] = []): PoseEstimate {
+  return {
+    bodyXY,
+    noseXY: null,
+    qualityFlags: ['ambiguous_head_tail', ...extraFlags],
+    axisRatio,
+  };
+}
+
+/**
+ * Body centroid + nose from axis extremities; null nose whenever evidence is anything
+ * short of strong agreement between heading and shape (D6) — never a guessed point.
+ *
+ * Two independent signals must agree for a nose estimate to be emitted:
+ *  1. Heading (recent motion direction) must be reasonably aligned with the blob's own
+ *     principal axis — otherwise we can't tell which end is "forward" from motion alone.
+ *  2. Local width at the heading-implied head end must not be markedly thinner than the
+ *     opposite end — a thin "head" end contradicts the tail-is-thin shape prior and is
+ *     treated as disagreement between signals, not resolved by picking one side.
+ */
 export function estimatePose(
   blob: Blob,
   recentCentroids: Point[],
   width: number,
   height: number,
 ): PoseEstimate {
-  const flags: ObservationQualityFlag[] = [];
   const bodyXY = blob.centroid;
   const axis = computeAxisExtremities(blob);
+  const clipped = isRimClipped(blob, width, height);
+  const occlusionFlags: ObservationQualityFlag[] = clipped ? ['possible_occlusion'] : [];
 
-  if (!axis || axis.axisRatio < 1.35) {
-    flags.push('ambiguous_head_tail');
-    if (isRimClipped(blob, width, height)) flags.push('possible_occlusion');
-    return { bodyXY, noseXY: null, qualityFlags: flags, axisRatio: axis?.axisRatio ?? 1 };
+  if (!axis || axis.axisRatio < TRACKING_NOSE_MIN_AXIS_RATIO) {
+    return noNose(bodyXY, axis?.axisRatio ?? 1, occlusionFlags);
+  }
+
+  // A rim-clipped blob's true extremities may be truncated by the frame edge — the
+  // "tip" we'd measure could just be where the animal exits the frame, not its nose.
+  if (clipped) {
+    return noNose(bodyXY, axis.axisRatio, occlusionFlags);
   }
 
   const heading = headingFromHistory(recentCentroids);
   if (!heading) {
-    flags.push('ambiguous_head_tail');
-    if (isRimClipped(blob, width, height)) flags.push('possible_occlusion');
-    return { bodyXY, noseXY: null, qualityFlags: flags, axisRatio: axis.axisRatio };
+    return noNose(bodyXY, axis.axisRatio);
   }
 
   const dx = axis.maxProj.x - axis.minProj.x;
   const dy = axis.maxProj.y - axis.minProj.y;
+  const axisLen = Math.hypot(dx, dy);
+  if (axisLen < 1e-6) {
+    return noNose(bodyXY, axis.axisRatio);
+  }
+
+  const axisUnit = { x: dx / axisLen, y: dy / axisLen };
+  const alignment = heading.x * axisUnit.x + heading.y * axisUnit.y;
+
+  if (Math.abs(alignment) < TRACKING_NOSE_MIN_HEADING_AXIS_ALIGNMENT) {
+    // Motion is too perpendicular to the body's long axis (lateral movement, noisy
+    // heading) to reliably say which extremity is the front.
+    return noNose(bodyXY, axis.axisRatio);
+  }
+
+  const preferred = alignment > 0 ? axis.maxProj : axis.minProj;
+  const other = alignment > 0 ? axis.minProj : axis.maxProj;
   const axisAngle = Math.atan2(dy, dx);
 
-  const widthAtMin = localWidthAtExtremity(blob, axis.minProj, axisAngle);
-  const widthAtMax = localWidthAtExtremity(blob, axis.maxProj, axisAngle);
+  // Sample width slightly inward from each extremity, not exactly at the tip — the
+  // extremity is often a corner pixel of the blob outline, and a perpendicular line
+  // through a corner under-measures the true local body thickness there.
+  const insetPreferred = {
+    x: preferred.x - Math.sign(alignment) * axisUnit.x * TRACKING_NOSE_WIDTH_INSET_PX,
+    y: preferred.y - Math.sign(alignment) * axisUnit.y * TRACKING_NOSE_WIDTH_INSET_PX,
+  };
+  const insetOther = {
+    x: other.x + Math.sign(alignment) * axisUnit.x * TRACKING_NOSE_WIDTH_INSET_PX,
+    y: other.y + Math.sign(alignment) * axisUnit.y * TRACKING_NOSE_WIDTH_INSET_PX,
+  };
+  const widthPreferred = localWidthAtExtremity(blob, insetPreferred, axisAngle);
+  const widthOther = localWidthAtExtremity(blob, insetOther, axisAngle);
 
-  const dotMin =
-    (axis.minProj.x - bodyXY.x) * heading.x + (axis.minProj.y - bodyXY.y) * heading.y;
-  const dotMax =
-    (axis.maxProj.x - bodyXY.x) * heading.x + (axis.maxProj.y - bodyXY.y) * heading.y;
-
-  let noseCandidate: Point;
-  if (dotMax >= dotMin) {
-    noseCandidate = widthAtMax >= widthAtMin ? axis.maxProj : axis.minProj;
-  } else {
-    noseCandidate = widthAtMin >= widthAtMax ? axis.minProj : axis.maxProj;
+  if (widthOther > 0 && widthPreferred < widthOther * TRACKING_NOSE_WIDTH_CONTRADICTION_RATIO) {
+    // Shape evidence (thin/wide profile) disagrees with the heading-implied head end —
+    // disagreement between independent signals means the estimate isn't trustworthy,
+    // so we do not fall back to trusting shape over heading (or vice versa).
+    return noNose(bodyXY, axis.axisRatio);
   }
 
-  if (isRimClipped(blob, width, height)) {
-    flags.push('possible_occlusion');
-  }
-
+  // `clipped` was already checked (and returned early if true) above, so the blob's
+  // extremities here are untruncated and no occlusion flag applies.
   return {
     bodyXY,
-    noseXY: noseCandidate,
-    qualityFlags: flags,
+    noseXY: preferred,
+    qualityFlags: [],
     axisRatio: axis.axisRatio,
   };
 }
