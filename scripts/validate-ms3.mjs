@@ -242,7 +242,7 @@ async function main() {
   // Category-based review UX: every category is present with a count, and expanding
   // one category never hides frames belonging to another (each category's frames are
   // rendered independently, so opening all of them and counting must match the totals).
-  const categoryKeys = ['lost', 'absent_in_hole', 'ambiguous_head_tail', 'low_confidence', 'speed_outlier', 'possible_occlusion'];
+  const categoryKeys = ['tracking_issues', 'pose_uncertainty', 'hole_disappearance'];
   const categoryEls = await page.locator('details[data-testid^="flagged-category-"]').count();
   results.V_review_categories_present = categoryEls === categoryKeys.length ? 'PASS' : `FAIL: found ${categoryEls}`;
   if (results.V_review_categories_present !== 'PASS') {

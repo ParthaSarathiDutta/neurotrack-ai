@@ -1,6 +1,9 @@
 import {
+  TRACKING_ABSENT_IN_HOLE_MIN_MISSING_FRAMES,
+  TRACKING_ABSENT_IN_HOLE_PEAK_SHRINK_RATIO,
   TRACKING_DISAPPEARANCE_LOOKBACK,
   TRACKING_DISAPPEARANCE_SHRINK_RATIO,
+  TRACKING_HOLE_INTERACTION_MIN_FRAMES,
   TRACKING_HOLE_PROXIMITY_FRACTION,
 } from '../constants';
 import type { Point } from '../calibration/connectedComponents';
@@ -10,6 +13,15 @@ export interface DisappearanceContext {
   lastPosition: Point | null;
   recentAreas: number[];
   recentCentroids: Point[];
+}
+
+/** Temporal gate carried across consecutive missing frames — prevents a single missed
+ * detection (or partial rim shrink while the animal is still visible) from becoming
+ * an unsupported biological claim. */
+export interface DisappearanceTemporalState {
+  consecutiveMissingFrames: number;
+  peakRecentArea: number;
+  holeProximityStreak: number;
 }
 
 /** Nearest hole to `point`, only if within the hole-proximity catch radius. */
@@ -28,8 +40,7 @@ export function nearestHole(point: Point, holes: Hole[], platformRadiusPx: numbe
   return bestDist <= maxDist ? best : null;
 }
 
-/** Shrinking blob area OR slowing motion across the lookback window — light evidence
- *  of a genuine disappearance (D7), not merely a lost blob mid-platform. */
+/** Shrinking blob area OR slowing motion across the lookback window. */
 function showedDisappearanceEvidence(recentAreas: number[], recentCentroids: Point[]): boolean {
   let shrink = false;
   if (recentAreas.length >= TRACKING_DISAPPEARANCE_LOOKBACK) {
@@ -52,21 +63,36 @@ function showedDisappearanceEvidence(recentAreas: number[], recentCentroids: Poi
   return shrink || slowing;
 }
 
+/** The last tracked area must have collapsed to a small remnant relative to the recent
+ * peak — partial rim occlusion still leaves a substantial visible blob. */
+function lastTrackedAreaCollapsed(recentAreas: number[], peakRecentArea: number): boolean {
+  if (recentAreas.length === 0 || peakRecentArea <= 0) return false;
+  const lastArea = recentAreas[recentAreas.length - 1];
+  return lastArea <= peakRecentArea * TRACKING_ABSENT_IN_HOLE_PEAK_SHRINK_RATIO;
+}
+
 /**
  * Provisional per-frame status when no blob is found — NOT a scientific escape claim (MS-5).
  *
- * Only a *confirmed* target hole counts as "known" here — an unconfirmed/proposed value
- * is a suggestion, not a scientist-verified fact, and must not silently drive scientific
- * classification. Proximity to a non-target hole is never sufficient grounds for
- * `absent_in_hole` per the task reference (non-target holes are known dead ends): the
- * disappearance must be near an actual hole opening, not merely "somewhere on the rim."
+ * Requires a short temporal sequence: credible hole interaction while still tracked,
+ * then sustained missing frames after the blob shrank to a small remnant. A single missed
+ * frame or partial shrink while the animal may still be visible must stay `lost`.
  */
 export function classifyMissingObservation(
   geometry: Geometry,
   ctx: DisappearanceContext,
+  temporal: DisappearanceTemporalState,
 ): { observed: ObservedStatus; flags: ObservationQualityFlag[] } {
   const radius = geometry.platformRadiusPx;
   if (!radius || !ctx.lastPosition) {
+    return { observed: 'lost', flags: [] };
+  }
+
+  if (temporal.consecutiveMissingFrames < TRACKING_ABSENT_IN_HOLE_MIN_MISSING_FRAMES) {
+    return { observed: 'lost', flags: [] };
+  }
+
+  if (temporal.holeProximityStreak < TRACKING_HOLE_INTERACTION_MIN_FRAMES) {
     return { observed: 'lost', flags: [] };
   }
 
@@ -74,10 +100,12 @@ export function classifyMissingObservation(
     return { observed: 'lost', flags: [] };
   }
 
+  if (!lastTrackedAreaCollapsed(ctx.recentAreas, temporal.peakRecentArea)) {
+    return { observed: 'lost', flags: [] };
+  }
+
   const nearestAnyHole = nearestHole(ctx.lastPosition, geometry.holes, radius);
   if (!nearestAnyHole) {
-    // Disappearing away from any actual hole opening is far more likely a tracking
-    // failure (occlusion, shadow, rig hardware) than a genuine hole entry.
     return { observed: 'lost', flags: [] };
   }
 
@@ -86,7 +114,5 @@ export function classifyMissingObservation(
     return { observed: 'lost', flags: [] };
   }
 
-  // Either near the confirmed target hole, or the target is still unknown and this is
-  // near *some* real hole opening — both are provisional hypotheses only (MS-5 decides).
   return { observed: 'absent_in_hole', flags: ['near_hole_disappearance'] };
 }

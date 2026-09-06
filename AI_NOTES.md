@@ -81,3 +81,21 @@ Playwright's `waitForFunction(pageFunction, arg, options)` treats a bare `{timeo
 ### Validated
 lint/test/build PASS; `validate:calibration`, `validate:ms1`, `validate:ms2`, `validate:ms3`, `validate:tracking` all PASS. Live-UI (WebCodecs) tracking re-run on all three clips with target hole left **unconfirmed**: test53 99.6% tracked / 0 `absent_in_hole` (high), test51 73.4% tracked / 0 `absent_in_hole` / 177 lost (low), test50 97.2% tracked / 28 `absent_in_hole` / 124 lost (high). Category-based review UI (`flagged-category-*`) and "Go to frame" input verified end-to-end in `validate-ms3.mjs`.
 
+## MS-3 follow-up — rim tracking + hole-disappearance honesty (2026-09-06)
+
+### Problem 1 — test51 visible rim frames marked `lost`
+Manual frames ~181, ~270, ~334, ~672, ~681 showed a visible mouse near the rim/hole but no body position. Root causes: (a) single-channel foreground diff weakened near dark holes, (b) strict blob compactness/area gates rejected partial rim blobs, (c) continuity window too narrow for reacquisition after rim interaction.
+
+**Fix:** max-channel foreground diff + slightly expanded segmentation ROI; rim-relaxed second-pass blob selection (lower min area/compactness, wider continuity) only when the animal was recently tracked near the rim or a hole opening (`rimGeometry.ts` + `blobSelection.ts`). Offline tracked fraction test51: 66.2% → **90.0%**; all five manual spot frames now `tracked`.
+
+### Problem 2 — test50 false provisional `absent_in_hole`
+Manual frames ~573, ~586, ~592, ~2047, ~2051 still had a visible mouse but were classified `absent_in_hole` because a single missed detection near a hole plus partial area shrink satisfied the old heuristic.
+
+**Fix:** temporal gate in `observationStatus.ts` + extended `TrackerState`: requires ≥3 consecutive missing frames, ≥2 prior tracked frames near a hole opening, last tracked area ≤45% of recent peak, plus existing shrink/slow evidence. Partial shrink while a substantial blob may still be visible → `lost`. Combined with rim tracking improvements, test50 absent_in_hole: 28 → **0**; all five manual spot frames now `tracked`.
+
+### Review UX simplification
+Scientist-facing review panel collapsed from six granular categories to three broad groups (Tracking issues, Pose uncertainty, Hole disappearance). Granular per-flag counts retained under Technical details; each frame in a group lists its specific reasons inline.
+
+### Validated
+All manual spot-check frames pass in `validate:tracking`. test53 unchanged at 100% tracked (high). Full lint/test/build + all validation scripts PASS.
+

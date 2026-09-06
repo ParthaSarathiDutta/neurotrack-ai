@@ -1,6 +1,11 @@
 import { useState } from 'react';
-import { groupFlaggedFrames } from '../domain/tracking/trackQuality';
-import type { FlaggedFrame, TrialRecord } from '../domain/types';
+import {
+  formatReviewReasons,
+  groupFlaggedFrames,
+  groupFlaggedFramesForReview,
+  type ReviewFrameEntry,
+} from '../domain/tracking/trackQuality';
+import type { TrialRecord } from '../domain/types';
 import { canRunTracking } from '../services/trackingService';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
@@ -17,7 +22,7 @@ function CategoryFrameList({
   frames,
   onSeekToFrame,
 }: {
-  frames: FlaggedFrame[];
+  frames: ReviewFrameEntry[];
   onSeekToFrame: (frameIndex: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -27,7 +32,7 @@ function CategoryFrameList({
     <div>
       <ul className={styles.flaggedFrameList}>
         {visible.map((f) => (
-          <li key={`${f.frameIndex}-${f.reason}`}>
+          <li key={`${f.frameIndex}-${f.specificReasons.join('-')}`}>
             <button
               type="button"
               className={styles.linkButton}
@@ -35,6 +40,7 @@ function CategoryFrameList({
               data-testid={`flagged-frame-${f.frameIndex}`}
             >
               Frame {f.frameIndex + 1} ({(f.timeUs / 1_000_000).toFixed(3)} s)
+              <span className={styles.mono}> — {formatReviewReasons(f.specificReasons)}</span>
             </button>
           </li>
         ))}
@@ -62,7 +68,8 @@ export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelPro
   const gate = canRunTracking(trial);
   const track = trial.track;
   const quality = track?.quality;
-  const categories = quality ? groupFlaggedFrames(quality.flaggedFrames) : [];
+  const reviewGroups = quality ? groupFlaggedFramesForReview(quality.flaggedFrames) : [];
+  const technicalCategories = quality ? groupFlaggedFrames(quality.flaggedFrames) : [];
 
   const progressPct =
     trackingProgress && trackingProgress.total > 0
@@ -184,28 +191,44 @@ export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelPro
               Provisional <code>absent_in_hole</code> statuses are per-frame hypotheses only — not
               confirmed escape events (MS-5).
             </p>
+            <table className={styles.metricsTable} data-testid="tracking-flag-breakdown">
+              <thead>
+                <tr>
+                  <th scope="col">Specific flag</th>
+                  <th scope="col">Frames</th>
+                </tr>
+              </thead>
+              <tbody>
+                {technicalCategories.map((cat) => (
+                  <tr key={cat.key}>
+                    <td>{cat.label}</td>
+                    <td>{cat.frames.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </details>
 
           <div data-testid="flagged-review-categories">
-            <h3>Frames requiring review, by category</h3>
+            <h3>Frames requiring review</h3>
             <p className={styles.hint}>
-              Each category lists every matching frame — a busy category never hides frames from
-              a rarer one. Click a frame to seek the player to it exactly.
+              Broad review groups — expand any group to browse every matching frame and jump
+              directly to it. Specific flags are listed per frame and in Technical details above.
             </p>
-            {categories.map((cat) => (
+            {reviewGroups.map((group) => (
               <details
-                key={cat.key}
+                key={group.key}
                 className={styles.details}
-                data-testid={`flagged-category-${cat.key}`}
-                open={cat.frames.length > 0 && cat.frames.length <= CATEGORY_PAGE_SIZE}
+                data-testid={`flagged-category-${group.key}`}
+                open={group.frames.length > 0 && group.frames.length <= CATEGORY_PAGE_SIZE}
               >
-                <summary data-testid={`flagged-category-summary-${cat.key}`}>
-                  {cat.label} ({cat.frames.length})
+                <summary data-testid={`flagged-category-summary-${group.key}`}>
+                  {group.label} ({group.frames.length})
                 </summary>
-                {cat.frames.length > 0 ? (
-                  <CategoryFrameList frames={cat.frames} onSeekToFrame={onSeekToFrame} />
+                {group.frames.length > 0 ? (
+                  <CategoryFrameList frames={group.frames} onSeekToFrame={onSeekToFrame} />
                 ) : (
-                  <p className={styles.hint}>No frames in this category.</p>
+                  <p className={styles.hint}>No frames in this group.</p>
                 )}
               </details>
             ))}

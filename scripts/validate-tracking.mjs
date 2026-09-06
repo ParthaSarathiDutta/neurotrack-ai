@@ -125,6 +125,17 @@ const failures = [];
 const results = {};
 const params = defaultTrackingParams();
 
+/** Manual review spot-checks from MS-3 follow-up (1-based frame numbers → 0-based index). */
+const MANUAL_SPOT_CHECKS = {
+  test51: {
+    mustTrack: [180, 269, 333, 671, 680],
+  },
+  test50: {
+    mustTrack: [572, 585, 591, 2046, 2050],
+    mustNotAbsentInHole: [572, 585, 591, 2046, 2050],
+  },
+};
+
 for (const name of ['test53', 'test51', 'test50']) {
   console.log(`Tracking ${name}…`);
   const videoPath = join(DATA, `${name}.mp4`);
@@ -213,6 +224,31 @@ for (const name of ['test53', 'test51', 'test50']) {
       ? Number((ambiguousHeadTailCount / trackedObs.length).toFixed(4))
       : 0,
   };
+
+  const spot = MANUAL_SPOT_CHECKS[name];
+  if (spot) {
+    const spotResults = {};
+    if (spot.mustTrack) {
+      for (const idx of spot.mustTrack) {
+        const obs = observations[idx];
+        spotResults[`frame_${idx + 1}`] = obs
+          ? { observed: obs.observed, hasBody: obs.bodyXY != null }
+          : { observed: 'missing', hasBody: false };
+        if (!obs || obs.observed !== 'tracked' || obs.bodyXY == null) {
+          failures.push(`${name}: manual spot frame ${idx + 1} expected tracked with body`);
+        }
+      }
+    }
+    if (spot.mustNotAbsentInHole) {
+      for (const idx of spot.mustNotAbsentInHole) {
+        const obs = observations[idx];
+        if (obs?.observed === 'absent_in_hole') {
+          failures.push(`${name}: manual spot frame ${idx + 1} must not be absent_in_hole`);
+        }
+      }
+    }
+    results[name].manualSpotChecks = spotResults;
+  }
 
   if (observations.some((o) => o.origin !== 'auto')) failures.push(`${name}: non-auto origin`);
   if (

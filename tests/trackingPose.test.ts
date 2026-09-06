@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { estimatePose } from '../src/domain/tracking/animalPose';
 import type { Blob } from '../src/domain/calibration/connectedComponents';
 import { classifyMissingObservation } from '../src/domain/tracking/observationStatus';
-import { computeTrackQuality, groupFlaggedFrames } from '../src/domain/tracking/trackQuality';
+import {
+  computeTrackQuality,
+  groupFlaggedFrames,
+  groupFlaggedFramesForReview,
+} from '../src/domain/tracking/trackQuality';
 import { processTrackingFrame, buildTrackingFrameContext } from '../src/domain/tracking/trackPipeline';
 import { createInitialTrackerState } from '../src/domain/tracking/trackPipeline';
 import { defaultTrackingParams } from '../src/domain/trialFactory';
@@ -127,21 +131,67 @@ describe('observationStatus', () => {
     detection: null,
   };
 
-  it('classifies rim disappearance as absent_in_hole when shrink pattern present', () => {
-    const result = classifyMissingObservation(geometry, {
-      lastPosition: { x: 510, y: 240 },
-      recentAreas: [800, 700, 550, 400],
-      recentCentroids: [],
-    });
+  it('classifies rim disappearance as absent_in_hole when temporal evidence is strong', () => {
+    const result = classifyMissingObservation(
+      geometry,
+      {
+        lastPosition: { x: 510, y: 240 },
+        recentAreas: [800, 700, 550, 300],
+        recentCentroids: [],
+      },
+      {
+        consecutiveMissingFrames: 3,
+        peakRecentArea: 800,
+        holeProximityStreak: 3,
+      },
+    );
     expect(result.observed).toBe('absent_in_hole');
   });
 
+  it('classifies a single missed frame near a hole as lost', () => {
+    const result = classifyMissingObservation(
+      geometry,
+      {
+        lastPosition: { x: 510, y: 240 },
+        recentAreas: [800, 700, 550, 400],
+        recentCentroids: [],
+      },
+      {
+        consecutiveMissingFrames: 1,
+        peakRecentArea: 800,
+        holeProximityStreak: 3,
+      },
+    );
+    expect(result.observed).toBe('lost');
+  });
+
+  it('classifies partial shrink near a hole as lost when blob remnant is still large', () => {
+    const result = classifyMissingObservation(
+      geometry,
+      {
+        lastPosition: { x: 510, y: 240 },
+        recentAreas: [800, 700, 650, 600],
+        recentCentroids: [],
+      },
+      {
+        consecutiveMissingFrames: 4,
+        peakRecentArea: 800,
+        holeProximityStreak: 4,
+      },
+    );
+    expect(result.observed).toBe('lost');
+  });
+
   it('classifies mid-platform loss as lost', () => {
-    const result = classifyMissingObservation(geometry, {
-      lastPosition: { x: 320, y: 240 },
-      recentAreas: [700, 680],
-      recentCentroids: [],
-    });
+    const result = classifyMissingObservation(
+      geometry,
+      {
+        lastPosition: { x: 320, y: 240 },
+        recentAreas: [700, 680],
+        recentCentroids: [],
+      },
+      { consecutiveMissingFrames: 5, peakRecentArea: 700, holeProximityStreak: 0 },
+    );
     expect(result.observed).toBe('lost');
   });
 
@@ -157,11 +207,15 @@ describe('observationStatus', () => {
     };
     // Disappearance is near hole 0 (a known non-target, dead-end hole per task reference),
     // not near the confirmed target (hole 1) — must not become absent_in_hole.
-    const result = classifyMissingObservation(confirmedGeometry, {
-      lastPosition: { x: 510, y: 240 },
-      recentAreas: [800, 700, 550, 400],
-      recentCentroids: [],
-    });
+    const result = classifyMissingObservation(
+      confirmedGeometry,
+      {
+        lastPosition: { x: 510, y: 240 },
+        recentAreas: [800, 700, 550, 400],
+        recentCentroids: [],
+      },
+      { consecutiveMissingFrames: 3, peakRecentArea: 800, holeProximityStreak: 3 },
+    );
     expect(result.observed).toBe('lost');
   });
 
@@ -170,33 +224,61 @@ describe('observationStatus', () => {
       ...geometry,
       targetHoleConfirmedAt: '2026-01-01T00:00:00.000Z',
     };
-    const result = classifyMissingObservation(confirmedGeometry, {
-      lastPosition: { x: 510, y: 240 },
-      recentAreas: [800, 700, 550, 400],
-      recentCentroids: [],
-    });
+    const result = classifyMissingObservation(
+      confirmedGeometry,
+      {
+        lastPosition: { x: 510, y: 240 },
+        recentAreas: [800, 700, 550, 300],
+        recentCentroids: [],
+      },
+      { consecutiveMissingFrames: 3, peakRecentArea: 800, holeProximityStreak: 3 },
+    );
     expect(result.observed).toBe('absent_in_hole');
   });
 
   it('classifies disappearance away from any real hole as lost, even with shrink evidence', () => {
-    // A point out near the platform rim but not close to any actual hole opening —
-    // must not be treated as generic rim proximity (non-target holes are dead ends;
-    // "somewhere on the rim" is not evidence of a hole entry).
-    const result = classifyMissingObservation(geometry, {
-      lastPosition: { x: 320, y: 430 },
-      recentAreas: [800, 700, 550, 400],
-      recentCentroids: [],
-    });
+    const result = classifyMissingObservation(
+      geometry,
+      {
+        lastPosition: { x: 320, y: 430 },
+        recentAreas: [800, 700, 550, 300],
+        recentCentroids: [],
+      },
+      { consecutiveMissingFrames: 4, peakRecentArea: 800, holeProximityStreak: 2 },
+    );
     expect(result.observed).toBe('lost');
   });
 
   it('classifies disappearance near a hole with no shrink/slow evidence as lost', () => {
-    const result = classifyMissingObservation(geometry, {
-      lastPosition: { x: 510, y: 240 },
-      recentAreas: [700, 690, 685, 680],
-      recentCentroids: [],
-    });
+    const result = classifyMissingObservation(
+      geometry,
+      {
+        lastPosition: { x: 510, y: 240 },
+        recentAreas: [700, 690, 685, 680],
+        recentCentroids: [],
+      },
+      { consecutiveMissingFrames: 4, peakRecentArea: 700, holeProximityStreak: 3 },
+    );
     expect(result.observed).toBe('lost');
+  });
+});
+
+describe('groupFlaggedFramesForReview', () => {
+  it('collapses granular flags into three scientist-facing groups', () => {
+    const frames: FlaggedFrame[] = [
+      { frameIndex: 1, timeUs: 1_000_000, reason: 'lost' },
+      { frameIndex: 1, timeUs: 1_000_000, reason: 'low_confidence' },
+      { frameIndex: 2, timeUs: 2_000_000, reason: 'absent_in_hole' },
+      { frameIndex: 3, timeUs: 3_000_000, reason: 'ambiguous_head_tail' },
+    ];
+    const groups = groupFlaggedFramesForReview(frames);
+    expect(groups).toHaveLength(3);
+    const byKey = Object.fromEntries(groups.map((g) => [g.key, g.frames.length]));
+    expect(byKey.tracking_issues).toBe(1);
+    expect(byKey.pose_uncertainty).toBe(1);
+    expect(byKey.hole_disappearance).toBe(1);
+    const tracking = groups.find((g) => g.key === 'tracking_issues')!;
+    expect(tracking.frames[0].specificReasons).toEqual(expect.arrayContaining(['lost', 'low_confidence']));
   });
 });
 

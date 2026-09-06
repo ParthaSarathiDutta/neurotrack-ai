@@ -97,6 +97,86 @@ export function groupFlaggedFrames(flaggedFrames: FlaggedFrame[]): FlaggedFrameC
   }));
 }
 
+/** Scientist-facing review groups — broader buckets for the main review panel. */
+export type ReviewFrameGroupKey = 'tracking_issues' | 'pose_uncertainty' | 'hole_disappearance';
+
+export const REVIEW_FRAME_GROUPS: Array<{ key: ReviewFrameGroupKey; label: string }> = [
+  { key: 'tracking_issues', label: 'Tracking issues' },
+  { key: 'pose_uncertainty', label: 'Pose uncertainty' },
+  { key: 'hole_disappearance', label: 'Hole disappearance' },
+];
+
+const REVIEW_GROUP_BY_REASON: Record<
+  FlaggedFrame['reason'],
+  ReviewFrameGroupKey
+> = {
+  lost: 'tracking_issues',
+  possible_occlusion: 'tracking_issues',
+  low_confidence: 'tracking_issues',
+  speed_outlier: 'tracking_issues',
+  ambiguous_head_tail: 'pose_uncertainty',
+  absent_in_hole: 'hole_disappearance',
+  near_hole_disappearance: 'hole_disappearance',
+};
+
+const REVIEW_REASON_LABELS: Record<FlaggedFrame['reason'], string> = {
+  lost: 'lost',
+  absent_in_hole: 'provisional absent-in-hole',
+  ambiguous_head_tail: 'ambiguous head/tail',
+  low_confidence: 'low confidence',
+  speed_outlier: 'speed outlier',
+  possible_occlusion: 'possible occlusion',
+  near_hole_disappearance: 'near-hole disappearance',
+};
+
+export interface ReviewFrameEntry {
+  frameIndex: number;
+  timeUs: number;
+  specificReasons: FlaggedFrame['reason'][];
+}
+
+export interface ReviewFrameGroup {
+  key: ReviewFrameGroupKey;
+  label: string;
+  frames: ReviewFrameEntry[];
+}
+
+/** Collapse granular flags into scientist-facing review groups, deduplicating by frame. */
+export function groupFlaggedFramesForReview(flaggedFrames: FlaggedFrame[]): ReviewFrameGroup[] {
+  const buckets = new Map<ReviewFrameGroupKey, Map<number, ReviewFrameEntry>>();
+
+  for (const { key } of REVIEW_FRAME_GROUPS) {
+    buckets.set(key, new Map());
+  }
+
+  for (const frame of flaggedFrames) {
+    const groupKey = REVIEW_GROUP_BY_REASON[frame.reason];
+    const bucket = buckets.get(groupKey)!;
+    const existing = bucket.get(frame.frameIndex);
+    if (existing) {
+      if (!existing.specificReasons.includes(frame.reason)) {
+        existing.specificReasons.push(frame.reason);
+      }
+    } else {
+      bucket.set(frame.frameIndex, {
+        frameIndex: frame.frameIndex,
+        timeUs: frame.timeUs,
+        specificReasons: [frame.reason],
+      });
+    }
+  }
+
+  return REVIEW_FRAME_GROUPS.map(({ key, label }) => ({
+    key,
+    label,
+    frames: [...(buckets.get(key)?.values() ?? [])].sort((a, b) => a.frameIndex - b.frameIndex),
+  }));
+}
+
+export function formatReviewReasons(reasons: FlaggedFrame['reason'][]): string {
+  return reasons.map((r) => REVIEW_REASON_LABELS[r]).join(', ');
+}
+
 function assessOverall(
   trackedFraction: number,
   lostFraction: number,

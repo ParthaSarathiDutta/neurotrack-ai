@@ -13,6 +13,7 @@ import { estimatePose } from './animalPose';
 import { predictPosition, selectBestBlob } from './blobSelection';
 import { segmentForegroundBlobs, type PlatformRoi } from './foreground';
 import { classifyMissingObservation } from './observationStatus';
+import { isNearHoleOpening } from './rimGeometry';
 import {
   computeTrackQuality,
   isSpeedOutlier,
@@ -24,6 +25,9 @@ export interface TrackerState {
   lastVelocity: Point | null;
   recentCentroids: Point[];
   recentAreas: number[];
+  consecutiveMissingFrames: number;
+  peakRecentArea: number;
+  holeProximityStreak: number;
 }
 
 export function createInitialTrackerState(): TrackerState {
@@ -32,6 +36,9 @@ export function createInitialTrackerState(): TrackerState {
     lastVelocity: null,
     recentCentroids: [],
     recentAreas: [],
+    consecutiveMissingFrames: 0,
+    peakRecentArea: 0,
+    holeProximityStreak: 0,
   };
 }
 
@@ -74,11 +81,12 @@ function occlusionPenalty(
   return 1;
 }
 
-function updateTrackerState(
+function updateTrackerStateOnTrack(
   state: TrackerState,
   body: Point,
   area: number,
   deltaTimeUs: number,
+  geometry: Geometry,
 ): TrackerState {
   let velocity = state.lastVelocity;
   if (state.lastBody && deltaTimeUs > 0) {
@@ -90,11 +98,26 @@ function updateTrackerState(
   }
   const recentCentroids = [...state.recentCentroids, body].slice(-TRACKING_HEADING_HISTORY);
   const recentAreas = [...state.recentAreas, area].slice(-TRACKING_HEADING_HISTORY);
+  const peakRecentArea = Math.max(state.peakRecentArea, area);
+  const holeProximityStreak = isNearHoleOpening(body, geometry)
+    ? state.holeProximityStreak + 1
+    : 0;
+
   return {
     lastBody: body,
     lastVelocity: velocity,
     recentCentroids,
     recentAreas,
+    consecutiveMissingFrames: 0,
+    peakRecentArea,
+    holeProximityStreak,
+  };
+}
+
+function updateTrackerStateOnMiss(state: TrackerState): TrackerState {
+  return {
+    ...state,
+    consecutiveMissingFrames: state.consecutiveMissingFrames + 1,
   };
 }
 
@@ -142,14 +165,24 @@ export function processTrackingFrame(
     ctx.roi.radiusPx,
     ctx.params,
     predicted,
+    { lastBody: state.lastBody, geometry: ctx.geometry },
   );
 
   if (!selection.blob) {
-    const missing = classifyMissingObservation(ctx.geometry, {
-      lastPosition: state.lastBody,
-      recentAreas: state.recentAreas,
-      recentCentroids: state.recentCentroids,
-    });
+    const missState = updateTrackerStateOnMiss(state);
+    const missing = classifyMissingObservation(
+      ctx.geometry,
+      {
+        lastPosition: state.lastBody,
+        recentAreas: state.recentAreas,
+        recentCentroids: state.recentCentroids,
+      },
+      {
+        consecutiveMissingFrames: missState.consecutiveMissingFrames,
+        peakRecentArea: state.peakRecentArea,
+        holeProximityStreak: state.holeProximityStreak,
+      },
+    );
     return {
       observation: {
         timeUs: entry.timeUs,
@@ -161,7 +194,7 @@ export function processTrackingFrame(
         origin: 'auto',
         qualityFlags: missing.flags.length > 0 ? missing.flags : null,
       },
-      state,
+      state: missState,
     };
   }
 
@@ -190,7 +223,13 @@ export function processTrackingFrame(
     flags.push('speed_outlier');
   }
 
-  const newState = updateTrackerState(state, pose.bodyXY, blob.area, deltaTimeUs);
+  const newState = updateTrackerStateOnTrack(
+    state,
+    pose.bodyXY,
+    blob.area,
+    deltaTimeUs,
+    ctx.geometry,
+  );
 
   return {
     observation: {

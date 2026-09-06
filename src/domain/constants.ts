@@ -55,6 +55,26 @@ export const TRACKING_HOLE_PROXIMITY_FRACTION = 0.12;
  * count as "shrinking/slowing" disappearance evidence (D7) — conservative by design so
  * ordinary rim exploration near non-target holes doesn't masquerade as a hole entry. */
 export const TRACKING_DISAPPEARANCE_SHRINK_RATIO = 0.75;
+/** Last tracked area must fall below this fraction of the recent peak before a hole
+ * disappearance hypothesis is even considered — partial rim occlusion still leaves a
+ * substantial blob and must stay `lost`, not `absent_in_hole`. */
+export const TRACKING_ABSENT_IN_HOLE_PEAK_SHRINK_RATIO = 0.45;
+/** Consecutive missing frames required before provisional absent_in_hole — a single
+ * missed frame near a hole is almost always tracking/occlusion failure, not entry. */
+export const TRACKING_ABSENT_IN_HOLE_MIN_MISSING_FRAMES = 3;
+/** Tracked frames with centroid within this rim band (fraction of platform radius)
+ * count toward "credible hole interaction" for the temporal disappearance gate. */
+export const TRACKING_RIM_BAND_FRACTION = 0.82;
+/** Minimum consecutive tracked frames near a hole before disappearance evidence counts. */
+export const TRACKING_HOLE_INTERACTION_MIN_FRAMES = 2;
+
+/** Rim / partial-occlusion tracking — relax size/continuity gates only when the animal
+ * was recently tracked near the platform edge where segmentation weakens. */
+export const TRACKING_SEGMENTATION_ROI_MARGIN = 1.04;
+export const TRACKING_RIM_MIN_BLOB_AREA_FRACTION = 0.0008;
+export const TRACKING_RIM_MIN_COMPACTNESS = 0.02;
+/** Wider reacquisition window (fraction of platform radius) near the rim. */
+export const TRACKING_RIM_CONTINUITY_FRACTION = 0.38;
 
 /** Nose/head estimation (D6) — deliberately conservative: emit noseXY only when
  * independent geometric signals agree, otherwise null rather than a guessed point. */

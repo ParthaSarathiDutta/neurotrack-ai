@@ -1,5 +1,6 @@
 import { findConnectedComponents, type Blob } from '../calibration/connectedComponents';
 import { otsuThreshold } from '../calibration/otsu';
+import { TRACKING_SEGMENTATION_ROI_MARGIN } from '../constants';
 
 export interface PlatformRoi {
   center: { x: number; y: number };
@@ -18,7 +19,9 @@ export function segmentForegroundBlobs(
   const diff = new Uint8ClampedArray(n * 4);
   const cx = roi.center.x;
   const cy = roi.center.y;
-  const rMax = roi.radiusPx;
+  // Slightly expanded capture zone — animals at the rim often extend a few pixels
+  // beyond the fitted platform circle while still being on-platform.
+  const rMax = roi.radiusPx * TRACKING_SEGMENTATION_ROI_MARGIN;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -32,7 +35,11 @@ export function segmentForegroundBlobs(
         diff[i + 3] = 255;
         continue;
       }
-      const d = Math.abs(frame[i] - background[i]);
+      // Max channel diff survives dark-hole rim contrast better than a single channel.
+      const dR = Math.abs(frame[i] - background[i]);
+      const dG = Math.abs(frame[i + 1] - background[i + 1]);
+      const dB = Math.abs(frame[i + 2] - background[i + 2]);
+      const d = Math.max(dR, dG, dB);
       diff[i] = d;
       diff[i + 1] = d;
       diff[i + 2] = d;
