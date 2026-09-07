@@ -465,3 +465,19 @@ Expected under definition: 33.17 s on-platform + 11.08 s off-platform = 44.24 s 
 ### Validated
 189 unit tests, lint, build, validate:ms6-viz (36 checks), validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review.
 
+## MS-6 Checkpoint 3 final figure readability refinement (2026-09-07)
+
+### Timeline
+- Tightened Y-axis grouping: title `x=16`, ticks end-anchored at `x=48`, plot at `x=54` (gap ~17 px desktop, ~11 px at 390 px width).
+- Shared `CandidateEntryGlyph`: orange dashed vertical line with circle centered on the line (legend + chart midpoint).
+- Absent-category note shortened (`Absent in this trial:` + concise labels).
+
+### Occupancy
+- Distribution audit (test51/test53): max/median ratio ≫ 4 with ≤4 bins above half-max → auto `sqrt_seconds_per_bin` display mapping (weights unchanged).
+- Stronger sequential blue ramp; rendered grayscale spread ~0.78 on both sample trials.
+- Plain description: “Darker squares indicate locations where the mouse spent more time.”
+- Normalization disclosed in `<details>`; legend ticks remain true seconds; tooltips unchanged.
+
+### Validated
+196 unit tests, lint, build, validate:ms6-viz (46 checks + screenshots in `tests/screenshots/ms6-viz-refinement/`), validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review.
+

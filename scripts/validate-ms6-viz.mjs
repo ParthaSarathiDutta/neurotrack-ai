@@ -4,7 +4,7 @@
  */
 import { chromium } from 'playwright';
 import { createServer } from 'http';
-import { readFile } from 'fs/promises';
+import { readFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -14,6 +14,7 @@ const ROOT = join(__dirname, '..');
 const DIST = join(ROOT, 'dist');
 const FIXTURE = join(ROOT, 'tests', 'fixtures', 'ms6', 'three-trial-session.neurotrack.json');
 const TEST53_MP4 = join(ROOT, 'data', 'barnes-maze', 'test53.mp4');
+const SCREENSHOT_DIR = join(ROOT, 'tests', 'screenshots', 'ms6-viz-refinement');
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const results = {};
@@ -95,9 +96,76 @@ async function yAxisClearOfTickLabels(page) {
   });
 }
 
+/** Gap (px) between Y-axis title right edge and nearest tick label left edge. */
+async function yAxisTitleTickGap(page) {
+  return page.evaluate(() => {
+    const ylab = document.querySelector('[data-testid="hole-timeline-y-axis-label"]');
+    const ticks = [...document.querySelectorAll('[data-testid="hole-timeline-y-tick-label"]')];
+    if (!ylab || ticks.length === 0) return null;
+    const ry = ylab.getBoundingClientRect();
+    const tickLeft = Math.min(...ticks.map((t) => t.getBoundingClientRect().left));
+    return tickLeft - ry.right;
+  });
+}
+
+async function candidateLegendGlyphCentered(page) {
+  return page.evaluate(() => {
+    const svg = document.querySelector('[data-testid="hole-timeline-legend-candidate-glyph"]');
+    if (!svg) return null;
+    const line = svg.querySelector('line');
+    const circle = svg.querySelector('circle');
+    if (!line || !circle) return false;
+    const lr = line.getBoundingClientRect();
+    const cr = circle.getBoundingClientRect();
+    const lineMidY = (lr.top + lr.bottom) / 2;
+    const circleMidY = (cr.top + cr.bottom) / 2;
+    const lineMidX = (lr.left + lr.right) / 2;
+    const circleMidX = (cr.left + cr.right) / 2;
+    return Math.abs(lineMidY - circleMidY) <= 2 && Math.abs(lineMidX - circleMidX) <= 2;
+  });
+}
+
+async function occupancyGrayscaleSpread(page) {
+  return page.evaluate(() => {
+    const cells = [...document.querySelectorAll('[data-testid="occupancy-cell"]')];
+    if (cells.length === 0) return { ok: false, reason: 'no_cells' };
+    const parse = (color) => {
+      const m = color.match(/rgb\((\d+), (\d+), (\d+)\)/);
+      if (!m) return null;
+      return [Number(m[1]), Number(m[2]), Number(m[3])];
+    };
+    const lum = (rgb) => {
+      const chan = rgb.map((v) => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * chan[0] + 0.7152 * chan[1] + 0.0722 * chan[2];
+    };
+    const values = cells
+      .map((el) => parse(getComputedStyle(el).fill))
+      .filter(Boolean)
+      .map(lum);
+    if (values.length === 0) return { ok: false, reason: 'no_rgb' };
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    return { ok: max - min >= 0.12, spread: max - min, count: values.length };
+  });
+}
+
+async function captureVizScreenshot(page, name) {
+  const panel = page.locator('[data-testid="trial-visualizations-panel"]');
+  await panel.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(50);
+  await panel.screenshot({ path: join(SCREENSHOT_DIR, `${name}.png`) });
+}
+
 async function assertVizLayout(page, trialTag) {
   const yAxisOk = await yAxisClearOfTickLabels(page);
   results[`V_${trialTag}_y_axis_clear`] = yAxisOk ? 'PASS' : 'FAIL';
+
+  const gap = await yAxisTitleTickGap(page);
+  results[`V_${trialTag}_y_axis_gap_px`] =
+    gap != null && gap >= 2 && gap <= 28 ? `PASS:${gap.toFixed(1)}` : `FAIL:${gap}`;
 
   const holeLabels = await textsWithinSvg(
     page,
@@ -109,9 +177,20 @@ async function assertVizLayout(page, trialTag) {
 
   const desc = await page.locator('[data-testid="occupancy-description"]').textContent();
   results[`V_${trialTag}_occupancy_plain_language`] =
-    desc && desc.includes('Each square is shaded') && desc.includes('does not independently identify')
+    desc && desc.includes('Darker squares indicate locations where the mouse spent more time')
       ? 'PASS'
       : `FAIL:${desc?.trim()}`;
+
+  const norm = await page.locator('[data-testid="occupancy-heatmap"]').getAttribute('data-display-normalization');
+  results[`V_${trialTag}_occupancy_display_norm`] =
+    norm === 'sqrt_seconds_per_bin' ? 'PASS' : `FAIL:${norm}`;
+
+  const scaleDetails = await page.locator('[data-testid="occupancy-scale-details"]').count();
+  results[`V_${trialTag}_occupancy_scale_details`] = scaleDetails > 0 ? 'PASS' : 'FAIL';
+
+  const gray = await occupancyGrayscaleSpread(page);
+  results[`V_${trialTag}_occupancy_grayscale_spread`] =
+    gray.ok ? `PASS:${gray.spread.toFixed(3)}` : `FAIL:${JSON.stringify(gray)}`;
 
   const legendAbsent = await page.locator('[data-testid="hole-timeline-legend-absent"]').textContent();
   results[`V_${trialTag}_dynamic_legend_note`] = legendAbsent ? 'PASS' : 'FAIL:missing';
@@ -122,6 +201,7 @@ async function assertVizLayout(page, trialTag) {
 
 async function main() {
   if (!process.env.SKIP_BUILD) execSync('npm run build', { cwd: ROOT, stdio: 'inherit' });
+  await mkdir(SCREENSHOT_DIR, { recursive: true });
 
   const server = await startStaticServer(DIST);
   const port = server.address().port;
@@ -185,6 +265,7 @@ async function main() {
     results.V_test53_timeline_investigations = invCount > 0 ? 'PASS' : `FAIL:${invCount}`;
 
     await assertVizLayout(page, 'test53');
+    await captureVizScreenshot(page, 'test53-desktop');
 
     const completionEndpoint = await page.locator('[data-testid="hole-timeline-completion-endpoint"]').count();
     results.V_test53_completion_marker = completionEndpoint > 0 ? 'PASS' : 'FAIL';
@@ -202,6 +283,10 @@ async function main() {
     await page.waitForTimeout(100);
     const narrowYAxis = await yAxisClearOfTickLabels(page);
     results.V_narrow_viewport_y_axis = narrowYAxis ? 'PASS' : 'FAIL';
+    const narrowGap = await yAxisTitleTickGap(page);
+    results.V_narrow_viewport_y_gap =
+      narrowGap != null && narrowGap >= 2 && narrowGap <= 28 ? `PASS:${narrowGap.toFixed(1)}` : `FAIL:${narrowGap}`;
+    await captureVizScreenshot(page, 'test53-narrow');
     await page.setViewportSize({ width: 1280, height: 900 });
 
     const occCells = await page.locator('[data-testid="occupancy-cell"]').count();
@@ -217,16 +302,27 @@ async function main() {
     results.V_test51_occupancy =
       (await page.locator('[data-testid="occupancy-heatmap"]').count()) > 0 ? 'PASS' : 'FAIL';
     await assertVizLayout(page, 'test51');
+    await captureVizScreenshot(page, 'test51-desktop');
 
     const candidateMarker = await page.locator('[data-testid="hole-timeline-candidate_entry"]').count();
     results.V_test51_candidate_marker = candidateMarker > 0 ? 'PASS' : 'FAIL';
+
+    const candidateGlyphCentered = await candidateLegendGlyphCentered(page);
+    results.V_test51_candidate_legend_glyph =
+      candidateGlyphCentered === true ? 'PASS' : `FAIL:${candidateGlyphCentered}`;
 
     const test51LegendCandidate = await page.locator('[data-testid="hole-timeline-legend-candidate_entry"]').count();
     results.V_test51_legend_candidate = test51LegendCandidate > 0 ? 'PASS' : 'FAIL';
 
     const test51Absent = await page.locator('[data-testid="hole-timeline-legend-absent"]').textContent();
     results.V_test51_legend_absent_completion =
-      test51Absent && test51Absent.includes('Confirmed body-entry completion') ? 'PASS' : `FAIL:${test51Absent?.trim()}`;
+      test51Absent && test51Absent.includes('Confirmed completion') ? 'PASS' : `FAIL:${test51Absent?.trim()}`;
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.waitForTimeout(100);
+    results.V_test51_narrow_y_axis = (await yAxisClearOfTickLabels(page)) ? 'PASS' : 'FAIL';
+    await captureVizScreenshot(page, 'test51-narrow');
+    await page.setViewportSize({ width: 1280, height: 900 });
 
     const test51Included = await page.locator('[data-testid="occupancy-included-sec"]').textContent();
     const test51OffPlatform = await page.locator('[data-testid="occupancy-excluded-off-platform"]').textContent();

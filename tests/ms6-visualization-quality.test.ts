@@ -37,10 +37,14 @@ describe('MS-6 occupancy accounting', () => {
     expect(accounting.unaccountedSec).toBeLessThan(0.001);
   });
 
-  it('uses linear seconds-per-bin display normalization with monotonic color ramp', () => {
+  it('uses monotonic display intensity with perceptual color ramp', () => {
     expect(occupancyDisplayIntensity(0, 10)).toBe(0);
     expect(occupancyDisplayIntensity(5, 10)).toBe(0.5);
     expect(occupancyDisplayIntensity(10, 10)).toBe(1);
+    expect(occupancyDisplayIntensity(2_500_000, 10_000_000, 'sqrt_seconds_per_bin')).toBeCloseTo(
+      Math.sqrt(0.25),
+      5,
+    );
     const low = occupancyCellColor(0.2);
     const high = occupancyCellColor(0.9);
     expect(low).not.toBe(high);
@@ -56,7 +60,7 @@ describe('MS-6 visualization quality metadata', () => {
     const { observations } = resolveMeasurementObservations(trial.track, 'corrected');
     const grid = buildOccupancyGrid(observations, trial.geometry, start, censor);
     expect(grid.trialDurationUs).toBeGreaterThan(0);
-    expect(grid.displayNormalization).toBe('linear_seconds_per_bin');
+    expect(grid.displayNormalization).toBe('sqrt_seconds_per_bin');
     expect(grid.totalWeightUs).toBeGreaterThan(0);
   });
 });

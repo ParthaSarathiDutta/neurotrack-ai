@@ -4,6 +4,11 @@ import {
   isUnsupportedTrajectoryGap,
 } from './trialObservations';
 
+export type OccupancyDisplayNormalization =
+  | 'linear_seconds_per_bin'
+  | 'sqrt_seconds_per_bin'
+  | 'log1p_seconds_per_bin';
+
 export interface OccupancyGridModel {
   gridSize: number;
   weights: Float64Array;
@@ -21,8 +26,8 @@ export interface OccupancyGridModel {
   unitLabel: string;
   platformCenter: { x: number; y: number } | null;
   platformRadiusPx: number | null;
-  /** Display normalization: linear map from bin seconds to color intensity. */
-  displayNormalization: 'linear_seconds_per_bin';
+  /** Display-only color mapping; bin weights remain true accumulated seconds. */
+  displayNormalization: OccupancyDisplayNormalization;
 }
 
 export interface OccupancyAccountingSummary {
@@ -35,10 +40,108 @@ export interface OccupancyAccountingSummary {
   unaccountedSec: number;
 }
 
+export interface OccupancyBinDistribution {
+  nonzeroCount: number;
+  maxSec: number;
+  medianNonzeroSec: number;
+  p90NonzeroSec: number;
+  maxOverMedian: number;
+  aboveHalfMaxCount: number;
+}
+
 const DEFAULT_GRID_SIZE = 32;
+
+/** When max ≫ median and only a few bins dominate, sqrt display improves mid-range contrast. */
+const SQRT_MAX_OVER_MEDIAN = 4;
+const SQRT_MAX_ABOVE_HALF = 4;
 
 function cellIndex(row: number, col: number, gridSize: number): number {
   return row * gridSize + col;
+}
+
+export function analyzeOccupancyBinDistribution(
+  weights: Float64Array,
+  maxWeightUs: number,
+): OccupancyBinDistribution {
+  const nonzeroSec = [...weights]
+    .filter((w) => w > 0)
+    .map((w) => w / 1_000_000)
+    .sort((a, b) => a - b);
+  const maxSec = maxWeightUs / 1_000_000;
+  const medianNonzeroSec =
+    nonzeroSec.length > 0 ? nonzeroSec[Math.floor(nonzeroSec.length / 2)]! : 0;
+  const p90NonzeroSec =
+    nonzeroSec.length > 0 ? nonzeroSec[Math.floor(nonzeroSec.length * 0.9)]! : 0;
+  const aboveHalfMaxCount = nonzeroSec.filter((v) => v >= maxSec / 2).length;
+  const maxOverMedian =
+    medianNonzeroSec > 0 ? maxSec / medianNonzeroSec : maxSec > 0 ? Infinity : 1;
+
+  return {
+    nonzeroCount: nonzeroSec.length,
+    maxSec,
+    medianNonzeroSec,
+    p90NonzeroSec,
+    maxOverMedian,
+    aboveHalfMaxCount,
+  };
+}
+
+/** Choose a display-only normalization from the bin-second distribution. */
+export function resolveOccupancyDisplayNormalization(
+  weights: Float64Array,
+  maxWeightUs: number,
+): OccupancyDisplayNormalization {
+  if (maxWeightUs <= 0) return 'linear_seconds_per_bin';
+
+  const stats = analyzeOccupancyBinDistribution(weights, maxWeightUs);
+  if (
+    stats.maxOverMedian >= SQRT_MAX_OVER_MEDIAN &&
+    stats.aboveHalfMaxCount <= SQRT_MAX_ABOVE_HALF &&
+    stats.nonzeroCount >= 8
+  ) {
+    return 'sqrt_seconds_per_bin';
+  }
+  return 'linear_seconds_per_bin';
+}
+
+export function occupancyDisplayNormalizationLabel(
+  normalization: OccupancyDisplayNormalization,
+): string {
+  switch (normalization) {
+    case 'sqrt_seconds_per_bin':
+      return 'Square-root of seconds per bin (display only)';
+    case 'log1p_seconds_per_bin':
+      return 'log(1 + seconds) per bin (display only)';
+    default:
+      return 'Linear seconds per bin (display only)';
+  }
+}
+
+/** Map accumulated bin seconds to color intensity using the chosen display normalization. */
+export function occupancyDisplayIntensity(
+  weightUs: number,
+  maxWeightUs: number,
+  normalization: OccupancyDisplayNormalization = 'linear_seconds_per_bin',
+): number {
+  if (weightUs <= 0 || maxWeightUs <= 0) return 0;
+  const t = Math.max(0, Math.min(1, weightUs / maxWeightUs));
+  switch (normalization) {
+    case 'sqrt_seconds_per_bin':
+      return Math.sqrt(t);
+    case 'log1p_seconds_per_bin':
+      return Math.log1p(weightUs / 1_000_000) / Math.log1p(maxWeightUs / 1_000_000);
+    default:
+      return t;
+  }
+}
+
+/** Color intensity for a legend/bar position that represents fraction of max bin seconds. */
+export function occupancyLegendIntensity(
+  fractionOfMax: number,
+  normalization: OccupancyDisplayNormalization,
+): number {
+  const t = Math.max(0, Math.min(1, fractionOfMax));
+  return occupancyDisplayIntensity(t * 1_000_000, 1_000_000, normalization);
 }
 
 /** Time-weighted occupancy on platform circle; skips unsupported gaps, zero Δt, and off-platform starts. */
@@ -124,6 +227,8 @@ export function buildOccupancyGrid(
     if (weights[idx]! > maxWeightUs) maxWeightUs = weights[idx]!;
   }
 
+  const displayNormalization = resolveOccupancyDisplayNormalization(weights, maxWeightUs);
+
   return {
     gridSize,
     weights,
@@ -137,7 +242,7 @@ export function buildOccupancyGrid(
     unitLabel: geometry.pxPerCm ? 'cm (platform-relative)' : 'px (platform-relative)',
     platformCenter: center,
     platformRadiusPx: radius,
-    displayNormalization: 'linear_seconds_per_bin',
+    displayNormalization,
   };
 }
 
@@ -161,26 +266,21 @@ export function summarizeOccupancyAccounting(model: OccupancyGridModel): Occupan
   };
 }
 
-/** Linear color intensity from bin accumulated seconds (not share of trial). */
-export function occupancyDisplayIntensity(weightUs: number, maxWeightUs: number): number {
-  if (weightUs <= 0 || maxWeightUs <= 0) return 0;
-  return Math.max(0, Math.min(1, weightUs / maxWeightUs));
-}
-
 /** @deprecated Prefer occupancyDisplayIntensity for heatmap shading. */
 export function occupancyCellFraction(weightUs: number, totalWeightUs: number): number {
   if (totalWeightUs <= 0 || weightUs <= 0) return 0;
   return weightUs / totalWeightUs;
 }
 
-/** ColorBrewer Blues-inspired ramp — distinguishable in grayscale and deuteranopia. */
+/** Sequential blue ramp with stronger mid-range contrast for grayscale and deuteranopia. */
 export function occupancyCellColor(intensity: number): string {
   const t = Math.max(0, Math.min(1, intensity));
   const stops = [
-    { t: 0, r: 247, g: 251, b: 255 },
-    { t: 0.35, r: 198, g: 219, b: 239 },
-    { t: 0.65, r: 107, g: 174, b: 214 },
-    { t: 1, r: 8, g: 48, b: 107 },
+    { t: 0, r: 242, g: 242, b: 242 },
+    { t: 0.15, r: 210, g: 225, b: 240 },
+    { t: 0.4, r: 140, g: 180, b: 220 },
+    { t: 0.7, r: 55, g: 110, b: 170 },
+    { t: 1, r: 0, g: 35, b: 85 },
   ];
   let lower = stops[0]!;
   let upper = stops[stops.length - 1]!;
@@ -197,6 +297,17 @@ export function occupancyCellColor(intensity: number): string {
   const g = Math.round(lower.g + (upper.g - lower.g) * u);
   const b = Math.round(lower.b + (upper.b - lower.b) * u);
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Relative luminance (sRGB) for grayscale contrast checks. */
+export function occupancyColorLuminance(color: string): number {
+  const m = color.match(/rgb\((\d+), (\d+), (\d+)\)/);
+  if (!m) return 0;
+  const chan = [m[1], m[2], m[3]].map((v) => {
+    const c = Number(v) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * chan[0]! + 0.7152 * chan[1]! + 0.0722 * chan[2]!;
 }
 
 /** Place hole number label slightly inward from the hole toward platform center. */

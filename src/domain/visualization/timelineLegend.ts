@@ -80,4 +80,15 @@ export function resolveTimelineLegend(
   return { present: presentList, absent: absentList, labels: LEGEND_LABELS };
 }
 
-export { LEGEND_LABELS };
+const LEGEND_ABSENT_LABELS: Record<TimelineLegendKind, string> = {
+  confirmed_investigation: 'Confirmed investigation',
+  proposed_investigation: 'Proposed investigation',
+  manual_provenance: 'Manual provenance',
+  entry_onset: 'Entry onset',
+  confirmed_completion: 'Confirmed completion',
+  candidate_entry: 'Candidate entry',
+  pre_trial_region: 'Pre-trial region',
+  censor_region: 'Censor boundary',
+};
+
+export { LEGEND_LABELS, LEGEND_ABSENT_LABELS };

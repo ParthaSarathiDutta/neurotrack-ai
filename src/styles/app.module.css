@@ -992,7 +992,21 @@
 
 .occupancyPlatformOutline {
   fill: none;
-  stroke: rgba(40, 40, 40, 0.85);
-  stroke-width: 2;
-  stroke-dasharray: 6 4;
+  stroke: rgba(80, 80, 80, 0.35);
+  stroke-width: 1;
+}
+
+.occupancyScaleDetails {
+  margin-top: var(--space-xs);
+  font-size: 0.8125rem;
+}
+
+.occupancyScaleDetails summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.occupancyScaleDetails .hint {
+  margin: var(--space-xs) 0 0;
 }

@@ -3,6 +3,7 @@ import {
   resolveTimelineLegend,
   type TimelineLegendKind,
   LEGEND_LABELS,
+  LEGEND_ABSENT_LABELS,
 } from '../../domain/visualization/timelineLegend';
 import styles from '../../styles/app.module.css';
 
@@ -12,13 +13,16 @@ interface HoleVisitTimelineProps {
 }
 
 const ROW_HEIGHT = 18;
-const Y_TITLE_X = 10;
-const TICK_LABEL_X = 64;
-const PLOT_LEFT = 72;
+const Y_TITLE_X = 16;
+const TICK_LABEL_X = 48;
+const PLOT_LEFT = 54;
 const TOP_PAD = 40;
 const BOTTOM_PAD = 52;
 const RIGHT_PAD = 16;
 const CHART_WIDTH = 680;
+
+const CANDIDATE_STROKE = '#c45c00';
+const CANDIDATE_DASH = '6 4';
 
 function xTicks(durationSec: number): number[] {
   if (durationSec <= 0) return [0];
@@ -48,6 +52,43 @@ function investigationStroke(status: InvestigationSpan['status'], origin: Invest
     strokeWidth: manual ? 2.5 : 0.75,
     strokeDasharray: undefined as string | undefined,
   };
+}
+
+function CandidateEntryGlyph({
+  x,
+  y1,
+  y2,
+  circleCy,
+  circleTestId,
+}: {
+  x: number;
+  y1: number;
+  y2: number;
+  circleCy: number;
+  circleTestId?: string;
+}) {
+  return (
+    <>
+      <line
+        x1={x}
+        y1={y1}
+        x2={x}
+        y2={y2}
+        stroke={CANDIDATE_STROKE}
+        strokeWidth={2}
+        strokeDasharray={CANDIDATE_DASH}
+      />
+      <circle
+        cx={x}
+        cy={circleCy}
+        r={4}
+        fill="none"
+        stroke={CANDIDATE_STROKE}
+        strokeWidth={1.5}
+        data-testid={circleTestId}
+      />
+    </>
+  );
 }
 
 function LegendSample({ kind }: { kind: TimelineLegendKind }) {
@@ -97,9 +138,14 @@ function LegendSample({ kind }: { kind: TimelineLegendKind }) {
   }
   if (kind === 'candidate_entry') {
     return (
-      <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
-        <line x1={20} y1={2} x2={20} y2={14} stroke="#c45c00" strokeWidth={2} strokeDasharray="5 4" />
-        <circle cx={20} cy={3} r={3} fill="none" stroke="#c45c00" strokeWidth={1.5} />
+      <svg
+        width={w}
+        height={h}
+        aria-hidden="true"
+        className={styles.legendSampleSvg}
+        data-testid="hole-timeline-legend-candidate-glyph"
+      >
+        <CandidateEntryGlyph x={20} y1={2} y2={14} circleCy={8} />
       </svg>
     );
   }
@@ -145,8 +191,8 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
     const isCandidate = marker.kind === 'candidate_entry';
     const isEntryOnset = marker.kind === 'entry_onset';
 
-    const stroke = isCompletion ? '#111111' : isCandidate ? '#c45c00' : '#555555';
-    const dash = isCompletion ? undefined : isCandidate ? '6 4' : '4 3';
+    const stroke = isCompletion ? '#111111' : isCandidate ? CANDIDATE_STROKE : '#555555';
+    const dash = isCompletion ? undefined : isCandidate ? CANDIDATE_DASH : '4 3';
     const widthPx = isCompletion ? 2.5 : isCandidate ? 2 : 1.5;
 
     return (
@@ -164,31 +210,30 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
           }
         }}
       >
-        <line
-          x1={x}
-          y1={yTop}
-          x2={x}
-          y2={yBottom}
-          stroke={stroke}
-          strokeWidth={widthPx}
-          strokeDasharray={dash}
-        />
+        {isCandidate ? (
+          <CandidateEntryGlyph
+            x={x}
+            y1={yTop}
+            y2={yBottom}
+            circleCy={yTop + plotHeight / 2}
+            circleTestId="hole-timeline-candidate-endpoint"
+          />
+        ) : (
+          <line
+            x1={x}
+            y1={yTop}
+            x2={x}
+            y2={yBottom}
+            stroke={stroke}
+            strokeWidth={widthPx}
+            strokeDasharray={dash}
+          />
+        )}
         {isCompletion && (
           <polygon
             points={`${x},${yTop - 1} ${x + 6},${yTop + 7} ${x - 6},${yTop + 7}`}
             fill={stroke}
             data-testid="hole-timeline-completion-endpoint"
-          />
-        )}
-        {isCandidate && (
-          <circle
-            cx={x}
-            cy={yTop + 2}
-            r={4}
-            fill="none"
-            stroke={stroke}
-            strokeWidth={1.5}
-            data-testid="hole-timeline-candidate-endpoint"
           />
         )}
         {isEntryOnset && (
@@ -375,8 +420,7 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
       </ul>
       {legend.absent.length > 0 && (
         <p className={styles.legendAbsentNote} data-testid="hole-timeline-legend-absent">
-          Not present in this trial:{' '}
-          {legend.absent.map((k) => LEGEND_LABELS[k].replace(/ \(.+\)$/, '')).join('; ')}
+          Absent in this trial: {legend.absent.map((k) => LEGEND_ABSENT_LABELS[k]).join('; ')}
         </p>
       )}
     </figure>
