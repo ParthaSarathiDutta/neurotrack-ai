@@ -88,7 +88,7 @@ Validated as feasible, so no longer open questions: per-pixel median-background 
 | **Compute** | **Web Workers** with typed arrays | Decode and CV off the main thread; UI and progress stay responsive. |
 | **Background model** | Per-pixel median over sampled frames | Validated on all three clips; handles the strong intra-platform lighting gradient that defeats global thresholding. |
 | **Maze detection** | Otsu platform mask → dark-blob hole candidates → least-squares ring fit | Validated 20/20 hole detection on all three clips. |
-| **Export** | **SheetJS** for XLSX, hand-rolled CSV | Client-side, no server. |
+| **Export** | **ExcelJS** for XLSX (styled six-sheet workbooks), **SheetJS (`xlsx`)** for CSV parse/read-back, hand-rolled CSV | Client-side, no server. |
 | **Visualization** | **D3** (or plain SVG/Canvas where simpler) | Trajectory overlays, heat maps, hole-visit rasters, learning curves; needed for grayscale-safe palettes and export resolution. |
 | **Testing** | **Vitest** for logic, **Playwright** for a thin end-to-end path | Timing, measures, censoring, and provenance are pure functions and must be unit-tested. |
 | **CI** | **GitHub Actions** | Lint, test, build, deploy. Dependencies pinned via lockfile. |
@@ -177,7 +177,7 @@ Preview UX: per-frame compare line (raw/corrected → preview/applied, Δ px, or
 
 **Validate:** manual body/nose correction and reset; persistence across immediate reload; Preview/Discard/Apply; applied cleaning persists; staleness + re-apply; duplicate-PTS independent corrections; re-track confirmation preserves edits on Cancel. Exercised by `npm run validate:ms4` (V1–V11, V_stale_*, V_preview_*, V_applied_compare), `npm run validate:ms4-ghost` (test50 frame 3795), and unit tests (`tests/trajectory.test.ts`, `tests/cleaningPreviewCompare.test.ts`, `tests/cleaningStaleness.test.ts`, `tests/previewRawMarker.test.ts`). MS-1–MS-3 + `validate:tracking` regressions green at merge.
 
-**Known limitations:** no full trajectory path overlay; sub-0.5 px smoothing shifts are intentionally unchanged; MS-6 visualization/export not yet implemented.
+**Known limitations:** no full trajectory path overlay; sub-0.5 px smoothing shifts are intentionally unchanged; visualization/export delivered in MS-6.
 
 ### MS-5 — Event Detection & Behavioral Measures — ✅ Complete
 
@@ -191,13 +191,15 @@ Behavioral measures: primary/total latency, primary/total errors (provisional vs
 
 **Known limitations:** Path A still requires centroid in strict gate — tracker lag may block auto completion; pixel budget (120 trailing frames) may miss late entry; target-dependent measures unavailable until protocol target confirmed; heuristic strategy ≠ any single published method.
 
-### MS-6 — Visualization, Export & Reloadable Analysis
+### MS-6 — Visualization, Export & Reloadable Analysis — ✅ Complete
 
-Visualization is generous, per the brief: a trajectory overlay styled by time and by provenance, a path plot, an occupancy heat map, a hole-visit raster over the trial, and a learning curve across a session's trials — all grayscale-safe and rendered at export resolution, because these are the figures a scientist will screenshot into a paper.
+Validated September 7, 2026 on branch `ms-6-visualization-export-reload`, merged to `main`.
 
-Export produces CSV and XLSX with a per-trial summary, per-event detail, and a parameters/version sheet, readable in Excel without a legend. The `.neurotrack.json` analysis bundle documents the full intermediate representation and can be saved and reloaded to recompute measures without re-tracking, so a facility can revisit an analysis as definitions evolve.
+Per-trial **results report** with measure definitions, escape state, and stale banners. **CSV and XLSX export** (six worksheets: human-readable `Results` + machine-readable `Summary`, `Events`, `Parameters`, `OperationalDefinitions`, `Provenance`) with explicit `valueKind` encoding — censored, unavailable, and proposed values never collapse to misleading numerics. **`.neurotrack.json` bundle** reloads calibration, window, track, corrections, cleaning, events, measures, and review provenance without re-tracking; video bytes stay external (fingerprint re-link). **Visualizations:** basis-aware trajectory overlay on the review player, hole-visit timeline, occupancy heatmap (time-weighted, sqrt display normalization when skewed). **Speed policy:** `speed_interval_validity.v1` gates primary mean/max speed (`mean_speed.v2`, `max_speed.v2`); diagnostic speeds retained with exclusion metadata. **Committed outputs** for test50/51/53 in `outputs/`; **Load example analysis** seeds three trials from `public/example/all-clips-session.neurotrack.json`.
 
-**Validate:** all five visualization types render for all three clips and remain readable printed in grayscale; CSV/XLSX open cleanly in Excel with a parameters sheet matching the UI; a saved bundle reloads and reproduces the same displayed measures without re-tracking.
+**Validate:** `npm run validate:ms6` (viz + outputs); `npm test` (205 tests incl. export, bundle, XLSX formatting); MS-1–MS-5 regressions green. test53 confirmed escape **24.40 s** numeric latency; test51 uncertain/censored; test50 incomplete/censored; protocol target and px/cm unknown on all three. XLSX formatting serialized via ExcelJS (frozen headers, filters, wrap, styled headers). Regenerate: `npm run generate:ms6-outputs`. See `outputs/README.md`.
+
+**Known limitations:** learning-curve / cohort views out of scope (no session metadata fields); bundle size grows with observation count (~MB for test50); ExcelJS increases client bundle size; five-figure publication charts not automated; target-dependent measures unavailable until protocol target confirmed.
 
 ---
 

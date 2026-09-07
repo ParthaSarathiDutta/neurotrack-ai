@@ -1,19 +1,59 @@
 # NeuroTrack AI
 
-Browser-based Barnes maze analysis pipeline (Salk Task 1). See `specs/constitution.md` for architecture and roadmap.
+Browser-based Barnes maze analysis pipeline (Salk Task 1). Architecture and roadmap: `specs/constitution.md`.
 
-## Development (MS-1)
+## Development
 
-Requires Node.js 20+ and Chromium (for validation). Sample videos are not committed — download from [Salk sample data](https://github.com/talmolab/salk-airc-takehome/tree/main/data/barnes-maze) into `data/barnes-maze/`.
+Requires Node.js 20+ and Chromium (Playwright validators). Sample videos are **not** committed — download from [Salk sample data](https://github.com/talmolab/salk-airc-takehome/tree/main/data/barnes-maze) into `data/barnes-maze/`.
 
 ```bash
 npm ci
-npm run dev          # local dev server
+npm run dev                    # local dev server (Vite)
 npm run lint && npm test && npm run build
-npm run validate:ms1 # ingest all three videos (build first)
 ```
 
-All video processing runs locally in the browser; no API keys or backend required.
+### Validation suite (MS-1–MS-6)
+
+Run after `npm run build` for Playwright scripts:
+
+```bash
+npm run validate:calibration
+npm run validate:ms1
+npm run validate:ms2
+npm run validate:ms3
+npm run validate:tracking
+npm run validate:ms4
+npm run validate:ms5
+npm run validate:import-empty
+npm run validate:ms6          # validate:ms6-viz + validate:ms6-outputs
+```
+
+Unit tests alone: `npm test` (205 tests at MS-6 sign-off).
+
+### Persistence — two mechanisms
+
+1. **Browser-local (automatic):** IndexedDB via Dexie stores trials, geometry, tracks, corrections, events, and measures across refresh. Video bytes are cached with a bounded fingerprint-indexed budget; when evicted, the user re-selects the MP4 and analysis state is preserved.
+
+2. **Portable analysis bundle (explicit export/import):** `.neurotrack.json` files serialize the full trial state except video bytes. Import restores calibration through measures without re-tracking. Fingerprint metadata enables video re-linking on import.
+
+### Load example analysis
+
+On an empty session, **Load example analysis** imports `public/example/all-clips-session.neurotrack.json` (three trials: test50, test51, test53). Reports, exports, and visualizations work without MP4 bytes; re-select video when playback is needed.
+
+### Committed submission outputs
+
+Pre-generated artifacts live in `outputs/` (CSV, six-sheet XLSX, per-clip and session bundles). See `outputs/README.md` for provenance, tool versions, and regeneration:
+
+```bash
+npm run generate:ms6-outputs
+npm run validate:ms6-outputs
+```
+
+Source analysis: `tests/fixtures/ms6/three-trial-session.neurotrack.json`.
+
+### Data handling
+
+All video processing and analysis run locally in the browser. No API keys, backend, or data egress.
 
 License: MIT
 

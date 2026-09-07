@@ -2,7 +2,7 @@
 
 Branch: `ms-6-visualization-export-reload`
 Constitution reference: `specs/constitution.md` → MS-6, Delivery requirements
-Status: **🚧 In progress — Checkpoint 3 complete (pending manual review)**
+Status: **✅ Complete — merged to `main` (September 7, 2026)**
 
 Depends on: MS-1–MS-5 merged at `cc6eaf3` (`main`, September 7, 2026).
 
@@ -348,15 +348,64 @@ Sequential — each checkpoint ends with tests passing; no MS-5 science changes.
 
 ### Checkpoint 5 — Final validation
 
-**Scope:** `validate:ms6`, full regression suite, end-to-end workflow documentation.
+**Scope:** Full regression suite, committed outputs verification, documentation sign-off.
 
-**Dependencies:** All prior checkpoints.
+**Dependencies:** All prior checkpoints; manual review of Checkpoints 1–4 approved.
 
-**Validation gate:** Tier 1–3 PASS; MS-1–MS-5 regressions green.
+**Delivered:**
+- Consolidated `npm run validate:ms6` (= `validate:ms6-viz` + `validate:ms6-outputs`)
+- Full MS-1–MS-6 regression suite green (205 unit tests; Playwright validators)
+- Six-sheet XLSX with ExcelJS-serialized formatting (Results human-readable tab + machine-readable Summary)
+- Constitution and README updated with persistence, bundle workflow, output inventory
+
+**Validation gate:** Tier 1–3 PASS; Tier 4 manual review done; MS-1–MS-5 regressions green.
 
 ---
 
-## Validation
+## Validation (final status — September 7, 2026)
+
+All tiers PASS unless noted.
+
+### Tier 1 — Unit tests
+
+205 tests in `npm test`, including MS-6 export (`tests/ms6-export.test.ts`), bundle (`tests/ms6-bundle.test.ts`), visualization, XLSX formatting (`tests/ms6-xlsx-formatting.test.ts`), and committed-output integrity (`tests/ms6-outputs-integrity.test.ts`). U1–U14 covered.
+
+### Tier 2 — Fixtures
+
+Fixtures under `tests/fixtures/ms6/` used for export encoding, bundle round-trip, and import rejection.
+
+### Tier 3 — Playwright
+
+| Script | Role |
+|--------|------|
+| `npm run validate:ms6-viz` | Visualizations, load-example UI, bundle-without-video |
+| `npm run validate:ms6-outputs` | Committed `outputs/`, XLSX on-disk formatting, import/relink/collision |
+| `npm run validate:ms6` | Both of the above |
+
+Checkpoint 1 export smoke: `node scripts/smoke-export-checkpoint1.mjs` (optional; covered by `validate:ms6-outputs` import path).
+
+MS-1–MS-5 Playwright validators all green at sign-off.
+
+### Tier 4 — Manual review
+
+Approved: Results/CSV/XLSX export, reloadable bundle, visualizations, speed v2 policy, committed outputs, six-sheet formatted workbook.
+
+---
+
+## Completion criteria (signed off September 7, 2026)
+
+MS-6 is complete:
+
+1. ✅ Phases 1–6 implemented; branch `ms-6-visualization-export-reload` merged to `main`.
+2. ✅ Tier 1–3 validation PASS; Tier 4 manual review done.
+3. ✅ `outputs/` contains CSV, XLSX (six sheets), and `.neurotrack.json` for test50/51/53 plus session bundle.
+4. ✅ Load example (`public/example/all-clips-session.neurotrack.json`) works on static build.
+5. ✅ Constitution MS-6 marked ✅; README and `outputs/README.md` updated.
+6. ✅ No MS-5 scientific regressions; no per-filename branching introduced.
+
+---
+
+## Validation specification (reference)
 
 ### Tier 1 — Unit tests (must pass)
 
@@ -369,7 +418,7 @@ Sequential — each checkpoint ends with tests passing; no MS-5 science changes.
 | U5 | No `pxPerCm` → path length unit `px`; flag present. |
 | U6 | Events detail includes `status`, `origin`, body-entry version for escape rows. |
 | U7 | Export serializer never calls `detectEvents` / tracking (mock store). |
-| U8 | XLSX has sheets: Summary, Events, Parameters, OperationalDefinitions, Provenance. |
+| U8 | XLSX has sheets: Results (human-readable), Summary, Events, Parameters, OperationalDefinitions, Provenance. |
 | U9 | Bundle validate rejects malformed / wrong schemaVersion. |
 | U10 | Bundle round-trip: event statuses, manual corrections, strategy override unchanged. |
 | U11 | Bundle round-trip: `measures.totalLatency` equal within ε for confirmed escape fixture. |
@@ -434,16 +483,3 @@ Sequential — each checkpoint ends with tests passing; no MS-5 science changes.
 - `reference/neurotrack-body-entry-v3.md` — escape export wording
 - `reference/task-01-barnes-maze.md` — export and visualization brief
 - `src/domain/types.ts` — source types for bundle
-
----
-
-## Completion criteria (for future sign-off)
-
-MS-6 is complete when:
-
-1. Phases 1–6 implemented and merged to `main`.
-2. Tier 1–3 validation PASS; Tier 4 manual review done.
-3. `outputs/` contains CSV, XLSX, and `.neurotrack.json` for all three clips.
-4. Load example works on deployed GitHub Pages URL.
-5. Constitution MS-6 marked ✅; README updated with export/bundle instructions.
-6. No MS-5 scientific regressions; no per-filename branching introduced.

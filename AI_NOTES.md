@@ -524,3 +524,35 @@ Manual inspection showed SheetJS community `xlsx` wrote column widths and autofi
 ### Validated
 205 unit tests incl. `tests/ms6-xlsx-formatting.test.ts` (XML + sharedStrings + read-back), lint, build, validate:ms6-outputs (43 checks incl. on-disk pane/style/filter verification). Stopped for final review; MS-6 not marked complete.
 
+## MS-6 Checkpoint 5 final validation and merge (2026-09-07)
+
+### Validation executed (all PASS)
+
+| Command | Result |
+|---------|--------|
+| `npm test` | 205/205 |
+| `npm run lint` | PASS (2 pre-existing warnings) |
+| `npm run build` | PASS |
+| `validate:calibration` | PASS |
+| `validate:ms1`–`validate:ms5` | PASS |
+| `validate:tracking` | PASS |
+| `validate:import-empty` | PASS |
+| `validate:ms6-viz` | PASS |
+| `validate:ms6-outputs` | PASS |
+| `validate:ms6` | PASS (new consolidated script) |
+
+No consolidated `validate:ms6` existed before sign-off; added as `validate:ms6-viz && validate:ms6-outputs` per spec reference.
+
+### Submission artifacts verified
+
+- `outputs/` — CSV, XLSX (Results + Summary + Events + Parameters + OperationalDefinitions + Provenance), `.neurotrack.json` for test50/51/53; session bundle + README
+- test53: confirmed escape, **24.40 s** numeric latency; speed v2 ≈ 115.13 px/s; diagnostic max ≈ 44162.60 px/s
+- test51/test50: censored semantics; target unknown; scale unknown; error counts null (not zero)
+- No `.mp4` files tracked in git
+
+### Documentation updated
+
+Constitution MS-6 ✅, MS-6 spec signed off, README persistence/bundle/load-example sections, `outputs/README.md` unchanged (already current).
+
+Merged `ms-6-visualization-export-reload` → `main`. MS-6 complete.
+
