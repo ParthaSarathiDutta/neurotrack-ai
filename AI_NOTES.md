@@ -210,3 +210,9 @@ At test50 frame 3795 (Δ ≈ 6.22 px), ghost marker existed but was invisible �
 - Orange (`#c45c00`) dashed ring with white halo, dashed connector to preview, small "Raw" label.
 - Extracted `drawPreviewRawGhostMarker()` + `tests/previewRawMarker.test.ts`.
 - Live verify: `scripts/verify-preview-ghost-test50.mjs` (frame 3795 PASS).
+
+## MS-4 applied cleaning compare (2026-09-06)
+
+When consumable applied cleaning is active (not stale, no preview), panel shows per-frame:
+`Corrected body → Applied · Δ px · origin · cleaning reason`, plus unchanged note when applicable.
+Uses stored `appliedCleaning.observations`, not recomputed preview.

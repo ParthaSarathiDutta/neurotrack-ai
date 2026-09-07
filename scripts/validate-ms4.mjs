@@ -430,6 +430,11 @@ async function main() {
     results.V9_apply_persistence = appliedAfterReload ? 'PASS' : 'FAIL';
     console.error(`MS-4: apply persistence ${results.V9_apply_persistence}`);
 
+    const appliedCompareVisible = await page
+      .locator('[data-testid="clean-applied-compare"]')
+      .isVisible();
+    results.V_applied_compare = appliedCompareVisible ? 'PASS' : 'FAIL';
+
     const staleAfterApply = await page
       .locator('[data-testid="clean-stale-state"]')
       .getAttribute('data-stale');
@@ -496,6 +501,7 @@ async function main() {
     }
     if (results.V8_apply !== 'PASS') failures.push('V8: apply');
     if (results.V9_apply_persistence !== 'PASS') failures.push('V9: apply persistence');
+    if (results.V_applied_compare !== 'PASS') failures.push('V_applied: applied compare line');
     if (results.V_stale_after_correction !== 'PASS') failures.push('V_stale: after correction');
     if (results.V_stale_cleared_on_reapply !== 'PASS') failures.push('V_stale: reapply');
     if (results.V10_rerun_confirm !== 'PASS') failures.push('V10: rerun confirm');

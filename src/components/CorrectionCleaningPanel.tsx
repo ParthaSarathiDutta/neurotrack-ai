@@ -3,7 +3,9 @@ import { isAppliedCleaningConsumable } from '../domain/trajectory/cleaningStalen
 import { isEstimatedBodyPosition } from '../domain/trajectory/observationEstimate';
 import {
   compareCleaningPreviewFrame,
+  compareCleaningAppliedFrame,
   formatCleaningPreviewCompareLine,
+  formatCleaningAppliedCompareLine,
 } from '../domain/trajectory/cleaningPreviewCompare';
 import { applyManualCorrections } from '../domain/trajectory/manualCorrection';
 import { formatCleaningQualityFlags } from '../domain/trajectory/cleaningLabels';
@@ -51,6 +53,16 @@ export function CorrectionCleaningPanel({
           track.manualCorrections ?? [],
           currentFrameIndex,
           cleaningParams,
+        )
+      : null;
+  const appliedCompare =
+    hasActiveApplied && !hasPreview && appliedCleaning
+      ? compareCleaningAppliedFrame(
+          correctedBase,
+          appliedCleaning,
+          track?.manualCorrections ?? [],
+          currentFrameIndex,
+          appliedCleaning.params,
         )
       : null;
   const currentObs = effective.find((o) => o.frameIndex === currentFrameIndex) ?? null;
@@ -268,7 +280,19 @@ export function CorrectionCleaningPanel({
         data-active={hasPreview ? 'true' : 'false'}
       />
       {hasActiveApplied && !hasPreview && (
-        <p data-testid="clean-applied-marker">Cleaning applied at {appliedCleaning!.appliedAt}</p>
+        <>
+          <p data-testid="clean-applied-marker">Cleaning applied at {appliedCleaning!.appliedAt}</p>
+          {appliedCompare ? (
+            <p className={styles.hint} data-testid="clean-applied-compare">
+              {formatCleaningAppliedCompareLine(appliedCompare)}
+            </p>
+          ) : null}
+          {appliedCompare?.unchangedNote ? (
+            <p className={styles.hint} data-testid="clean-applied-unchanged">
+              {appliedCompare.unchangedNote}
+            </p>
+          ) : null}
+        </>
       )}
       {appliedStale && (
         <p className={styles.warningBox} role="alert" data-testid="clean-stale-marker">

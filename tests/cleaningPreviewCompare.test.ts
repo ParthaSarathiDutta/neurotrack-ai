@@ -3,7 +3,9 @@ import { defaultCleaningParams } from '../src/domain/trialFactory';
 import type { Observation } from '../src/domain/types';
 import {
   bodyDisplacementPx,
+  compareCleaningAppliedFrame,
   compareCleaningPreviewFrame,
+  formatCleaningAppliedCompareLine,
   formatCleaningPreviewCompareLine,
   isMeaningfulPreviewBodyChange,
 } from '../src/domain/trajectory/cleaningPreviewCompare';
@@ -68,7 +70,7 @@ describe('cleaningPreviewCompare', () => {
       { ...defaultCleaningParams(), smoothingWindow: 7 },
     );
     expect(compare?.meaningfulChange).toBe(false);
-    expect(compare?.skipNote).toContain('Smoothing skipped');
+    expect(compare?.skipNote).toContain('Preview unchanged');
   });
 
   it('formats compare line with coordinates and displacement', () => {
@@ -115,5 +117,93 @@ describe('cleaningPreviewCompare', () => {
     expect(isMeaningfulPreviewBodyChange({ x: 0, y: 0 }, { x: 0.4, y: 0 })).toBe(false);
     expect(isMeaningfulPreviewBodyChange({ x: 0, y: 0 }, { x: 0.6, y: 0 })).toBe(true);
     expect(bodyDisplacementPx({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
+  });
+});
+
+describe('compareCleaningAppliedFrame', () => {
+  it('compares corrected base to stored applied observations', () => {
+    const base = [
+      obs(0, 0, { x: 0, y: 0 }),
+      obs(1, 33_333, { x: 10, y: 0 }),
+      obs(2, 66_666, { x: 30, y: 0 }),
+      obs(3, 100_000, { x: 40, y: 0 }),
+    ];
+    const applied = smoothBodies(base, 3);
+    const compare = compareCleaningAppliedFrame(
+      base,
+      {
+        observations: applied,
+        params: { ...defaultCleaningParams(), smoothingWindow: 3 },
+        appliedAt: '2026-01-01T00:00:00.000Z',
+        stale: false,
+        staleReason: null,
+      },
+      [],
+      2,
+      defaultCleaningParams(),
+    );
+    expect(compare?.meaningfulChange).toBe(true);
+    expect(compare?.appliedOrigin).toBe('smoothed');
+    expect(compare?.cleaningReason).toBe('smoothed trajectory');
+    expect(compare?.unchangedNote).toBeNull();
+  });
+
+  it('returns null for stale applied cleaning', () => {
+    const base = [obs(0, 0, { x: 0, y: 0 })];
+    const compare = compareCleaningAppliedFrame(
+      base,
+      {
+        observations: base,
+        params: defaultCleaningParams(),
+        appliedAt: '2026-01-01T00:00:00.000Z',
+        stale: true,
+        staleReason: 'stale',
+      },
+      [],
+      0,
+      defaultCleaningParams(),
+    );
+    expect(compare).toBeNull();
+  });
+
+  it('reports unchanged note when applied body matches corrected base', () => {
+    const base = [
+      obs(0, 0, { x: 0, y: 0 }),
+      obs(1, 33_333, { x: 1, y: 0 }),
+      obs(2, 66_666, { x: 2, y: 0 }),
+    ];
+    const applied = smoothBodies(base, 7);
+    const compare = compareCleaningAppliedFrame(
+      base,
+      {
+        observations: applied,
+        params: { ...defaultCleaningParams(), smoothingWindow: 7 },
+        appliedAt: '2026-01-01T00:00:00.000Z',
+        stale: false,
+        staleReason: null,
+      },
+      [],
+      2,
+      defaultCleaningParams(),
+    );
+    expect(compare?.meaningfulChange).toBe(false);
+    expect(compare?.unchangedNote).toContain('Applied cleaning unchanged');
+  });
+
+  it('formats applied compare line with displacement and reason', () => {
+    const line = formatCleaningAppliedCompareLine({
+      frameIndex: 1,
+      correctedBody: { x: 502.3, y: 263.0 },
+      appliedBody: { x: 497.4, y: 266.9 },
+      displacementPx: 6.22,
+      appliedOrigin: 'smoothed',
+      cleaningReason: 'smoothed trajectory',
+      meaningfulChange: true,
+      unchangedNote: null,
+    });
+    expect(line).toContain('Corrected body: (502.3, 263.0)');
+    expect(line).toContain('Applied: (497.4, 266.9)');
+    expect(line).toContain('Δ = 6.22 px');
+    expect(line).toContain('smoothed trajectory');
   });
 });
