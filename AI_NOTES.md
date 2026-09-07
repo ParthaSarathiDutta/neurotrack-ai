@@ -147,3 +147,23 @@ No event detection/editing; UI note only. Manual event editing deferred to MS-5.
 ### Validated
 `npm run lint`, `npm test` (72), `npm run build`, `validate:calibration`, `validate:ms1`, `validate:ms2`, `validate:ms3` PASS. Unit tests: `tests/trajectory.test.ts`, migration MS-4 fields. `validate:ms4` script added — run locally after killing orphaned `validate-ms4` node processes if port hangs.
 
+## MS-4 final stabilization (2026-09-06)
+
+### Mistake 1 — `validate:ms4` hung indefinitely on cleaning preview
+**Root cause:** `interpolateBodies()` infinite-looped on frames with `bodyXY == null` but **not** gap-fill eligible (e.g. `absent_pre_trial`). The outer loop only advanced when `bodyXY != null`; ineligible null-body frames never incremented `i`.
+
+**Fix:** skip frames where `bodyXY != null || !isEligibleForGapFill(obs)` before gap detection. Regression test: pre-trial absent null-body path completes without hang.
+
+### Mistake 2 — persistence race on immediate reload
+Corrections and applied cleaning used debounced `scheduleSave` (300 ms). Reload before flush dropped edits.
+
+**Fix:** `flushSave()` for manual corrections, reset, apply cleaning, and post-tracking; hidden `data-testid="session-persisted" data-ready` indicator; `flushPersist()` action.
+
+### Mistake 3 — Playwright validation fragility
+`page.reload()` waited for `load` (never fired while video workers active); duplicate-PTS frame seeks blocked the main thread; DOM waits timed out while decode ran.
+
+**Fix:** reload with `waitUntil: 'domcontentloaded'`; dynamic port + SIGINT/SIGTERM cleanup; store-verified test hooks (`__ntPreviewCleaning`, etc.) instead of overlay/duplicate-frame seeks where possible; bounded step logging.
+
+### Validated
+lint/test/build PASS (76 tests); `validate:ms4` PASS (~13 s); `validate:calibration`, `validate:ms1` PASS. Re-run tracking confirmation UI (`rerun-tracking-warning`) verified in validate:ms4 V10.
+

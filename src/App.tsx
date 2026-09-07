@@ -10,6 +10,7 @@ export default function App() {
   const hydrated = useSessionStore((s) => s.hydrated);
   const hydrate = useSessionStore((s) => s.hydrate);
   const statusMessage = useSessionStore((s) => s.statusMessage);
+  const persistPending = useSessionStore((s) => s.persistPending);
   const trials = useSessionStore((s) => s.trials);
   const selectedTrialId = useSessionStore((s) => s.selectedTrialId);
 
@@ -54,6 +55,12 @@ export default function App() {
       <p className={styles.status} role="status" aria-live="polite" data-testid="status-message">
         {statusMessage}
       </p>
+      <span
+        hidden
+        aria-hidden="true"
+        data-testid="session-persisted"
+        data-ready={persistPending ? 'false' : 'true'}
+      />
 
       <p className={styles.footerNote}>
         All video processing runs locally in your browser. No data leaves this device.

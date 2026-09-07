@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeCleanedTrajectory, interpolateBodies } from '../src/domain/trajectory/cleaning';
+import { computeCleanedTrajectory, gapInterpolationFactor, interpolateBodies } from '../src/domain/trajectory/cleaning';
 import {
   applyManualCorrections,
 } from '../src/domain/trajectory/manualCorrection';
@@ -159,5 +159,63 @@ describe('trajectory correction and cleaning', () => {
     ];
     const cleaned = computeCleanedTrajectory(base, { ...defaultCleaningParams(), smoothingWindow: 3 }, 800);
     expect(cleaned.some((o) => o.origin === 'smoothed')).toBe(true);
+  });
+
+  it('gapInterpolationFactor uses frameIndex when timeUs duplicates', () => {
+    const shared = 7_066_667;
+    expect(gapInterpolationFactor(208, 210, 209, shared, shared, shared)).toBeCloseTo(0.5);
+    expect(Number.isFinite(gapInterpolationFactor(208, 210, 209, shared, shared, shared))).toBe(
+      true,
+    );
+  });
+
+  it('interpolates short gap across duplicate timeUs without NaN', () => {
+    const shared = 7_066_667;
+    const base = [
+      obs(208, shared, { x: 0, y: 0 }),
+      obs(209, shared, null, 'lost'),
+      obs(210, shared, { x: 20, y: 0 }),
+    ];
+    const filled = interpolateBodies(base, 3);
+    expect(filled[1].bodyXY).not.toBeNull();
+    expect(Number.isFinite(filled[1].bodyXY!.x)).toBe(true);
+    expect(Number.isFinite(filled[1].bodyXY!.y)).toBe(true);
+    expect(filled[1].frameIndex).toBe(209);
+    expect(filled[1].origin).toBe('interpolated');
+  });
+
+  it('computeCleanedTrajectory completes when pre-trial absent frames have null body', () => {
+    const base = [
+      obs(0, 0, null, 'absent_pre_trial'),
+      obs(1, 33_333, null, 'absent_pre_trial'),
+      obs(2, 66_666, { x: 10, y: 10 }),
+      obs(3, 100_000, null, 'lost'),
+      obs(4, 133_333, { x: 20, y: 10 }),
+    ];
+    const cleaned = computeCleanedTrajectory(
+      base,
+      { ...defaultCleaningParams(), maxGapFrames: 1, smoothingWindow: 3 },
+      800,
+    );
+    expect(cleaned).toHaveLength(5);
+    expect(cleaned[0].bodyXY).toBeNull();
+    expect(cleaned[3].bodyXY).not.toBeNull();
+    expect(Number.isFinite(cleaned[3].bodyXY!.x)).toBe(true);
+  });
+
+  it('computeCleanedTrajectory skips speed outliers when deltaUs is zero', () => {
+    const shared = 7_066_667;
+    const base = [
+      obs(209, shared, { x: 0, y: 0 }),
+      obs(210, shared, { x: 500, y: 500 }),
+    ];
+    const cleaned = computeCleanedTrajectory(
+      base,
+      { ...defaultCleaningParams(), smoothingWindow: 1, maxGapFrames: 0 },
+      50,
+    );
+    expect(cleaned[1].bodyXY).toEqual({ x: 500, y: 500 });
+    expect(Number.isFinite(cleaned[0].bodyXY!.x)).toBe(true);
+    expect(Number.isFinite(cleaned[1].bodyXY!.x)).toBe(true);
   });
 });

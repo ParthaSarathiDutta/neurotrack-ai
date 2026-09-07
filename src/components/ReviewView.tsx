@@ -34,6 +34,22 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
     seekApiRef.current?.loadFrame(frameIndex);
   }, []);
 
+  const registerSeekApi = useCallback(
+    (api: { loadFrame: (i: number) => void }) => {
+      seekApiRef.current = api;
+      const hooks = window as Window & { __ntSeekFrame?: (frameIndex: number) => void };
+      hooks.__ntSeekFrame = (frameIndex: number) => api.loadFrame(frameIndex);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return () => {
+      const hooks = window as Window & { __ntSeekFrame?: (frameIndex: number) => void };
+      delete hooks.__ntSeekFrame;
+    };
+  }, [trial.id]);
+
   useEffect(() => {
     setSelectedHoleId(null);
     setCurrentFrameIndex(0);
@@ -85,9 +101,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
         observations={effectiveObservations}
         selectedHoleId={selectedHoleId}
         onFrameIndexChange={setCurrentFrameIndex}
-        onRegisterSeek={(api) => {
-          seekApiRef.current = api;
-        }}
+        onRegisterSeek={registerSeekApi}
         onHoleClick={(holeId) => {
           setSelectedHoleId(holeId);
           setTargetHole(trial.id, holeId);

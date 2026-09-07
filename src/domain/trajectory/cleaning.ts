@@ -14,6 +14,27 @@ function isEligibleForGapFill(obs: Observation): boolean {
   return obs.observed !== 'absent_pre_trial' && obs.bodyXY == null;
 }
 
+/**
+ * Interpolation factor for a gap frame between bracket indices.
+ * Uses container timeUs when delta > 0; otherwise frameIndex spacing (duplicate PTS pairs).
+ */
+export function gapInterpolationFactor(
+  prevIdx: number,
+  nextIdx: number,
+  gapFrameIndex: number,
+  prevTimeUs: number,
+  nextTimeUs: number,
+  gapTimeUs: number,
+): number {
+  const deltaUs = nextTimeUs - prevTimeUs;
+  if (deltaUs > 0) {
+    return (gapTimeUs - prevTimeUs) / deltaUs;
+  }
+  const deltaFrames = nextIdx - prevIdx;
+  if (deltaFrames <= 0) return 0;
+  return (gapFrameIndex - prevIdx) / deltaFrames;
+}
+
 /** Linear interpolate body position; nose stays null; origin becomes interpolated. */
 function interpolateBodies(
   observations: Observation[],
@@ -22,7 +43,7 @@ function interpolateBodies(
   const result = observations.map(cloneObservation);
   let i = 0;
   while (i < result.length) {
-    if (result[i].bodyXY != null) {
+    if (result[i].bodyXY != null || !isEligibleForGapFill(result[i])) {
       i += 1;
       continue;
     }
@@ -42,8 +63,15 @@ function interpolateBodies(
       nextIdx - prevIdx - 1 === gapLen
     ) {
       for (let g = gapStart; g <= gapEnd; g += 1) {
-        const t =
-          (result[g].timeUs - prev.timeUs) / Math.max(1, next.timeUs - prev.timeUs);
+        const t = gapInterpolationFactor(
+          prevIdx,
+          nextIdx,
+          g,
+          prev.timeUs,
+          next.timeUs,
+          result[g].timeUs,
+        );
+        if (!Number.isFinite(t)) continue;
         result[g] = {
           ...result[g],
           bodyXY: {
@@ -113,11 +141,12 @@ function smoothBodies(observations: Observation[], windowSize: number): Observat
     if (neighbors.length < 2) continue;
     const avgX = neighbors.reduce((s, p) => s + p.x, 0) / neighbors.length;
     const avgY = neighbors.reduce((s, p) => s + p.y, 0) / neighbors.length;
+    if (!Number.isFinite(avgX) || !Number.isFinite(avgY)) continue;
     if (Math.hypot(avgX - currentBody.x, avgY - currentBody.y) < 0.5) continue;
     result[i] = {
       ...result[i],
       bodyXY: { x: avgX, y: avgY },
-      origin: result[i].origin === 'interpolated' ? 'smoothed' : 'smoothed',
+      origin: 'smoothed',
       noseXY: result[i].noseXY,
     };
   }

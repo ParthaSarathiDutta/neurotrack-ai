@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
 import type { AnalysisParams, CleaningParams, Geometry, Hole, ManualCorrection, Observation, TrialRecord, TrialWindow } from '../domain/types';
 import { computeCleanedTrajectory } from '../domain/trajectory/cleaning';
 import {
@@ -41,6 +42,8 @@ interface SessionState {
   selectedTrialId: string | null;
   analysisParams: AnalysisParams;
   statusMessage: string | null;
+  /** True while a debounced or in-flight Dexie session write is pending. */
+  persistPending: boolean;
   hydrate: () => Promise<void>;
   selectTrial: (id: string | null) => void;
   updateTrialLabel: (id: string, label: string) => void;
@@ -78,6 +81,8 @@ interface SessionState {
   previewCleaning: (trialId: string) => void;
   applyCleaning: (trialId: string) => void;
   discardCleaningPreview: (trialId: string) => void;
+  /** Await completion of any pending session write (used after corrections / apply cleaning). */
+  flushPersist: () => Promise<void>;
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -85,19 +90,31 @@ let calibrationOpSeq = 0;
 let windowOpSeq = 0;
 let trackingOpSeq = 0;
 
-async function flushSave(getState: () => SessionState) {
+type StoreSet = (
+  partial: Partial<SessionState> | ((state: SessionState) => Partial<SessionState>),
+) => void;
+
+async function flushSave(getState: () => SessionState, setState: StoreSet): Promise<void> {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
-  const { trials, selectedTrialId, analysisParams } = getState();
-  await persistSession({ trials, selectedTrialId, analysisParams });
+  setState({ saving: true, persistPending: true });
+  try {
+    const { trials, selectedTrialId, analysisParams } = getState();
+    await persistSession({ trials, selectedTrialId, analysisParams });
+    setState({ saving: false, persistPending: false });
+  } catch (err) {
+    setState({ saving: false, persistPending: false });
+    throw err;
+  }
 }
 
-function scheduleSave(getState: () => SessionState) {
+function scheduleSave(getState: () => SessionState, setState: StoreSet): void {
+  setState({ persistPending: true });
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    void flushSave(getState);
+    void flushSave(getState, setState);
   }, 300);
 }
 
@@ -135,6 +152,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   selectedTrialId: null,
   analysisParams: defaultAnalysisParams(),
   statusMessage: null,
+  persistPending: false,
+
+  flushPersist: () => flushSave(get, set),
 
   hydrate: async () => {
     const data = await hydratePersistedSession();
@@ -157,14 +177,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     clearFrameCache();
     set({ selectedTrialId: id, templateWarning: null });
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   updateTrialLabel: (id, label) => {
     set((state) => ({
       trials: patchTrial(state.trials, id, { label }),
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   addFiles: async (files) => {
@@ -189,7 +209,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
 
     set({ ingestBusy: false, statusMessage: 'Ingest complete.' });
-    await flushSave(get);
+    await flushSave(get, set);
   },
 
   reselectFile: async (trialId, file) => {
@@ -210,7 +230,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       ingestBusy: false,
       statusMessage: `Re-associated ${file.name} with saved trial "${trial.label}".`,
     });
-    await flushSave(get);
+    await flushSave(get, set);
   },
 
   forceEvictCacheForTest: async () => {
@@ -218,7 +238,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     let trials = get().trials;
     trials = await markEvictedTrials(trials, evicted);
     set({ trials, statusMessage: 'Video cache cleared (test).' });
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   runAutoDetect: async (trialId) => {
@@ -273,7 +293,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } finally {
       set({ calibrationBusy: false });
     }
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   acknowledgeCalibrationReview: (trialId) => {
@@ -286,7 +306,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         },
       })),
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   confirmGeometry: (trialId) => {
@@ -297,7 +317,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
       statusMessage: 'Geometry confirmed.',
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   setTargetHole: (trialId, holeId) => {
@@ -307,7 +327,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         geometry: { ...t.geometry, targetHoleId: holeId },
       })),
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   confirmTargetHole: (trialId) => {
@@ -335,7 +355,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
       statusMessage: 'Target hole confirmed.',
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   clearTargetHole: (trialId) => {
@@ -353,7 +373,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
       statusMessage: 'Target hole cleared — target is now unknown.',
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   setDiameterCm: (trialId, diameterCm) => {
@@ -369,7 +389,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         };
       }),
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   nudgeHole: (trialId, holeId, x, y) => {
@@ -385,7 +405,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         },
       })),
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   setManualGeometry: (trialId, center, radius, anchorHole) => {
@@ -418,7 +438,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
       statusMessage: 'Manual geometry set. Confirm when ready.',
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   applyTemplate: async (destTrialId, sourceTrialId) => {
@@ -447,7 +467,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } finally {
       set({ calibrationBusy: false });
     }
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   clearTemplateWarning: () => set({ templateWarning: null }),
@@ -497,7 +517,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } finally {
       set({ calibrationBusy: false });
     }
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   confirmTrialWindow: (trialId) => {
@@ -511,7 +531,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
       statusMessage: 'Trial window confirmed.',
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   updateTrialWindow: (trialId, patch) => {
@@ -521,7 +541,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         trialWindow: { ...t.trialWindow, ...patch, source: 'manual' as const },
       })),
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   updateTrialGeometry: (trialId, patch) => {
@@ -531,7 +551,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         geometry: { ...t.geometry, ...patch },
       })),
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   runTracking: async (trialId) => {
@@ -576,7 +596,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (opSeq === trackingOpSeq) {
         set({ trackingBusy: false, trackingProgress: null });
       }
-      scheduleSave(get);
+      void flushSave(get, set);
     }
   },
 
@@ -623,7 +643,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         statusMessage: `Manual body correction saved for frame ${frameIndex + 1}.`,
       };
     });
-    scheduleSave(get);
+    void flushSave(get, set);
   },
 
   applyManualNoseCorrection: (trialId, frameIndex, x, y) => {
@@ -657,7 +677,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         statusMessage: `Manual nose correction saved for frame ${frameIndex + 1}.`,
       };
     });
-    scheduleSave(get);
+    void flushSave(get, set);
   },
 
   removeManualNoseCorrection: (trialId, frameIndex) => {
@@ -688,7 +708,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         statusMessage: `Nose removed for frame ${frameIndex + 1}.`,
       };
     });
-    scheduleSave(get);
+    void flushSave(get, set);
   },
 
   resetManualCorrection: (trialId, frameIndex) => {
@@ -705,7 +725,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
       statusMessage: `Frame ${frameIndex + 1} restored to automatic tracking.`,
     }));
-    scheduleSave(get);
+    void flushSave(get, set);
   },
 
   updateCleaningParams: (patch) => {
@@ -716,7 +736,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         updatedAt: new Date().toISOString(),
       },
     }));
-    scheduleSave(get);
+    scheduleSave(get, set);
   },
 
   previewCleaning: (trialId) => {
@@ -772,7 +792,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
       statusMessage: 'Trajectory cleaning applied.',
     });
-    scheduleSave(get);
+    void flushSave(get, set);
   },
 
   discardCleaningPreview: (trialId) => {
@@ -782,5 +802,58 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }));
   },
 }));
+
+if (typeof window !== 'undefined') {
+  type NeuroTrackTestHooks = Window & {
+    __ntApplyBodyCorrection?: (trialId: string, frameIndex: number, x: number, y: number) => void;
+    __ntPreviewCleaning?: (trialId: string) => number;
+    __ntApplyCleaning?: (trialId: string) => boolean;
+    __ntDiscardCleaningPreview?: (trialId: string) => boolean;
+    __ntGetManualBodyAt?: (
+      trialId: string,
+      frameIndex: number,
+    ) => { x: number; y: number } | null;
+    __ntResetManualCorrection?: (trialId: string, frameIndex: number) => void;
+    __ntGetEffectiveOriginAt?: (trialId: string, frameIndex: number) => string | null;
+    __ntUpdateCleaningParams?: (patch: { maxGapFrames?: number; smoothingWindow?: number }) => void;
+  };
+  const hooks = window as NeuroTrackTestHooks;
+  hooks.__ntApplyBodyCorrection = (trialId, frameIndex, x, y) => {
+    useSessionStore.getState().applyManualBodyCorrection(trialId, frameIndex, x, y);
+  };
+  hooks.__ntPreviewCleaning = (trialId) => {
+    useSessionStore.getState().previewCleaning(trialId);
+    return useSessionStore.getState().cleaningPreviewByTrialId[trialId]?.length ?? 0;
+  };
+  hooks.__ntApplyCleaning = (trialId) => {
+    useSessionStore.getState().applyCleaning(trialId);
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    return trial?.track?.appliedCleaning != null;
+  };
+  hooks.__ntDiscardCleaningPreview = (trialId) => {
+    useSessionStore.getState().discardCleaningPreview(trialId);
+    return useSessionStore.getState().cleaningPreviewByTrialId[trialId] == null;
+  };
+  hooks.__ntGetManualBodyAt = (trialId, frameIndex) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    const correction = trial?.track?.manualCorrections.find((c) => c.frameIndex === frameIndex);
+    return correction?.bodyXY ?? null;
+  };
+  hooks.__ntResetManualCorrection = (trialId, frameIndex) => {
+    useSessionStore.getState().resetManualCorrection(trialId, frameIndex);
+  };
+  hooks.__ntGetEffectiveOriginAt = (trialId, frameIndex) => {
+    const state = useSessionStore.getState();
+    const trial = state.trials.find((t) => t.id === trialId);
+    if (!trial?.track) return null;
+    const effective = resolveEffectiveObservations(trial.track, {
+      cleaningPreview: state.cleaningPreviewByTrialId[trialId] ?? null,
+    });
+    return effective.find((o) => o.frameIndex === frameIndex)?.origin ?? null;
+  };
+  hooks.__ntUpdateCleaningParams = (patch) => {
+    useSessionStore.getState().updateCleaningParams(patch);
+  };
+}
 
 export type { Hole };

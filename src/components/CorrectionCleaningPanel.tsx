@@ -191,6 +191,12 @@ export function CorrectionCleaningPanel({
           Preview active — trajectory shows proposed cleaning (not saved until Apply).
         </p>
       )}
+      <span
+        hidden
+        aria-hidden="true"
+        data-testid="cleaning-preview-state"
+        data-active={hasPreview ? 'true' : 'false'}
+      />
       {hasApplied && !hasPreview && (
         <p data-testid="clean-applied-marker">Cleaning applied at {track!.appliedCleaning!.appliedAt}</p>
       )}

@@ -65,10 +65,13 @@ export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelPro
   const cancelTracking = useSessionStore((s) => s.cancelTracking);
   const trackingBusy = useSessionStore((s) => s.trackingBusy);
   const trackingProgress = useSessionStore((s) => s.trackingProgress);
+  const [confirmRerun, setConfirmRerun] = useState(false);
 
   const gate = canRunTracking(trial);
   const track = trial.track;
   const quality = track?.quality;
+  const hasTrajectoryEdits =
+    (track?.manualCorrections?.length ?? 0) > 0 || track?.appliedCleaning != null;
   const reviewGroups = quality ? groupFlaggedFramesForReview(quality.flaggedFrames) : [];
   const technicalCategories = quality ? groupFlaggedFrames(quality.flaggedFrames) : [];
 
@@ -92,7 +95,14 @@ export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelPro
           type="button"
           className={styles.buttonPrimary}
           disabled={!gate.ok || trackingBusy}
-          onClick={() => void runTracking(trial.id)}
+          onClick={() => {
+            if (hasTrajectoryEdits && !confirmRerun) {
+              setConfirmRerun(true);
+              return;
+            }
+            setConfirmRerun(false);
+            void runTracking(trial.id);
+          }}
           data-testid="run-tracking-btn"
         >
           {trackingBusy ? 'Tracking…' : 'Run tracking'}
@@ -108,6 +118,36 @@ export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelPro
           </button>
         )}
       </div>
+
+      {confirmRerun && (
+        <div className={styles.warningBox} role="alert" data-testid="rerun-tracking-warning">
+          <p>
+            Re-running tracking will discard manual corrections and any applied trajectory cleaning
+            for this trial.
+          </p>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.buttonPrimary}
+              onClick={() => {
+                setConfirmRerun(false);
+                void runTracking(trial.id);
+              }}
+              data-testid="confirm-rerun-tracking-btn"
+            >
+              Discard edits and re-track
+            </button>
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => setConfirmRerun(false)}
+              data-testid="cancel-rerun-tracking-btn"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {trackingBusy && trackingProgress && (
         <div data-testid="tracking-progress">

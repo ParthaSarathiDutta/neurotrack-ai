@@ -26,7 +26,9 @@ export function TrialList() {
   if (trials.length === 0) {
     return (
       <section className={styles.panel} aria-labelledby="trials-heading">
-        <h2 id="trials-heading">Trials</h2>
+        <h2 id="trials-heading" data-testid="trials-heading">
+          Trials
+        </h2>
         <p>No trials loaded yet.</p>
       </section>
     );
