@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { Geometry, Observation, TimestampIndexEntry, TrialWindow } from '../domain/types';
+import type { BehavioralEvent, Geometry, Observation, TimestampIndexEntry, TrialWindow } from '../domain/types';
 import { formatCleaningQualityFlags } from '../domain/trajectory/cleaningLabels';
 import { isEstimatedBodyPosition } from '../domain/trajectory/observationEstimate';
 import { secondsFromTimeUs } from '../domain/timing';
@@ -17,6 +17,7 @@ interface VideoPlayerProps {
   geometry: Geometry;
   trialWindow: TrialWindow;
   observations?: Observation[];
+  behavioralEvents?: BehavioralEvent[];
   previewRawBodyXY?: { x: number; y: number } | null;
   selectedHoleId: number | null;
   onHoleClick?: (holeId: number) => void;
@@ -38,6 +39,7 @@ export function VideoPlayer({
   geometry,
   trialWindow,
   observations = [],
+  behavioralEvents = [],
   previewRawBodyXY = null,
   selectedHoleId,
   onHoleClick,
@@ -198,6 +200,30 @@ export function VideoPlayer({
         }))
       : [];
 
+  const escapeEvent = behavioralEvents.find((e) => e.type !== 'investigation') ?? null;
+  const investigationSpans =
+    durationSec > 0
+      ? behavioralEvents
+          .filter((e) => e.type === 'investigation' && e.status !== 'rejected')
+          .map((e) => ({
+            id: e.id,
+            leftFrac: secondsFromTimeUs(e.startTimeUs) / durationSec,
+            widthFrac: Math.max(
+              0.001,
+              (secondsFromTimeUs(e.endTimeUs) - secondsFromTimeUs(e.startTimeUs)) / durationSec,
+            ),
+            manual: e.origin === 'manual',
+          }))
+      : [];
+  const entryOnsetFrac =
+    escapeEvent?.entryOnsetTimeUs != null && durationSec > 0
+      ? secondsFromTimeUs(escapeEvent.entryOnsetTimeUs) / durationSec
+      : null;
+  const censorFrac =
+    escapeEvent?.censorBoundaryTimeUs != null && durationSec > 0
+      ? secondsFromTimeUs(escapeEvent.censorBoundaryTimeUs) / durationSec
+      : null;
+
   return (
     <div className={styles.playerSection}>
       <div ref={containerRef} className={styles.playerContainer} data-testid="video-player">
@@ -352,6 +378,32 @@ export function VideoPlayer({
                 />
               );
             })}
+          </div>
+        )}
+        {investigationSpans.length > 0 && (
+          <div className={styles.eventMarkerStrip} aria-hidden="true" data-testid="event-marker-strip">
+            {investigationSpans.map((span) => (
+              <div
+                key={span.id}
+                className={`${styles.eventInvestigationSpan}${span.manual ? ` ${styles.eventInvestigationSpanManual}` : ''}`}
+                style={{ left: `${span.leftFrac * 100}%`, width: `${span.widthFrac * 100}%` }}
+                data-testid="event-investigation-span"
+              />
+            ))}
+            {entryOnsetFrac != null && (
+              <div
+                className={styles.eventEntryOnsetMarker}
+                style={{ left: `${entryOnsetFrac * 100}%` }}
+                data-testid="event-entry-onset-marker"
+              />
+            )}
+            {censorFrac != null && (
+              <div
+                className={styles.eventCensorMarker}
+                style={{ left: `${censorFrac * 100}%` }}
+                data-testid="event-censor-marker"
+              />
+            )}
           </div>
         )}
         <input

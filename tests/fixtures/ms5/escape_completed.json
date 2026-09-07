@@ -1,0 +1,33 @@
+{
+  "observations": [
+    { "frameIndex": 0, "timeUs": 5000000, "bodyXY": { "x": 520, "y": 240 }, "noseXY": { "x": 525, "y": 235 }, "confidence": 0.9, "observed": "tracked", "origin": "auto", "qualityFlags": null },
+    { "frameIndex": 50, "timeUs": 10000000, "bodyXY": { "x": 520, "y": 240 }, "noseXY": { "x": 525, "y": 235 }, "confidence": 0.9, "observed": "tracked", "origin": "auto", "qualityFlags": null },
+    { "frameIndex": 100, "timeUs": 15000000, "bodyXY": { "x": 520, "y": 240 }, "noseXY": { "x": 525, "y": 235 }, "confidence": 0.9, "observed": "tracked", "origin": "auto", "qualityFlags": null }
+  ],
+  "timestampIndex": [
+    { "frameIndex": 0, "timeUs": 5000000 },
+    { "frameIndex": 50, "timeUs": 10000000 },
+    { "frameIndex": 100, "timeUs": 15000000 }
+  ],
+  "events": [
+    {
+      "id": "esc1",
+      "type": "escape_completed",
+      "holeId": 0,
+      "startFrameIndex": 40,
+      "endFrameIndex": 100,
+      "startTimeUs": 9000000,
+      "endTimeUs": 15000000,
+      "entryOnsetTimeUs": 9000000,
+      "completionTimeUs": 15000000,
+      "censorBoundaryTimeUs": 15000000,
+      "origin": "auto",
+      "status": "confirmed",
+      "confidence": "high",
+      "visitIndex": null,
+      "isRevisit": null,
+      "evidence": { "observedFollowUpLowerBoundUs": 10000000 },
+      "notes": null
+    }
+  ]
+}

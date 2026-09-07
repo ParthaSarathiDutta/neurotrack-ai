@@ -151,8 +151,15 @@ for (const name of CLIPS) {
   );
 
   const escape = analysis.events.find((e) => e.type !== 'investigation');
+  const invEvents = analysis.events.filter((e) => e.type === 'investigation');
+  const dwells = invEvents.map((e) => Number(e.evidence.dwellUs ?? 0) / 1_000_000);
+  const distinctHoles = new Set(invEvents.map((e) => e.holeId)).size;
   out[name] = {
-    investigations: analysis.events.filter((e) => e.type === 'investigation').length,
+    investigations: invEvents.length,
+    distinctHolesVisited: distinctHoles,
+    medianDwellSec: dwells.length
+      ? dwells.slice().sort((a, b) => a - b)[Math.floor(dwells.length / 2)]
+      : null,
     escapeType: escape?.type ?? null,
     totalLatencyCensored: measures?.totalLatency.censored ?? null,
     totalLatencyLowerBoundSec: measures?.totalLatency.lowerBound ?? null,

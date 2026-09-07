@@ -35,6 +35,28 @@ function confidenceForSegment(seg: ZoneSegment): EventConfidence {
   return 'low';
 }
 
+interface InZoneEntry {
+  holeId: number;
+  basis: 'nose' | 'body';
+  distance: number;
+}
+
+function chooseHoleForFrame(
+  inZoneEntries: InZoneEntry[],
+  current: ZoneSegment | null,
+): { holeId: number; basis: 'nose' | 'body' } | null {
+  if (current) {
+    for (const entry of inZoneEntries) {
+      if (entry.holeId === current.holeId) {
+        return { holeId: entry.holeId, basis: entry.basis };
+      }
+    }
+  }
+  if (inZoneEntries.length === 0) return null;
+  const best = inZoneEntries.reduce((a, b) => (a.distance < b.distance ? a : b));
+  return { holeId: best.holeId, basis: best.basis };
+}
+
 /** Detect hole investigation events from trajectory observations. */
 export function detectInvestigations(
   observations: Observation[],
@@ -56,9 +78,7 @@ export function detectInvestigations(
   let current: ZoneSegment | null = null;
 
   for (const obs of inTrial) {
-    let bestHole: number | null = null;
-    let bestBasis: 'nose' | 'body' | null = null;
-    let bestDist: number | null = null;
+    const inZoneEntries: InZoneEntry[] = [];
 
     for (const hole of holes) {
       const prox = observationProximityToHole(
@@ -68,17 +88,21 @@ export function detectInvestigations(
         params.investigationNoseProximityFraction,
         params.investigationBodyProximityFraction,
       );
-      if (prox.inZone && (bestDist == null || (prox.distance ?? Infinity) < bestDist)) {
-        bestHole = hole.id;
-        bestBasis = prox.basis;
-        bestDist = prox.distance;
+      if (prox.inZone && prox.basis) {
+        inZoneEntries.push({
+          holeId: hole.id,
+          basis: prox.basis,
+          distance: prox.distance ?? Infinity,
+        });
       }
     }
 
-    if (bestHole != null && bestBasis != null) {
+    const chosen = chooseHoleForFrame(inZoneEntries, current);
+
+    if (chosen) {
       if (
         current &&
-        current.holeId === bestHole &&
+        current.holeId === chosen.holeId &&
         (current.endFrameIndex === obs.frameIndex - 1 ||
           obs.timeUs - current.endTimeUs <= params.investigationMergeGapUs)
       ) {
@@ -91,7 +115,7 @@ export function detectInvestigations(
         }
       } else if (
         current &&
-        current.holeId === bestHole &&
+        current.holeId === chosen.holeId &&
         obs.timeUs - current.endTimeUs <= params.investigationMergeGapUs
       ) {
         current.endFrameIndex = obs.frameIndex;
@@ -102,13 +126,13 @@ export function detectInvestigations(
           segments.push(current);
         }
         current = {
-          holeId: bestHole,
+          holeId: chosen.holeId,
           startFrameIndex: obs.frameIndex,
           endFrameIndex: obs.frameIndex,
           startTimeUs: obs.timeUs,
           endTimeUs: obs.timeUs,
           dwellUs: 0,
-          basis: bestBasis,
+          basis: chosen.basis,
           hasAmbiguousHeadTail: Boolean(obs.qualityFlags?.includes('ambiguous_head_tail')),
           hasLostOrLow:
             obs.observed === 'lost' || Boolean(obs.qualityFlags?.includes('low_confidence')),

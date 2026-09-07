@@ -9,11 +9,19 @@ import {
 } from '../domain/trajectory/cleaningStaleness';
 import { create } from 'zustand';
 import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
-import { runEventPipeline } from '../domain/events/eventPipeline';
+import { runEventPipelineAsync } from '../domain/events/eventPipeline';
 import { markEventAnalysisStale } from '../domain/events/eventStaleness';
+import {
+  buildManualEscapeEvent,
+  buildManualInvestigation,
+  mergeManualEventEdit,
+  reindexInvestigationVisits,
+  replaceEscapeEvent,
+} from '../domain/events/manualEvents';
+import { censorBoundaryTimeUs, effectiveTrialStartUs } from '../domain/events/holeProximity';
 import { measuresFromAnalysis } from '../domain/measures/computeMeasures';
 import { resolveMeasurementObservations } from '../domain/trajectory/measurementObservations';
-import type { AnalysisParams, CleaningParams, EventDetectionParams, Geometry, Hole, ManualCorrection, MeasurementBasis, Observation, OperationalDefinitionSelections, TrialRecord, TrialWindow } from '../domain/types';
+import type { AnalysisParams, BehavioralEvent, CleaningParams, EventDetectionParams, EventType, Geometry, Hole, ManualCorrection, MeasurementBasis, Observation, OperationalDefinitionSelections, TrialRecord, TrialWindow } from '../domain/types';
 import { computeCleanedTrajectory } from '../domain/trajectory/cleaning';
 import {
   applyManualCorrections,
@@ -36,7 +44,7 @@ import { runAutoCalibration } from '../services/calibrationService';
 import { applyTemplateGeometry } from '../services/templateService';
 import { proposeTrialWindow } from '../services/trialWindowService';
 import { cancelTracking as cancelTrackingJob, runTracking } from '../services/trackingService';
-import { clearFrameCache } from '../services/frameService';
+import { clearFrameCache, initFrameDecoder } from '../services/frameService';
 import { evictAllFromCache } from '../db/videoCache';
 
 export type CorrectionMode = 'off' | 'body' | 'nose' | 'remove-nose';
@@ -99,6 +107,15 @@ interface SessionState {
   setMeasurementBasis: (trialId: string, basis: MeasurementBasis) => void;
   confirmEvent: (trialId: string, eventId: string) => void;
   rejectEvent: (trialId: string, eventId: string) => void;
+  addManualInvestigation: (
+    trialId: string,
+    input: { holeId: number; startFrameIndex: number; endFrameIndex: number; notes?: string },
+  ) => void;
+  updateEvent: (trialId: string, eventId: string, patch: Partial<Pick<BehavioralEvent, 'holeId' | 'startFrameIndex' | 'endFrameIndex' | 'type' | 'notes' | 'status'>>) => void;
+  setManualEscapeOutcome: (
+    trialId: string,
+    input: { type: Exclude<EventType, 'investigation'>; holeId: number | null; entryOnsetFrameIndex?: number | null; notes?: string },
+  ) => void;
   updateEventParams: (patch: Partial<EventDetectionParams>) => void;
   updateOperationalDefinitions: (patch: Partial<OperationalDefinitionSelections>) => void;
   /** Await completion of any pending session write (used after corrections / apply cleaning). */
@@ -177,9 +194,14 @@ function recomputeMeasuresForTrial(trial: TrialRecord, analysisParams: AnalysisP
   return { ...trial, measures };
 }
 
-function redetectEventsForTrial(trial: TrialRecord, analysisParams: AnalysisParams): TrialRecord {
+async function redetectEventsForTrialAsync(
+  trial: TrialRecord,
+  analysisParams: AnalysisParams,
+): Promise<TrialRecord> {
   if (!trial.track || trial.track.status !== 'done') return trial;
-  const result = runEventPipeline(trial, analysisParams, { previousEvents: trial.events });
+  const result = await runEventPipelineAsync(trial, analysisParams, {
+    previousEvents: trial.events,
+  });
   if (!result.events) {
     return {
       ...trial,
@@ -188,6 +210,66 @@ function redetectEventsForTrial(trial: TrialRecord, analysisParams: AnalysisPara
     };
   }
   return { ...trial, events: result.events, measures: result.measures };
+}
+
+async function redetectTrialEventsById(
+  getState: () => SessionState,
+  setState: StoreSet,
+  trialId: string,
+): Promise<void> {
+  const state = getState();
+  const trial = state.trials.find((t) => t.id === trialId);
+  if (!trial?.events) return;
+  setState({ eventsBusy: true });
+  try {
+    if (trial.videoCached) {
+      try {
+        await initFrameDecoder(trial.fingerprint);
+      } catch {
+        /* Pixel pass reports incomplete when decoder unavailable. */
+      }
+    }
+    const updated = await redetectEventsForTrialAsync(trial, state.analysisParams);
+    setState((s) => ({
+      trials: patchTrial(s.trials, trialId, () => updated),
+      statusMessage: s.statusMessage,
+    }));
+  } finally {
+    setState({ eventsBusy: false });
+  }
+}
+
+async function redetectAllTrialEvents(
+  getState: () => SessionState,
+  setState: StoreSet,
+): Promise<void> {
+  const state = getState();
+  const withEvents = state.trials.filter((t) => t.events);
+  if (withEvents.length === 0) return;
+  setState({ eventsBusy: true });
+  try {
+    const updatedById = new Map<string, TrialRecord>();
+    for (const t of withEvents) {
+      updatedById.set(t.id, await redetectEventsForTrialAsync(t, state.analysisParams));
+    }
+    setState((s) => ({
+      trials: s.trials.map((t) => updatedById.get(t.id) ?? t),
+    }));
+  } finally {
+    setState({ eventsBusy: false });
+  }
+}
+
+function scheduleAsyncRedetect(
+  getState: () => SessionState,
+  setState: StoreSet,
+  trialId: string,
+): void {
+  void redetectTrialEventsById(getState, setState, trialId).then(() => scheduleSave(getState, setState));
+}
+
+function scheduleAsyncRedetectAll(getState: () => SessionState, setState: StoreSet): void {
+  void redetectAllTrialEvents(getState, setState).then(() => scheduleSave(getState, setState));
 }
 
 function staleTrialById(trials: TrialRecord[], trialId: string, reason: string): TrialRecord[] {
@@ -750,11 +832,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
                 )
               : t.track,
           };
-          return t.events ? redetectEventsForTrial(patched, state.analysisParams) : patched;
+          return patched;
         }),
         statusMessage: `Manual body correction saved for frame ${frameIndex + 1}.`,
       };
     });
+    scheduleAsyncRedetect(get, set, trialId);
     void flushSave(get, set);
   },
 
@@ -934,10 +1017,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
               }
             : t.track,
         };
-        return t.events ? redetectEventsForTrial(patched, state.analysisParams) : patched;
+        return patched;
       }),
       statusMessage: 'Trajectory cleaning applied.',
     });
+    scheduleAsyncRedetect(get, set, trialId);
     void flushSave(get, set);
   },
 
@@ -953,14 +1037,25 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!trial?.track || trial.track.status !== 'done') return;
     set({ eventsBusy: true, statusMessage: 'Detecting events…' });
     try {
-      const result = runEventPipeline(trial, get().analysisParams);
+      if (trial.videoCached) {
+        try {
+          await initFrameDecoder(trial.fingerprint);
+        } catch {
+          /* Pixel pass reports incomplete when decoder unavailable. */
+        }
+      }
+      const result = await runEventPipelineAsync(trial, get().analysisParams, {
+        previousEvents: trial.events,
+      });
       set((state) => ({
         trials: patchTrial(state.trials, trialId, (t) => ({
           ...t,
           events: result.events,
           measures: result.measures,
         })),
-        statusMessage: result.message ?? 'Event detection complete.',
+        statusMessage: result.pixelEvidenceSummary
+          ? `${result.message ?? 'Event detection complete.'} ${result.pixelEvidenceSummary}`
+          : result.message ?? 'Event detection complete.',
       }));
       await flushSave(get, set);
     } finally {
@@ -969,17 +1064,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   setMeasurementBasis: (trialId, basis) => {
-    set((state) => {
-      const params = state.analysisParams;
-      return {
-        trials: patchTrial(state.trials, trialId, (t) => {
-          const withBasis = { ...t, measurementBasis: basis };
-          return t.events ? redetectEventsForTrial(withBasis, params) : withBasis;
-        }),
-        statusMessage: `Measurement basis set to ${basis} — events re-detected.`,
-      };
-    });
-    scheduleSave(get, set);
+    const trial = get().trials.find((t) => t.id === trialId);
+    set((state) => ({
+      trials: patchTrial(state.trials, trialId, (t) => ({ ...t, measurementBasis: basis })),
+      statusMessage: trial?.events
+        ? `Measurement basis set to ${basis} — events re-detecting…`
+        : `Measurement basis set to ${basis}.`,
+    }));
+    if (trial?.events) {
+      scheduleAsyncRedetect(get, set, trialId);
+    } else {
+      scheduleSave(get, set);
+    }
   },
 
   confirmEvent: (trialId, eventId) => {
@@ -1016,16 +1112,73 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     scheduleSave(get, set);
   },
 
+  addManualInvestigation: (trialId, input) => {
+    set((state) => ({
+      trials: patchTrial(state.trials, trialId, (t) => {
+        if (!t.events) return t;
+        const ev = buildManualInvestigation({
+          ...input,
+          timestampIndex: t.timestampIndex,
+        });
+        if (!ev) return t;
+        const merged = reindexInvestigationVisits([...t.events.events, ev]);
+        const events = { ...t.events, events: merged };
+        return recomputeMeasuresForTrial({ ...t, events }, state.analysisParams);
+      }),
+      statusMessage: 'Manual investigation added.',
+    }));
+    scheduleSave(get, set);
+  },
+
+  updateEvent: (trialId, eventId, patch) => {
+    set((state) => ({
+      trials: patchTrial(state.trials, trialId, (t) => {
+        if (!t.events) return t;
+        const edited = mergeManualEventEdit(t.events.events, eventId, patch, t.timestampIndex);
+        const events = {
+          ...t.events,
+          events: reindexInvestigationVisits(edited),
+        };
+        return recomputeMeasuresForTrial({ ...t, events }, state.analysisParams);
+      }),
+      statusMessage: 'Event updated.',
+    }));
+    scheduleSave(get, set);
+  },
+
+  setManualEscapeOutcome: (trialId, input) => {
+    set((state) => ({
+      trials: patchTrial(state.trials, trialId, (t) => {
+        if (!t.events) return t;
+        const trialStart = effectiveTrialStartUs(t.trialWindow);
+        const censorUs = censorBoundaryTimeUs(t.trialWindow, t.timestampIndex);
+        if (trialStart == null || censorUs == null) return t;
+        const escape = buildManualEscapeEvent({
+          type: input.type,
+          holeId: input.holeId,
+          entryOnsetFrameIndex: input.entryOnsetFrameIndex ?? null,
+          timestampIndex: t.timestampIndex,
+          censorBoundaryTimeUs: censorUs,
+          trialStartTimeUs: trialStart,
+          notes: input.notes,
+        });
+        if (!escape) return t;
+        const merged = replaceEscapeEvent(t.events.events, escape);
+        const events = { ...t.events, events: merged };
+        return recomputeMeasuresForTrial({ ...t, events }, state.analysisParams);
+      }),
+      statusMessage: 'Manual escape/censor record saved.',
+    }));
+    scheduleSave(get, set);
+  },
+
   updateEventParams: (patch) => {
     set((state) => {
       const events = { ...state.analysisParams.events, ...patch };
       const analysisParams = { ...state.analysisParams, events, updatedAt: new Date().toISOString() };
-      const trials = state.trials.map((t) =>
-        t.events ? redetectEventsForTrial(t, analysisParams) : t,
-      );
-      return { trials, analysisParams, statusMessage: 'Event parameters updated — re-detected.' };
+      return { analysisParams, statusMessage: 'Event parameters updated — re-detecting…' };
     });
-    scheduleSave(get, set);
+    scheduleAsyncRedetectAll(get, set);
   },
 
   updateOperationalDefinitions: (patch) => {
@@ -1065,7 +1218,16 @@ if (typeof window !== 'undefined') {
     __ntDetectEvents?: (trialId: string) => Promise<boolean>;
     __ntGetMeasuresText?: (trialId: string) => string | null;
     __ntSetMeasurementBasis?: (trialId: string, basis: string) => void;
-    __ntUpdateEventParams?: (patch: { investigationMinDwellUs?: number }) => void;
+    __ntUpdateEventParams?: (patch: { investigationMinDwellUs?: number; pixelEvidenceBudgetFrames?: number }) => void;
+    __ntConfirmEvent?: (trialId: string, eventId: string) => void;
+    __ntAddManualInvestigation?: (trialId: string, holeId: number, startFrame: number, endFrame: number) => void;
+    __ntGetEscapeType?: (trialId: string) => string | null;
+    __ntGetPixelEvidenceBanner?: () => string | null;
+    __ntGetInvestigationCount?: (trialId: string) => number;
+    __ntGetProvisionalErrors?: (trialId: string) => number | null;
+    __ntGetConfirmedErrors?: (trialId: string) => number | null;
+    __ntAckCalibrationReview?: (trialId: string) => void;
+    __ntConfirmGeometry?: (trialId: string) => void;
   };
   const hooks = window as NeuroTrackTestHooks;
   hooks.__ntApplyBodyCorrection = (trialId, frameIndex, x, y) => {
@@ -1125,6 +1287,41 @@ if (typeof window !== 'undefined') {
   };
   hooks.__ntUpdateEventParams = (patch) => {
     useSessionStore.getState().updateEventParams(patch);
+  };
+  hooks.__ntConfirmEvent = (trialId, eventId) => {
+    useSessionStore.getState().confirmEvent(trialId, eventId);
+  };
+  hooks.__ntAddManualInvestigation = (trialId, holeId, startFrame, endFrame) => {
+    useSessionStore.getState().addManualInvestigation(trialId, {
+      holeId,
+      startFrameIndex: startFrame,
+      endFrameIndex: endFrame,
+    });
+  };
+  hooks.__ntGetEscapeType = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    return trial?.events?.events.find((e) => e.type !== 'investigation')?.type ?? null;
+  };
+  hooks.__ntGetPixelEvidenceBanner = () =>
+    document.querySelector('[data-testid="pixel-evidence-banner"]')?.textContent ?? null;
+  hooks.__ntGetInvestigationCount = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    return trial?.events?.events.filter((e) => e.type === 'investigation').length ?? 0;
+  };
+  hooks.__ntGetProvisionalErrors = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    return trial?.measures?.errorCounts.provisional.total ?? null;
+  };
+  hooks.__ntGetConfirmedErrors = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    const v = trial?.measures?.primaryErrors.value;
+    return typeof v === 'number' ? v : null;
+  };
+  hooks.__ntAckCalibrationReview = (trialId) => {
+    useSessionStore.getState().acknowledgeCalibrationReview(trialId);
+  };
+  hooks.__ntConfirmGeometry = (trialId) => {
+    useSessionStore.getState().confirmGeometry(trialId);
   };
 }
 

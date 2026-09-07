@@ -15,8 +15,10 @@ export function mergeDetectedEvents(
     (e) => e.origin === 'manual' || e.status === 'confirmed' || e.status === 'rejected',
   );
   const preservedKeys = new Set(preserved.map(eventKey));
+  const preservedEscape = preserved.some((e) => e.type !== 'investigation');
 
   const freshAuto = detected.filter((e) => {
+    if (e.type !== 'investigation' && preservedEscape) return false;
     if (preservedKeys.has(eventKey(e))) return false;
     for (const p of preserved) {
       if (

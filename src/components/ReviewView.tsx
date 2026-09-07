@@ -127,6 +127,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
         geometry={trial.geometry}
         trialWindow={trial.trialWindow}
         observations={effectiveObservations}
+        behavioralEvents={trial.events?.events ?? []}
         previewRawBodyXY={previewRawBodyXY}
         selectedHoleId={selectedHoleId}
         onFrameIndexChange={setCurrentFrameIndex}
@@ -150,7 +151,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
 
       <CorrectionCleaningPanel trial={trial} currentFrameIndex={currentFrameIndex} />
 
-      <EventsMeasuresPanel trial={trial} onSeekToFrame={handleSeekToFrame} />
+      <EventsMeasuresPanel trial={trial} onSeekToFrame={handleSeekToFrame} currentFrameIndex={currentFrameIndex} />
 
       <div hidden aria-hidden="true" data-testid="trial-metadata-compat">
         <span data-testid="meta-frame-rate">{meta.containerFrameRateLabel}</span>

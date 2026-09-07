@@ -47,6 +47,8 @@ interface PhaseACandidate {
   motionDecay: number;
 }
 
+export type { PhaseACandidate };
+
 function scorePhaseA(
   observations: Observation[],
   geometry: Geometry,
@@ -133,6 +135,54 @@ function scorePhaseA(
   return best;
 }
 
+/** Phase A trajectory gate for pixel pass and escape scoring. */
+export function getPhaseACandidate(
+  observations: Observation[],
+  geometry: Geometry,
+  trialStartUs: number,
+  censorUs: number,
+  params: EventDetectionParams,
+): PhaseACandidate | null {
+  return scorePhaseA(observations, geometry, trialStartUs, censorUs, params);
+}
+
+function hasRimProximityWithoutEntry(
+  observations: Observation[],
+  geometry: Geometry,
+  trialStartUs: number,
+  censorUs: number,
+  params: EventDetectionParams,
+): boolean {
+  const radius = geometry.platformRadiusPx;
+  if (!radius) return false;
+  const trail = observations
+    .filter((o) => isInTrial(o, trialStartUs, censorUs))
+    .slice(-40);
+  for (const obs of trail) {
+    for (const hole of geometry.holes) {
+      const prox = observationProximityToHole(
+        obs,
+        hole,
+        radius,
+        params.escapeProximityFraction,
+        params.escapeProximityFraction,
+      );
+      if (prox.inZone) return true;
+    }
+  }
+  return false;
+}
+
+function isTrackingLostAtCensor(
+  observations: Observation[],
+  trialStartUs: number,
+  censorUs: number,
+): boolean {
+  const inTrial = observations.filter((o) => isInTrial(o, trialStartUs, censorUs));
+  const last = inTrial[inTrial.length - 1];
+  return last?.observed === 'lost';
+}
+
 /** Detect escape / censor outcome at trial end. */
 export function detectEscapeOutcome(
   observations: Observation[],
@@ -211,7 +261,11 @@ export function detectEscapeOutcome(
     };
   }
 
-  if (phaseA && score >= params.escapeCensorThreshold) {
+  if (phaseA) {
+    const confidence: 'medium' | 'low' =
+      score >= params.escapeCensorThreshold && pixelComplete
+        ? 'medium'
+        : 'low';
     return {
       id: newEventId(),
       type: 'escape_incomplete_censored',
@@ -225,7 +279,7 @@ export function detectEscapeOutcome(
       censorBoundaryTimeUs: censorUs,
       origin: 'auto',
       status: 'proposed',
-      confidence: pixelComplete ? 'medium' : 'low',
+      confidence,
       visitIndex: null,
       isRevisit: null,
       evidence: {
@@ -241,10 +295,14 @@ export function detectEscapeOutcome(
     };
   }
 
-  // Insufficient entry evidence — trial censored without observed entry
-  // Do NOT infer from incomplete pixel alone
-  if (!phaseA || score < params.escapeCensorThreshold) {
-    return {
+  // Insufficient entry evidence — distinguish rim exploration vs trial censor vs no record
+  if (isTrackingLostAtCensor(observations, trialStart, censorUs)) {
+    return null;
+  }
+  if (hasRimProximityWithoutEntry(observations, geometry, trialStart, censorUs, params)) {
+    return null;
+  }
+  return {
       id: newEventId(),
       type: 'trial_censored_no_entry',
       holeId: null,
@@ -261,7 +319,7 @@ export function detectEscapeOutcome(
       visitIndex: null,
       isRevisit: null,
       evidence: {
-        phaseAScore: phaseA?.score ?? 0,
+        phaseAScore: 0,
         censorReason,
         observedFollowUpLowerBoundUs: followUpLowerBoundUs,
         no_entry_evidence: true,
@@ -269,7 +327,4 @@ export function detectEscapeOutcome(
       },
       notes: null,
     };
-  }
-
-  return null;
 }

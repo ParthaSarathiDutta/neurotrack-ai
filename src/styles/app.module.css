@@ -565,6 +565,84 @@
   background: rgba(128, 128, 128, 0.4);
 }
 
+.eventMarkerStrip {
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  pointer-events: none;
+}
+
+.eventInvestigationSpan {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(0, 102, 204, 0.45);
+  border-radius: 1px;
+}
+
+.eventInvestigationSpanManual {
+  background: rgba(0, 102, 204, 0.7);
+  outline: 1px solid rgba(0, 40, 100, 0.8);
+}
+
+.eventEntryOnsetMarker {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 12px;
+  background: #111;
+  transform: translateX(-1px);
+}
+
+.eventCensorMarker {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 12px;
+  background: #c00;
+  transform: translateX(-1px);
+}
+
+.eventFormRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: flex-end;
+  margin: var(--space-sm) 0;
+}
+
+.eventFormRow label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.875rem;
+}
+
+.eventFormRow input,
+.eventFormRow select {
+  min-height: 2rem;
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.pixelEvidenceBanner {
+  margin: var(--space-sm) 0;
+  padding: var(--space-sm);
+  border-radius: var(--radius);
+  background: #fff8e6;
+  border: 1px solid #e6c200;
+  font-size: 0.9rem;
+}
+
+.diagnosticNote {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
 .subheading {
   font-size: 1rem;
   margin: var(--space-md) 0 var(--space-xs);
