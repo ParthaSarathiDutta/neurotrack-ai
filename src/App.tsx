@@ -5,7 +5,7 @@ import { TrialList } from './components/TrialList';
 import { TrialDetailPanel } from './components/TrialDetailPanel';
 import { ReviewView } from './components/ReviewView';
 import { ImportedAnalysisView } from './components/ImportedAnalysisView';
-import { AnalysisBundleImport } from './components/AnalysisBundleImport';
+import { EmptySessionImportPanel } from './components/EmptySessionImportPanel';
 import { useSessionStore } from './store/sessionStore';
 import { canShowVideoReview, hasStoredAnalysis } from './domain/trialAnalysis';
 
@@ -53,7 +53,7 @@ export default function App() {
           ) : selected ? (
             <TrialDetailPanel trial={selected} />
           ) : (
-            <EmptySessionPanel />
+            <EmptySessionImportPanel />
           )}
         </div>
       </div>
@@ -72,17 +72,5 @@ export default function App() {
         All video processing runs locally in your browser. No data leaves this device.
       </p>
     </main>
-  );
-}
-
-function EmptySessionPanel() {
-  return (
-    <section className={styles.panel} aria-labelledby="detail-placeholder">
-      <h2 id="detail-placeholder">Get started</h2>
-      <p>Load MP4 trial videos to run a new analysis, or restore a saved analysis bundle.</p>
-      <div className={styles.actions}>
-        <AnalysisBundleImport buttonTestId="import-bundle-empty-btn" inputTestId="import-bundle-empty-input" />
-      </div>
-    </section>
   );
 }

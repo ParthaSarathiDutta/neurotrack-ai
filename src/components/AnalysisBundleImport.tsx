@@ -10,6 +10,7 @@ export interface UseAnalysisBundleImportResult {
   pendingImport: { json: string; collisions: ImportCollision[] } | null;
   openFilePicker: () => void;
   handleImportFile: (file: File) => Promise<void>;
+  loadExampleBundle: (url: string) => Promise<void>;
   confirmPendingImport: () => Promise<void>;
   cancelPendingImport: () => void;
 }
@@ -21,27 +22,47 @@ export function useAnalysisBundleImport(): UseAnalysisBundleImportResult {
   const [pendingImport, setPendingImport] = useState<{ json: string; collisions: ImportCollision[] } | null>(null);
   const [importBusy, setImportBusy] = useState(false);
 
+  const importJson = async (json: string) => {
+    const result = await importAnalysisBundle(json, false);
+    if (result.status === 'collision') {
+      setPendingImport({ json, collisions: result.collisions });
+      return;
+    }
+    if (result.status === 'error') {
+      setImportError(
+        result.errors?.map((e) => `${e.path}: ${e.message}`).join('; ') ?? result.message,
+      );
+    }
+  };
+
   const handleImportFile = async (file: File) => {
     setImportError(null);
     setImportBusy(true);
     try {
       const json = await file.text();
-      const result = await importAnalysisBundle(json, false);
-      if (result.status === 'collision') {
-        setPendingImport({ json, collisions: result.collisions });
-        return;
-      }
-      if (result.status === 'error') {
-        setImportError(
-          result.errors?.map((e) => `${e.path}: ${e.message}`).join('; ') ?? result.message,
-        );
-        return;
-      }
+      await importJson(json);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'Import failed.');
     } finally {
       setImportBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const loadExampleBundle = async (url: string) => {
+    setImportError(null);
+    setImportBusy(true);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Example bundle not available (${res.status})`);
+      }
+      const json = await res.text();
+      await importJson(json);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Failed to load example analysis.');
+    } finally {
+      setImportBusy(false);
     }
   };
 
@@ -72,12 +93,14 @@ export function useAnalysisBundleImport(): UseAnalysisBundleImportResult {
     pendingImport,
     openFilePicker: () => fileInputRef.current?.click(),
     handleImportFile,
+    loadExampleBundle,
     confirmPendingImport,
     cancelPendingImport: () => setPendingImport(null),
   };
 }
 
 interface AnalysisBundleImportProps {
+  bundleImport?: UseAnalysisBundleImportResult;
   buttonTestId?: string;
   inputTestId?: string;
   errorTestId?: string;
@@ -87,9 +110,12 @@ interface AnalysisBundleImportProps {
   buttonLabel?: string;
   className?: string;
   disabled?: boolean;
+  showCollisionDialog?: boolean;
+  showError?: boolean;
 }
 
 export function AnalysisBundleImport({
+  bundleImport: externalImport,
   buttonTestId = 'import-bundle-btn',
   inputTestId = 'import-bundle-input',
   errorTestId = 'import-bundle-error',
@@ -99,7 +125,11 @@ export function AnalysisBundleImport({
   buttonLabel = 'Load analysis bundle',
   className,
   disabled = false,
+  showCollisionDialog = true,
+  showError = true,
 }: AnalysisBundleImportProps) {
+  const internalImport = useAnalysisBundleImport();
+  const bundleImport = externalImport ?? internalImport;
   const {
     fileInputRef,
     importBusy,
@@ -109,7 +139,7 @@ export function AnalysisBundleImport({
     handleImportFile,
     confirmPendingImport,
     cancelPendingImport,
-  } = useAnalysisBundleImport();
+  } = bundleImport;
 
   return (
     <div className={className}>
@@ -134,13 +164,13 @@ export function AnalysisBundleImport({
         }}
       />
 
-      {importError && (
+      {showError && importError && (
         <p className={styles.warning} role="alert" data-testid={errorTestId}>
           {importError}
         </p>
       )}
 
-      {pendingImport && (
+      {showCollisionDialog && pendingImport && (
         <div className={styles.importConfirmBox} data-testid={dialogTestId}>
           <h4>Replace existing trials?</h4>
           <p>

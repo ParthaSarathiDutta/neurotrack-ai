@@ -1,0 +1,11 @@
+trialId,eventId,type,exportLabel,holeDisplay,holeIdInternal,startFrameIndex,endFrameIndex,startTimeSec,endTimeSec,entryOnsetTimeSec,completionTimeSec,censorBoundaryTimeSec,origin,status,confidence,visitIndex,isRevisit,bodyEntryPath,bodyEntryVersion,pixelEvidenceComplete,notes
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,ad3cf284-3df5-48bb-9622-4c7408cfe464,investigation,investigation,11,10,86,122,5.872533,8.274933,,,,auto,proposed,medium,1,false,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,a3fc2f00-f373-41ed-80b4-975d191ae2ff,investigation,investigation,12,11,136,178,9.209200,12.012000,,,,auto,proposed,medium,1,false,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,b812c2e2-e459-4a2a-82b8-3bdbeb368dab,investigation,investigation,11,10,194,345,13.079733,23.156467,,,,auto,proposed,medium,2,true,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,d1beac6e-ec45-4cf3-8ec3-73ce19d00f60,investigation,investigation,11,10,350,358,23.490133,24.024000,,,,auto,proposed,medium,3,true,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,612ae6cc-d804-4146-9b2d-190c000b258a,investigation,investigation,10,9,361,393,24.224200,26.359667,,,,auto,proposed,medium,1,false,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,b897b531-67ae-4912-9f69-5abd0f375e30,investigation,investigation,10,9,398,408,26.693333,27.360667,,,,auto,proposed,medium,2,true,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,15259281-2cd9-4c73-8bc2-4e5ecce5237c,investigation,investigation,17,16,501,526,33.566867,35.235200,,,,auto,proposed,medium,1,false,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,43016980-1892-4da4-a53e-5905bf8ef55f,investigation,investigation,18,17,537,559,35.969267,37.437400,,,,auto,proposed,medium,1,false,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,d6b790ec-1c92-4ab4-80e4-fcd54adf69c1,investigation,investigation,18,17,576,740,38.571867,49.449400,,,,auto,proposed,low,2,true,,,,
+e31e497a-d9c4-4ec0-b47f-531e3e5f83d8,9d631383-66e0-4888-b10e-f9fb50ba63e3,escape_entry_uncertain,candidate_hole_entry_not_protocol_escape,18,17,621,740,41.574867,49.449400,41.574867,,49.449400,auto,proposed,medium,,,,3,,

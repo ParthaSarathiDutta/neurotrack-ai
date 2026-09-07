@@ -19,6 +19,8 @@
     "validate:ms5": "node scripts/validate-ms5.mjs",
     "validate:import-empty": "node scripts/validate-import-empty.mjs",
     "validate:ms6-viz": "node scripts/validate-ms6-viz.mjs",
+    "generate:ms6-outputs": "npx tsx scripts/generate-ms6-outputs.ts",
+    "validate:ms6-outputs": "node scripts/validate-ms6-outputs.mjs",
     "validate:events-offline": "npx tsx scripts/validate-events-offline.mjs",
     "validate:calibration": "npx tsx scripts/validate-calibration.mjs",
     "preview": "vite preview"

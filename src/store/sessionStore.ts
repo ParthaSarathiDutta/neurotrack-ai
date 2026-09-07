@@ -1342,6 +1342,7 @@ if (typeof window !== 'undefined') {
     __ntGetTrackingInvokeCount?: () => number;
     __ntGetDetectEventsInvokeCount?: () => number;
     __ntResetInvokeCounts?: () => void;
+    __ntLoadExampleAnalysis?: () => ReturnType<SessionState['importAnalysisBundle']>;
   };
   const hooks = window as NeuroTrackTestHooks;
   hooks.__ntApplyBodyCorrection = (trialId, frameIndex, x, y) => {
@@ -1510,6 +1511,16 @@ if (typeof window !== 'undefined') {
   hooks.__ntGetTrackingInvokeCount = () => trackingInvokeCount;
   hooks.__ntGetDetectEventsInvokeCount = () => detectEventsInvokeCount;
   hooks.__ntResetInvokeCounts = () => resetSessionInvokeCountsForTest();
+  hooks.__ntLoadExampleAnalysis = async () => {
+    const base = import.meta.env.BASE_URL ?? '/';
+    const url = `${base}example/all-clips-session.neurotrack.json`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      return { status: 'error' as const, message: `Example bundle not available (${res.status})` };
+    }
+    const json = await res.text();
+    return useSessionStore.getState().importAnalysisBundle(json, false);
+  };
 }
 
 export type { Hole };

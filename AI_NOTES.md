@@ -481,3 +481,18 @@ Expected under definition: 33.17 s on-platform + 11.08 s off-platform = 44.24 s 
 ### Validated
 196 unit tests, lint, build, validate:ms6-viz (46 checks + screenshots in `tests/screenshots/ms6-viz-refinement/`), validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review.
 
+## MS-6 Checkpoint 4 submission outputs (2026-09-07)
+
+### Source
+- Canonical analysis: `tests/fixtures/ms6/three-trial-session.neurotrack.json` (real pipeline on test50/51/53; test53 escape confirmed at 24.40 s).
+- Generation recomputes measures with `speed_interval_validity.v1` / `max_speed.v2` only — events unchanged.
+
+### Delivered
+- `outputs/` per-clip CSV/XLSX/bundle + `bundles/all-clips-session.neurotrack.json` + `outputs/README.md`
+- `scripts/generate-ms6-outputs.ts`, `scripts/validate-ms6-outputs.mjs`
+- **Load example analysis** button (empty session) → `public/example/all-clips-session.neurotrack.json`
+- Unit tests `tests/ms6-outputs-integrity.test.ts`
+
+### Validated
+199 unit tests, lint, build, validate:ms6-outputs (31 checks), validate:ms6-viz, validate:import-empty, validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review; MS-6 not marked complete.
+
