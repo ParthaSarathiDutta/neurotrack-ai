@@ -140,7 +140,8 @@ export function CorrectionCleaningPanel({
         <li><span className={styles.legendSmoothed} aria-hidden="true" /> Smoothed (double circle)</li>
         {hasPreview ? (
           <li data-testid="legend-preview-raw">
-            Hollow dashed circle — raw corrected body during preview (when shift ≥ 0.5 px)
+            Orange hollow ring + connector + &quot;Raw&quot; label — corrected body before preview
+            (when shift ≥ 0.5 px)
           </li>
         ) : null}
       </ul>

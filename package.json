@@ -15,6 +15,7 @@
     "validate:tracking": "npx tsx scripts/validate-tracking.mjs",
     "validate:ms3": "node scripts/validate-ms3.mjs",
     "validate:ms4": "node scripts/validate-ms4.mjs",
+    "validate:ms4-ghost": "node scripts/verify-preview-ghost-test50.mjs",
     "validate:calibration": "npx tsx scripts/validate-calibration.mjs",
     "preview": "vite preview"
   },

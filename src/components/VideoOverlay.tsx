@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Geometry, Observation } from '../domain/types';
+import { drawPreviewRawGhostMarker } from '../domain/overlay/previewRawMarker';
 import { videoToDisplay, displayToVideo, type VideoDisplayBox } from '../domain/videoTransform';
 import styles from '../styles/app.module.css';
 
@@ -115,17 +116,6 @@ export function VideoOverlay({
       ctx.fillText(label, p.x + 8, p.y - 8);
     }
 
-    if (previewRawBodyXY && observation?.bodyXY) {
-      const rawPt = videoToDisplay(previewRawBodyXY, displayBox);
-      ctx.beginPath();
-      ctx.arc(rawPt.x, rawPt.y, 7, 0, 2 * Math.PI);
-      ctx.strokeStyle = 'rgba(70, 70, 70, 0.7)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
     if (observation?.bodyXY) {
       const body = videoToDisplay(observation.bodyXY, displayBox);
       ctx.beginPath();
@@ -191,6 +181,12 @@ export function VideoOverlay({
       ctx.font = '10px system-ui, sans-serif';
       ctx.fillStyle = '#111111';
       ctx.fillText('?', body.x + 10, body.y - 10);
+    }
+
+    if (previewRawBodyXY && observation?.bodyXY) {
+      const rawPt = videoToDisplay(previewRawBodyXY, displayBox);
+      const previewPt = videoToDisplay(observation.bodyXY, displayBox);
+      drawPreviewRawGhostMarker(ctx, rawPt, previewPt);
     }
   }, [geometry, displayBox, selectedHoleId, observation, previewRawBodyXY]);
 

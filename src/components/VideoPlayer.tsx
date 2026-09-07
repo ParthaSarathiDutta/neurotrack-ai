@@ -245,6 +245,10 @@ export function VideoPlayer({
         </span>
         <span data-testid="preview-raw-body-x">{previewRawBodyXY?.x ?? ''}</span>
         <span data-testid="preview-raw-body-y">{previewRawBodyXY?.y ?? ''}</span>
+        <span
+          data-testid="preview-raw-marker-active"
+          data-active={previewRawBodyXY ? 'true' : 'false'}
+        />
       </div>
 
       <div className={styles.playerControls}>

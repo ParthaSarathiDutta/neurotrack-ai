@@ -199,3 +199,14 @@ Scientists could not see raw vs preview cleaning differences — overlay draws o
 
 ### Validated
 88 unit tests; validate:ms4 V_preview_compare + V_preview_cleared_on_param_change PASS.
+
+## MS-4 raw ghost marker visibility (2026-09-06)
+
+### Problem
+At test50 frame 3795 (Δ ≈ 6.22 px), ghost marker existed but was invisible — gray 1.5 px dashed ring drawn **under** the filled preview marker on the dark mouse.
+
+### Fix
+- Draw ghost **after** preview body + nose (on top).
+- Orange (`#c45c00`) dashed ring with white halo, dashed connector to preview, small "Raw" label.
+- Extracted `drawPreviewRawGhostMarker()` + `tests/previewRawMarker.test.ts`.
+- Live verify: `scripts/verify-preview-ghost-test50.mjs` (frame 3795 PASS).
