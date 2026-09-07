@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
-import type { TrialRecord, MeasurementBasis, BehavioralEvent, EventType } from '../domain/types';
+import type { TrialRecord, MeasurementBasis, BehavioralEvent, EventType, MeasuresSnapshot } from '../domain/types';
 import { formatPresentationTimeSeconds } from '../domain/timing';
 import { formatHoleDisplayId, parseHoleDisplayId } from '../domain/holeDisplay';
 
@@ -19,6 +19,46 @@ function formatMeasure(m: { value: number | null; unit: string; censored: boolea
   }
   if (m.value == null) return '—';
   return `${m.value.toFixed(2)} ${m.unit}`;
+}
+
+function escapeStateSummary(
+  escapeEv: BehavioralEvent,
+  measures: MeasuresSnapshot | null | undefined,
+  trialStartUs: number | null,
+  targetConfirmed: boolean,
+): string {
+  const trialStart = trialStartUs ?? 0;
+  const lowerBoundSuffix =
+    escapeEv.evidence.observedFollowUpLowerBoundUs != null
+      ? ` — follow-up lower bound ≥ ${formatPresentationTimeSeconds(Number(escapeEv.evidence.observedFollowUpLowerBoundUs))} s`
+      : '';
+
+  if (escapeEv.type === 'escape_completed' && escapeEv.status === 'confirmed' && escapeEv.completionTimeUs != null) {
+    const completionOffsetSec = formatPresentationTimeSeconds(escapeEv.completionTimeUs - trialStart);
+    const latency =
+      measures?.totalLatency && !measures.totalLatency.censored && measures.totalLatency.value != null
+        ? `${measures.totalLatency.value.toFixed(2)} s total latency`
+        : null;
+    const targetNote = targetConfirmed
+      ? ''
+      : ' — candidate hole completion; protocol target not confirmed';
+    return `Completion at ${completionOffsetSec} s${latency ? `; ${latency}` : ''}${targetNote}`;
+  }
+
+  if (escapeEv.type === 'escape_completed' && escapeEv.completionTimeUs != null) {
+    const completionOffsetSec = formatPresentationTimeSeconds(escapeEv.completionTimeUs - trialStart);
+    return `Proposed completion at ${completionOffsetSec} s (frame ${escapeEv.endFrameIndex + 1}) — confirm to finalize latency`;
+  }
+
+  if (escapeEv.type === 'escape_entry_uncertain') {
+    return `Candidate hole entry — not confirmed escape through protocol target${lowerBoundSuffix}`;
+  }
+
+  if (escapeEv.type === 'escape_incomplete_censored' || escapeEv.type === 'trial_censored_no_entry') {
+    return `Censored outcome${lowerBoundSuffix}`;
+  }
+
+  return lowerBoundSuffix ? lowerBoundSuffix.slice(3) : '';
 }
 
 export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 0 }: EventsMeasuresPanelProps) {
@@ -47,6 +87,10 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
   const targetConfirmed = Boolean(trial.geometry.targetHoleConfirmedAt);
 
   const escapeEv = analysis?.events.find((e) => e.type !== 'investigation');
+  const trialStartUs = trial.trialWindow.startTimeUs;
+  const escapeSummary = escapeEv
+    ? escapeStateSummary(escapeEv, measures, trialStartUs, targetConfirmed)
+    : null;
   const pixelComplete = escapeEv?.evidence.pixelEvidenceComplete;
   const pixelAnalyzed = escapeEv?.evidence.pixelFramesAnalyzed;
   const pixelRequested = escapeEv?.evidence.pixelFramesRequested;
@@ -144,9 +188,7 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
 
           <p data-testid="escape-state-label">
             Escape state: <strong>{escapeEv.type.replace(/_/g, ' ')}</strong>
-            {escapeEv.evidence.observedFollowUpLowerBoundUs != null && (
-              <> — follow-up lower bound ≥ {formatPresentationTimeSeconds(Number(escapeEv.evidence.observedFollowUpLowerBoundUs))} s</>
-            )}
+            {escapeSummary ? <> — {escapeSummary}</> : null}
           </p>
         </>
       ) : (

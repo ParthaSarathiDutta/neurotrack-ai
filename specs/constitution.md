@@ -177,15 +177,19 @@ Preview UX: per-frame compare line (raw/corrected → preview/applied, Δ px, or
 
 **Validate:** manual body/nose correction and reset; persistence across immediate reload; Preview/Discard/Apply; applied cleaning persists; staleness + re-apply; duplicate-PTS independent corrections; re-track confirmation preserves edits on Cancel. Exercised by `npm run validate:ms4` (V1–V11, V_stale_*, V_preview_*, V_applied_compare), `npm run validate:ms4-ghost` (test50 frame 3795), and unit tests (`tests/trajectory.test.ts`, `tests/cleaningPreviewCompare.test.ts`, `tests/cleaningStaleness.test.ts`, `tests/previewRawMarker.test.ts`). MS-1–MS-3 + `validate:tracking` regressions green at merge.
 
-**Known limitations:** no full trajectory path overlay; sub-0.5 px smoothing shifts are intentionally unchanged; no MS-5 events/measures/export yet.
+**Known limitations:** no full trajectory path overlay; sub-0.5 px smoothing shifts are intentionally unchanged; MS-6 visualization/export not yet implemented.
 
-### MS-5 — Event Detection & Behavioral Measures
+### MS-5 — Event Detection & Behavioral Measures — ✅ Complete
 
-Hole investigations are detected from nose/body proximity, dwell time, and approach speed, with every threshold exposed and its consequence immediately visible when changed. Escape detection combines progressive area loss, proximity to a hole, loss of motion, and darkening of the hole region — because no clip in hand shows the animal's blob vanishing outright, and a binary present/absent rule would report "never escaped" for all three. Every event shows the evidence behind it. When no escape occurs before the protocol cutoff or the recording ends, the result is explicitly censored and flagged — never silently emitted as a latency equal to clip duration.
+Validated September 7, 2026 on branch `ms-5-event-detection-behavioral-measures`, merged to `main`.
 
-From detected events, the pipeline computes primary and total latency, primary and total errors, path length, speed, time in the target quadrant (with the quadrant convention stated), and a search-strategy classification (spatial / serial / random) with its reasoning shown and an override the user can apply. Assumption-violating cases — for example a trial that doesn't start at the platform center — are flagged rather than quietly scored.
+Hole investigations from nose/body proximity, dwell time, and approach speed — thresholds exposed and versioned. Escape uses **body-entry v3**: Path A (centroid + pixel + temporal support) may propose `escape_completed`; Path B (occlusion-aware pixels) yields `escape_entry_uncertain` only — not auto-completion. Proposed auto completions keep total latency censored until scientist confirms. Four censor/escape states with distinct UI copy; candidate hole entry distinguished from protocol-target escape when target unknown.
 
-**Validate:** the end-of-clip descent on all three clips is detected as escape or reported censored, never a silent "never escaped"; mid-platform tracker loss is never labeled an escape; changing a threshold visibly changes the event count; measures recompute from corrected trajectories with every time value from container timestamps; strategy overrides persist.
+Behavioral measures: primary/total latency, primary/total errors (provisional vs confirmed), path length, mean speed, target quadrant time, search-strategy v1 with override. Measurement basis raw/corrected/cleaned with stale-cleaning gate. Pixel evidence budget with completeness flag. Player: continuous rVFC playback, speed control (0.25×–2×), pause canvas continuity, natural-end rewind to frame 1.
+
+**Validate:** `npm run validate:ms5` on all three clips (target unknown, no per-filename branching); body-entry v3 outcomes — test51 `escape_entry_uncertain`, test53 proposed Path A completion (censored until confirm), test50 censored incomplete; MS-1–MS-4 + playback regressions green. Manual sign-off: playback on test53/test51 approved September 7, 2026.
+
+**Known limitations:** Path A still requires centroid in strict gate — tracker lag may block auto completion; pixel budget (120 trailing frames) may miss late entry; target-dependent measures unavailable until protocol target confirmed; heuristic strategy ≠ any single published method.
 
 ### MS-6 — Visualization, Export & Reloadable Analysis
 

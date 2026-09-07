@@ -25,3 +25,13 @@ When present without Path A completion → `escape_entry_uncertain` (candidate h
 ## Manual review
 
 Scientist may confirm `escape_completed` with an explicit completion frame, or retain uncertain/censored outcome. Target-hole confirmation remains separate from candidate-hole entry evidence.
+
+## Validation (September 7, 2026)
+
+| Clip | Escape state | Notes |
+|---|---|---|
+| test53 | `escape_completed` (proposed) | Path A frame 880; numeric latency after confirm |
+| test51 | `escape_entry_uncertain` | Occlusion possible entry 673; not auto-completed |
+| test50 | `escape_incomplete_censored` | No sustained entry |
+
+Manual playback sign-off: test53 + test51 (Play/Pause, speed, pause canvas, natural-end rewind).

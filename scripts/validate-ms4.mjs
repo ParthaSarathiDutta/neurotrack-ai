@@ -482,7 +482,7 @@ async function main() {
       .isVisible();
     results.V10_rerun_confirm = warningVisible ? 'PASS' : 'FAIL';
 
-    results.V11_ms5_note = (await page.locator('[data-testid="ms5-event-note"]').isVisible())
+    results.V11_events_panel = (await page.locator('[data-testid="events-measures-panel"]').isVisible())
       ? 'PASS'
       : 'FAIL';
 
@@ -505,6 +505,7 @@ async function main() {
     if (results.V_stale_after_correction !== 'PASS') failures.push('V_stale: after correction');
     if (results.V_stale_cleared_on_reapply !== 'PASS') failures.push('V_stale: reapply');
     if (results.V10_rerun_confirm !== 'PASS') failures.push('V10: rerun confirm');
+    if (results.V11_events_panel !== 'PASS') failures.push('V11: events panel');
   } finally {
     await cleanup();
   }

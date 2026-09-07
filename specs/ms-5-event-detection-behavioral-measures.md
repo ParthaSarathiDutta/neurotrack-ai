@@ -1,11 +1,10 @@
 # MS-5 — Event Detection & Behavioral Measures
 
-Branch: `ms-5-event-detection-behavioral-measures`
-Base: `main` @ `e3ef219` (MS-4 complete)
+Branch: `ms-5-event-detection-behavioral-measures` (merged to `main` September 7, 2026)
 Constitution reference: `specs/constitution.md` → MS-5
-Status: **Implementation in progress** (approved plan + consistency clarifications)
+Status: **✅ Complete**
 
-**Revision:** `b8cc1e7` → `2d12b75` (scientific review) → implementation branch.
+Body-entry operational default: **`neurotrack_body_entry` v3** — see `reference/neurotrack-body-entry-v3.md`.
 
 ### Final consistency clarifications (pre-implementation)
 
@@ -570,21 +569,20 @@ No silent auto-run on tracking complete.
 
 ---
 
-## Known limitations (expected after MS-5)
+## Known limitations (validated at MS-5 sign-off)
 
-- Heuristic strategy ≠ any single published method — overrides and unclassified required.
-- Body-only investigations common at rim — provisional until confirmed.
-- Sample clips likely never reach `escape_completed`.
-- Incomplete pixel evidence reduces auto confidence — manual confirmation path provided.
-- Path length across gaps discontinuous unless cleaned interpolated segments included (flagged).
+- **Body-entry v3:** Path A (centroid-confirmed) only for auto completion; Path B is possible-entry evidence → `escape_entry_uncertain`. Occlusion proxies cannot prove full torso entry (test51 audit).
+- **Proposed auto `escape_completed`:** total latency censored until scientist confirms; confirmed display shows completion time + numeric latency.
+- **Target unknown:** primary latency, errors, and quadrant unavailable until protocol target confirmed; candidate hole entry ≠ verified target escape.
+- **Pixel budget:** 120 trailing frames — late entry outside window may be missed.
+- **Heuristic strategy** ≠ any single published method — overrides and unclassified required.
+- **Path length** across gaps discontinuous unless cleaned interpolated segments included (flagged).
 
 ---
 
-## Completion criteria (future sign-off)
+## Completion sign-off (September 7, 2026)
 
-1. Tier 1–3 validation pass including new escape/censor/basis/strategy cases.
-2. Manual review of three-state censor model and provisional/confirmed errors.
-3. MS-1–MS-4 regressions green.
-4. `AI_NOTES.md` records Q1–Q10 binding decisions and any T1–T3 choices.
-
-**Do not mark complete or merge until explicit post-implementation review.**
+1. Tier 1–3 validation PASS (147 unit tests; `validate:ms5`, `validate:ms2` playback, MS-1–MS-4 regressions).
+2. Sample outcomes (target unknown, no cutoff): test53 proposed Path A `escape_completed` (frame 880, censored until confirm); test51 `escape_entry_uncertain` (possible entry 673); test50 `escape_incomplete_censored`.
+3. Manual review: playback (speed, pause canvas, natural-end rewind) approved on test53/test51.
+4. Merged to `main` at MS-5 branch HEAD.

@@ -372,3 +372,16 @@ lint/test/build PASS; validate:ms2 (incl. V16/V17 playback), validate:ms4, valid
 ### Validated
 lint/test/build PASS (147 tests); validate:ms2/ms4/ms5 PASS. **Stopped for user manual playback review — no merge yet.**
 
+## MS-5 final sign-off and merge (2026-09-07)
+
+### Phase 2 cleanup
+- Confirmed `escape_completed` summary shows completion time + numeric total latency (not censor lower bound).
+- Removed MS-5 placeholder from correction panel; events panel is live.
+- Candidate hole entry vs protocol-target escape distinguished in UI copy.
+
+### Pre-merge validation
+Full suite: lint, 147 unit tests, build, validate:calibration, validate:ms1–ms3, validate:tracking, validate:ms4, validate:ms5 (incl. confirm display + reload persistence), validate:ms2 playback regressions — ALL PASS.
+
+### Merged
+Branch `ms-5-event-detection-behavioral-measures` → `main`. MS-6 not started.
+

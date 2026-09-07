@@ -313,9 +313,9 @@ export function CorrectionCleaningPanel({
         data-value={isEstimatedBodyPosition(currentObs) ? 'true' : 'false'}
       />
 
-      <p className={styles.hint} data-testid="ms5-event-note">
-        Manual event editing (hole investigations, escape) requires MS-5 event detection — not
-        available in this milestone.
+      <p className={styles.hint}>
+        Hole investigations and escape outcomes are edited in the Events &amp; measures panel below the
+        player.
       </p>
     </section>
   );

@@ -1243,6 +1243,12 @@ if (typeof window !== 'undefined') {
     __ntGetConfirmedErrors?: (trialId: string) => number | null;
     __ntAckCalibrationReview?: (trialId: string) => void;
     __ntConfirmGeometry?: (trialId: string) => void;
+    __ntFlushPersist?: () => Promise<void>;
+    __ntGetEscapeEventStatus?: (trialId: string) => {
+      type: string;
+      status: string;
+      completionTimeUs: number | null;
+    } | null;
   };
   const hooks = window as NeuroTrackTestHooks;
   hooks.__ntApplyBodyCorrection = (trialId, frameIndex, x, y) => {
@@ -1367,6 +1373,17 @@ if (typeof window !== 'undefined') {
   };
   hooks.__ntConfirmGeometry = (trialId) => {
     useSessionStore.getState().confirmGeometry(trialId);
+  };
+  hooks.__ntFlushPersist = () => useSessionStore.getState().flushPersist();
+  hooks.__ntGetEscapeEventStatus = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    const esc = trial?.events?.events.find((e) => e.type !== 'investigation');
+    if (!esc) return null;
+    return {
+      type: esc.type,
+      status: esc.status,
+      completionTimeUs: esc.completionTimeUs ?? null,
+    };
   };
 }
 

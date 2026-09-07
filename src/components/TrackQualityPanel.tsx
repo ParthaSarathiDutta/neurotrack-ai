@@ -229,8 +229,8 @@ export function TrackQualityPanel({ trial, onSeekToFrame }: TrackQualityPanelPro
               </tbody>
             </table>
             <p className={styles.hint}>
-              Provisional <code>absent_in_hole</code> statuses are per-frame hypotheses only — not
-              confirmed escape events (MS-5).
+              Provisional <code>absent_in_hole</code> statuses are per-frame hypotheses only — confirm
+              escape outcomes in Events &amp; measures, not from tracking status alone.
             </p>
             <table className={styles.metricsTable} data-testid="tracking-flag-breakdown">
               <thead>

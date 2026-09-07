@@ -237,6 +237,81 @@ async function main() {
     await detectAndWait(page);
 
     const trialId = await page.locator('[data-testid="review-view"]').getAttribute('data-trial-id');
+
+    await page.evaluate(() => window.__ntUpdateEventParams?.({ pixelEvidenceBudgetFrames: 5 }));
+    await page.waitForFunction(
+      () => !document.querySelector('[data-testid="detect-events-btn"]')?.textContent?.includes('Detecting'),
+      undefined,
+      { timeout: 180_000 },
+    );
+    await page.waitForFunction(
+      () => {
+        const t = document.querySelector('[data-testid="pixel-evidence-banner"]')?.textContent ?? '';
+        return t.toLowerCase().includes('incomplete');
+      },
+      undefined,
+      { timeout: 30_000 },
+    );
+    results.V9_pixel_incomplete = 'PASS';
+    await page.evaluate(() => window.__ntUpdateEventParams?.({ pixelEvidenceBudgetFrames: 120 }));
+    await page.waitForFunction(
+      () => !document.querySelector('[data-testid="detect-events-btn"]')?.textContent?.includes('Detecting'),
+      undefined,
+      { timeout: 180_000 },
+    );
+
+    const escapeConfirmBtn = page
+      .locator('[data-testid^="event-row-escape_completed"]')
+      .locator('[data-testid^="confirm-event-"]')
+      .first();
+    if (await escapeConfirmBtn.count()) {
+      await escapeConfirmBtn.click();
+      await page.waitForFunction(
+        () => {
+          const label = document.querySelector('[data-testid="escape-state-label"]')?.textContent ?? '';
+          const latency = document.querySelector('[data-testid="measure-total-latency"]')?.textContent ?? '';
+          return (
+            label.includes('Completion at') &&
+            !label.includes('follow-up lower bound') &&
+            /\d+\.\d+ s/.test(latency) &&
+            !latency.includes('Censored')
+          );
+        },
+        undefined,
+        { timeout: 15_000 },
+      );
+      results.V_confirm_completion_display = 'PASS';
+    } else {
+      results.V_confirm_completion_display = 'SKIP:no_escape_proposed';
+    }
+
+    const invCountBefore = await page.evaluate(({ tid }) => window.__ntGetInvestigationCount?.(tid) ?? 0, {
+      tid: trialId,
+    });
+    const escapeStatusBefore = await page.evaluate(({ tid }) => window.__ntGetEscapeEventStatus?.(tid) ?? null, {
+      tid: trialId,
+    });
+    await page.evaluate(async () => {
+      await window.__ntFlushPersist?.();
+    });
+    await page.reload();
+    await waitForAppReady(page);
+    await selectTrial(page, 'test53');
+    const escapeStatusAfter = await page.evaluate(({ tid }) => window.__ntGetEscapeEventStatus?.(tid) ?? null, {
+      tid: trialId,
+    });
+    const invCountAfterReload = await page.evaluate(({ tid }) => window.__ntGetInvestigationCount?.(tid) ?? 0, {
+      tid: trialId,
+    });
+    results.V_reload_persistence =
+      escapeStatusBefore?.status === 'confirmed' &&
+      escapeStatusAfter?.status === 'confirmed' &&
+      escapeStatusBefore?.completionTimeUs === escapeStatusAfter?.completionTimeUs &&
+      invCountAfterReload >= invCountBefore &&
+      invCountBefore > 0
+        ? 'PASS'
+        : `FAIL:before=${JSON.stringify(escapeStatusBefore)},after=${JSON.stringify(escapeStatusAfter)},inv=${invCountBefore}->${invCountAfterReload}`;
+
     const firstProposed = await page.locator('[data-testid^="confirm-event-"]').first();
     if (await firstProposed.count()) {
       const eventId = (await firstProposed.getAttribute('data-testid'))?.replace('confirm-event-', '');
@@ -254,17 +329,6 @@ async function main() {
       { tid: trialId },
     );
     results.V_manual_add = 'PASS';
-
-    await page.evaluate(() => window.__ntUpdateEventParams?.({ pixelEvidenceBudgetFrames: 5 }));
-    await page.waitForFunction(
-      () => {
-        const t = document.querySelector('[data-testid="pixel-evidence-banner"]')?.textContent ?? '';
-        return t.toLowerCase().includes('incomplete');
-      },
-      undefined,
-      { timeout: 60_000 },
-    );
-    results.V9_pixel_incomplete = 'PASS';
 
     await page.evaluate(({ tid }) => window.__ntSetMeasurementBasis?.(tid, 'raw'), { tid: trialId });
     await page.waitForFunction(
