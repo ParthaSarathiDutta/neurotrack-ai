@@ -86,16 +86,27 @@ async function main() {
     await page.waitForSelector('[data-testid="trial-visualizations-panel"]', { timeout: 15_000 });
     results.V_test53_viz_panel = 'PASS';
 
+    await page.locator('[data-testid="recompute-measures-btn"]').click();
+    await page.waitForSelector('[data-testid="report-max-speed-diagnostic"]', { timeout: 15_000 });
+
+    const maxSpeed = await page.locator('[data-testid="report-max-speed"]').textContent();
+    results.V_test53_gated_max_speed =
+      maxSpeed && !/44162|43157/.test(maxSpeed) && /\d+\.\d+ px\/s/.test(maxSpeed) ? 'PASS' : `FAIL:${maxSpeed?.trim()}`;
+
+    const maxDiag = await page.locator('[data-testid="report-max-speed-diagnostic"]').textContent();
+    results.V_test53_diagnostic_max_speed =
+      maxDiag && /44162|43157/.test(maxDiag) ? 'PASS' : `FAIL:${maxDiag?.trim()}`;
+
+    const exclusions = await page.locator('[data-testid="report-speed-exclusions"]').textContent();
+    results.V_test53_speed_exclusions =
+      exclusions && exclusions.includes('excluded_timestamp_compression') ? 'PASS' : `FAIL:${exclusions?.trim()}`;
+
     await page.waitForSelector('[data-testid="hole-visit-timeline"]', { timeout: 10_000 });
     const invCount = await page.locator('[data-testid="hole-timeline-investigation"]').count();
     results.V_test53_timeline_investigations = invCount > 0 ? 'PASS' : `FAIL:${invCount}`;
 
     const occCells = await page.locator('[data-testid="occupancy-cell"]').count();
     results.V_test53_occupancy_cells = occCells > 0 ? 'PASS' : `FAIL:${occCells}`;
-
-    const audit = await page.locator('[data-testid="report-max-speed-audit"]').textContent();
-    results.V_test53_max_speed_audit =
-      audit && audit.includes('812') && audit.includes('µs') ? 'PASS' : `FAIL:${audit?.trim()}`;
 
     const latency = await page.locator('[data-testid="report-total-latency"]').textContent();
     results.V_test53_latency_preserved =

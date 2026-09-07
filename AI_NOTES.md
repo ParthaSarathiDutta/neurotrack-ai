@@ -414,3 +414,20 @@ Per MS-5 D12, speed uses intervals with Δt > 0 only; duplicate PTS (Δt = 0) ex
 ### Validated
 178 unit tests, lint, build, validate:import-empty, validate:ms6-viz, validate:ms2, validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review; Checkpoint 4 not started.
 
+## MS-6 speed interval validity policy (2026-09-07)
+
+### Decision
+Implemented `speed_interval_validity.v1`: exclude speed intervals with Δt < 5% of median in-trial container spacing. Not a universal millisecond cutoff. Path length unchanged (D12).
+
+### Measures
+- `mean_speed.v2` / `max_speed.v2` — quality-gated scientific values
+- `mean_speed_diagnostic.v1` / `max_speed_diagnostic.v1` — unfiltered D12 aggregates
+- Stored snapshots not silently rewritten; explicit recompute applies v2
+
+### test53 result (after recompute)
+- Gated max ≈ 115.13 px/s; diagnostic max ≈ 44 162.60 px/s; 7 timestamp-compression intervals excluded
+- Total latency and events unchanged
+
+### Validated
+183 unit tests, lint, build, validate:ms6-viz, validate:ms5 — ALL PASS. Stopped for manual review.
+

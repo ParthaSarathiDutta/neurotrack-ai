@@ -168,21 +168,18 @@ describe('MS-6 occupancy grid', () => {
   });
 });
 
-describe('MS-6 max speed audit (test53 fixture)', () => {
-  it('identifies container timestamp compression on max-speed pair', () => {
+describe('MS-6 max speed policy (test53 fixture)', () => {
+  it('documents compression pair excluded from gated max while preserved as diagnostic', () => {
     const trial = loadTest53Trial();
     const start = effectiveTrialStartUs(trial.trialWindow)!;
     const censor = censorBoundaryTimeUs(trial.trialWindow, trial.timestampIndex)!;
     const { observations } = resolveMeasurementObservations(trial.track, 'corrected');
     const audit = auditMaxSpeedInterval(observations, start, censor);
     expect(audit).not.toBeNull();
-    expect(audit!.maxSpeedPxPerSec).toBeGreaterThan(1000);
-    expect(audit!.deltaTimeUs).toBeLessThan(1000);
     expect(audit!.currFrameIndex).toBe(812);
-    expect(['container_timestamp_compression', 'tracking_speed_outlier_flag']).toContain(
-      audit!.artifactKind,
-    );
-    expect(audit!.artifactNote).toBeTruthy();
+    expect(audit!.excludedByPolicy).toBe(true);
+    expect(audit!.maxSpeedPxPerSec).toBeGreaterThan(10_000);
+    expect(audit!.maxSpeedQualityGatedPxPerSec).toBeLessThan(1000);
   });
 });
 

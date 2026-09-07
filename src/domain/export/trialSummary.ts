@@ -91,9 +91,23 @@ export function buildTrialSummaryRow(trial: TrialRecord): TrialSummaryRow {
       ['pathLength', encodeMeasureValue('pathLength', measures.pathLength)],
       ['meanSpeed', encodeMeasureValue('meanSpeed', measures.meanSpeed)],
       ['maxSpeed', encodeMeasureValue('maxSpeed', measures.maxSpeed)],
+    ];
+    if (measures.meanSpeedDiagnostic) {
+      measureEntries.push([
+        'meanSpeedDiagnostic',
+        encodeMeasureValue('meanSpeedDiagnostic', measures.meanSpeedDiagnostic),
+      ]);
+    }
+    if (measures.maxSpeedDiagnostic) {
+      measureEntries.push([
+        'maxSpeedDiagnostic',
+        encodeMeasureValue('maxSpeedDiagnostic', measures.maxSpeedDiagnostic),
+      ]);
+    }
+    measureEntries.push(
       ['targetQuadrantFraction', encodeMeasureValue('targetQuadrantFraction', measures.targetQuadrantFraction)],
       ['targetQuadrantTimeSec', encodeMeasureValue('targetQuadrantTimeSec', measures.targetQuadrantTimeSec)],
-    ];
+    );
     for (const [prefix, encoded] of measureEntries) {
       Object.assign(row, flattenEncodedMeasure(prefix, encoded));
     }

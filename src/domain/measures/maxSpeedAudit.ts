@@ -1,5 +1,11 @@
 import type { Observation } from '../types';
 import { filterInTrialObservations } from '../visualization/trialObservations';
+import { computePathSpeedMetrics } from './pathMetrics';
+import {
+  classifySpeedIntervalExclusion,
+  resolveSpeedIntervalReference,
+  SPEED_INTERVAL_VALIDITY_ID,
+} from './speedIntervalValidity';
 
 export type MaxSpeedArtifactKind =
   | 'none'
@@ -9,6 +15,7 @@ export type MaxSpeedArtifactKind =
 
 export interface MaxSpeedIntervalAudit {
   maxSpeedPxPerSec: number;
+  maxSpeedQualityGatedPxPerSec: number;
   prevFrameIndex: number;
   currFrameIndex: number;
   prevTimeUs: number;
@@ -21,65 +28,49 @@ export interface MaxSpeedIntervalAudit {
   currQualityFlags: Observation['qualityFlags'];
   artifactKind: MaxSpeedArtifactKind;
   artifactNote: string | null;
-  medianIntervalUs: number | null;
-}
-
-function medianIntervalUs(observations: Observation[]): number | null {
-  const dts: number[] = [];
-  for (let i = 1; i < observations.length; i += 1) {
-    const dt = observations[i]!.timeUs - observations[i - 1]!.timeUs;
-    if (dt > 0) dts.push(dt);
-  }
-  if (dts.length === 0) return null;
-  dts.sort((a, b) => a - b);
-  const mid = Math.floor(dts.length / 2);
-  return dts.length % 2 === 0 ? (dts[mid - 1]! + dts[mid]!) / 2 : dts[mid]!;
+  referenceIntervalUs: number | null;
+  excludedByPolicy: boolean;
+  speedIntervalValidityPolicy: string;
 }
 
 function classifyArtifact(
   deltaTimeUs: number,
-  medianUs: number | null,
+  referenceIntervalUs: number | null,
   prev: Observation,
   curr: Observation,
+  excludedByPolicy: boolean,
 ): { kind: MaxSpeedArtifactKind; note: string | null } {
   const currFlags = curr.qualityFlags ?? [];
   const prevFlags = prev.qualityFlags ?? [];
 
+  if (excludedByPolicy) {
+    return {
+      kind: 'container_timestamp_compression',
+      note: `Excluded from scientific speed by ${SPEED_INTERVAL_VALIDITY_ID}: Δt ${deltaTimeUs} µs below reference threshold (reference interval ${referenceIntervalUs != null ? Math.round(referenceIntervalUs) : 'unknown'} µs). Unfiltered value preserved as diagnostic.`,
+    };
+  }
+
   if (currFlags.includes('speed_outlier') || prevFlags.includes('speed_outlier')) {
     return {
       kind: 'tracking_speed_outlier_flag',
-      note:
-        'Tracking flagged a speed outlier on this interval. Max speed still follows MS-5 D12 (valid when Δt > 0).',
-    };
-  }
-
-  if (medianUs != null && deltaTimeUs > 0 && deltaTimeUs < medianUs * 0.05) {
-    return {
-      kind: 'container_timestamp_compression',
-      note: `Container timestamps compress to ${deltaTimeUs} µs between frames ${prev.frameIndex} and ${curr.frameIndex} (median interval ${Math.round(medianUs)} µs). Displacement is plausible at normal frame spacing but inflates instantaneous speed.`,
-    };
-  }
-
-  if (deltaTimeUs > 0 && deltaTimeUs <= 1000) {
-    return {
-      kind: 'container_timestamp_compression',
-      note: `Sub-millisecond Δt (${deltaTimeUs} µs) between consecutive frames inflates instantaneous speed per MS-5 D12 valid-interval rules.`,
+      note: 'Tracking flagged speed_outlier on this interval; interval passed timestamp-quality gate.',
     };
   }
 
   return { kind: 'tracking_jump', note: null };
 }
 
-/** Read-only audit of the max-speed contributing pair; does not alter measures. */
+/** Read-only audit of raw max-speed pair vs quality-gated scientific max. */
 export function auditMaxSpeedInterval(
   observations: Observation[],
   trialStartUs: number,
   censorUs: number,
 ): MaxSpeedIntervalAudit | null {
   const inTrial = filterInTrialObservations(observations, trialStartUs, censorUs);
-  const medianUs = medianIntervalUs(inTrial);
+  const reference = resolveSpeedIntervalReference(inTrial, undefined, trialStartUs, censorUs);
+  const metrics = computePathSpeedMetrics(observations, trialStartUs, censorUs);
 
-  let maxSpeed = 0;
+  let maxSpeedRaw = 0;
   let best: MaxSpeedIntervalAudit | null = null;
 
   for (let i = 1; i < inTrial.length; i += 1) {
@@ -104,12 +95,26 @@ export function auditMaxSpeedInterval(
       curr.bodyXY.y - prev.bodyXY.y,
     );
     const speed = distancePx / (deltaTimeUs / 1_000_000);
-    if (speed <= maxSpeed) continue;
+    if (speed <= maxSpeedRaw) continue;
 
-    maxSpeed = speed;
-    const artifact = classifyArtifact(deltaTimeUs, medianUs, prev, curr);
+    maxSpeedRaw = speed;
+    const exclusion = classifySpeedIntervalExclusion(
+      deltaTimeUs,
+      reference.referenceIntervalUs,
+      prev,
+      curr,
+    );
+    const excludedByPolicy = exclusion === 'timestamp_compression';
+    const artifact = classifyArtifact(
+      deltaTimeUs,
+      reference.referenceIntervalUs,
+      prev,
+      curr,
+      excludedByPolicy,
+    );
     best = {
       maxSpeedPxPerSec: speed,
+      maxSpeedQualityGatedPxPerSec: metrics.maxSpeedPxPerSec,
       prevFrameIndex: prev.frameIndex,
       currFrameIndex: curr.frameIndex,
       prevTimeUs: prev.timeUs,
@@ -122,7 +127,9 @@ export function auditMaxSpeedInterval(
       currQualityFlags: curr.qualityFlags,
       artifactKind: artifact.kind,
       artifactNote: artifact.note,
-      medianIntervalUs: medianUs,
+      referenceIntervalUs: reference.referenceIntervalUs,
+      excludedByPolicy,
+      speedIntervalValidityPolicy: metrics.speedIntervalValidityPolicy,
     };
   }
 

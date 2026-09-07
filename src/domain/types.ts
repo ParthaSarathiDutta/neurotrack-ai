@@ -315,6 +315,9 @@ export interface MeasuresSnapshot {
   pathLength: MeasureValue;
   meanSpeed: MeasureValue;
   maxSpeed: MeasureValue;
+  /** Unfiltered D12 speed aggregates — diagnostic when timestamp-quality gating applies. */
+  meanSpeedDiagnostic?: MeasureValue | null;
+  maxSpeedDiagnostic?: MeasureValue | null;
   targetQuadrantFraction: MeasureValue;
   targetQuadrantTimeSec: MeasureValue;
   searchStrategy: SearchStrategyResult;

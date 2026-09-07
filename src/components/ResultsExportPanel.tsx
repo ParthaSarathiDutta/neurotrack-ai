@@ -14,9 +14,7 @@ import {
 import { buildNeuroTrackBundle, bundleFileName, serializeNeuroTrackBundle } from '../domain/export/bundleExport';
 import { formatMeasureForDisplay } from '../domain/export/measureEncoding';
 import { escapeEventFromList, escapeStateSummary } from '../domain/export/escapeSummary';
-import { resolveMeasurementObservations } from '../domain/trajectory/measurementObservations';
-import { censorBoundaryTimeUs, confirmedTargetHoleId, effectiveTrialStartUs } from '../domain/events/holeProximity';
-import { auditMaxSpeedInterval } from '../domain/measures/maxSpeedAudit';
+import { confirmedTargetHoleId, effectiveTrialStartUs } from '../domain/events/holeProximity';
 import styles from '../styles/app.module.css';
 
 interface ResultsExportPanelProps {
@@ -51,15 +49,11 @@ export function ResultsExportPanel({
   const events = trial.events;
   const targetConfirmed = confirmedTargetHoleId(trial.geometry) != null;
   const trialStart = effectiveTrialStartUs(trial.trialWindow);
-  const censorUs = censorBoundaryTimeUs(trial.trialWindow, trial.timestampIndex);
   const escapeEv = escapeEventFromList(events?.events ?? []);
-
-  const maxSpeedAudit = useMemo(() => {
-    if (trialStart == null || censorUs == null || !measures?.maxSpeed.value) return null;
-    const resolved = resolveMeasurementObservations(trial.track, trial.measurementBasis ?? 'corrected');
-    if (resolved.unavailable) return null;
-    return auditMaxSpeedInterval(resolved.observations, trialStart, censorUs);
-  }, [trial.track, trial.measurementBasis, trialStart, censorUs, measures?.maxSpeed.value]);
+  const speedPolicyStale =
+    measures != null &&
+    (measures.maxSpeed.definitionId === 'max_speed.v1' ||
+      measures.meanSpeed.definitionId === 'mean_speed.v1');
 
   const handleExportTrialCsv = () => {
     const csv = buildCombinedCsvReport(buildSessionCsvFiles(trialExport));
@@ -116,6 +110,13 @@ export function ResultsExportPanel({
         </p>
       )}
 
+      {speedPolicyStale && (
+        <p className={styles.warning} data-testid="speed-policy-stale">
+          Speed measures use legacy v1 definitions — click &quot;Recompute measures from events&quot; to apply
+          speed_interval_validity.v1 without re-detecting events.
+        </p>
+      )}
+
       <div data-testid="results-report" className={styles.resultsReport}>
         <h4>Results report — {trial.label}</h4>
         <dl className={styles.measureGrid}>
@@ -154,13 +155,31 @@ export function ResultsExportPanel({
               <ReportMeasureRow label="Path length" testId="report-path-length" measure={measures.pathLength} />
               <ReportMeasureRow label="Mean speed" testId="report-mean-speed" measure={measures.meanSpeed} />
               <ReportMeasureRow label="Max speed" testId="report-max-speed" measure={measures.maxSpeed} />
-              {maxSpeedAudit?.artifactNote && (
+              {measures.meanSpeedDiagnostic && (
+                <ReportMeasureRow
+                  label="Mean speed (diagnostic)"
+                  testId="report-mean-speed-diagnostic"
+                  measure={measures.meanSpeedDiagnostic}
+                />
+              )}
+              {measures.maxSpeedDiagnostic && (
+                <ReportMeasureRow
+                  label="Max speed (diagnostic)"
+                  testId="report-max-speed-diagnostic"
+                  measure={measures.maxSpeedDiagnostic}
+                />
+              )}
+              {measures.maxSpeed.assumptions.some((a) => a.startsWith('excluded_timestamp_compression:')) && (
                 <>
-                  <dt>Max speed audit</dt>
-                  <dd data-testid="report-max-speed-audit" className={styles.diagnosticNote}>
-                    Frames {maxSpeedAudit.prevFrameIndex}→{maxSpeedAudit.currFrameIndex} (
-                    {maxSpeedAudit.deltaTimeUs} µs Δt, {maxSpeedAudit.distancePx.toFixed(2)} px):{' '}
-                    {maxSpeedAudit.artifactNote}
+                  <dt>Speed interval exclusions</dt>
+                  <dd data-testid="report-speed-exclusions" className={styles.diagnosticNote}>
+                    {measures.maxSpeed.assumptions
+                      .filter(
+                        (a) =>
+                          a.startsWith('excluded_timestamp_compression:') ||
+                          a.startsWith('speed_interval_validity'),
+                      )
+                      .join(' · ')}
                   </dd>
                 </>
               )}

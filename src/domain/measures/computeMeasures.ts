@@ -9,6 +9,7 @@ import type {
   Observation,
   OperationalDefinitionSelections,
   TrialWindow,
+  TimestampIndexEntry,
 } from '../types';
 import {
   censorBoundaryTimeUs,
@@ -75,7 +76,7 @@ export function computeMeasures(
   events: BehavioralEvent[],
   geometry: Geometry,
   trialWindow: TrialWindow,
-  timestampIndex: { timeUs: number }[],
+  timestampIndex: TimestampIndexEntry[],
   params: EventDetectionParams,
   opDefs: OperationalDefinitionSelections,
   basisUsed: MeasurementBasis,
@@ -85,7 +86,7 @@ export function computeMeasures(
   if (trialStart == null || censorUs == null) return null;
 
   const targetId = confirmedTargetHoleId(geometry);
-  const pathMetrics = computePathSpeedMetrics(observations, trialStart, censorUs);
+  const pathMetrics = computePathSpeedMetrics(observations, trialStart, censorUs, timestampIndex);
   const pxPerCm = geometry.pxPerCm;
   const lengthUnit = pxPerCm ? 'cm' : 'px';
   const speedUnit = pxPerCm ? 'cm/s' : 'px/s';
@@ -94,6 +95,12 @@ export function computeMeasures(
     ? pathMetrics.meanSpeedPxPerSec / pxPerCm
     : pathMetrics.meanSpeedPxPerSec;
   const maxSpeed = pxPerCm ? pathMetrics.maxSpeedPxPerSec / pxPerCm : pathMetrics.maxSpeedPxPerSec;
+  const meanSpeedRaw = pxPerCm
+    ? pathMetrics.meanSpeedRawPxPerSec / pxPerCm
+    : pathMetrics.meanSpeedRawPxPerSec;
+  const maxSpeedRaw = pxPerCm
+    ? pathMetrics.maxSpeedRawPxPerSec / pxPerCm
+    : pathMetrics.maxSpeedRawPxPerSec;
 
   const pathAssumptions: string[] = [`basis:${basisUsed}`];
   if (pathMetrics.includesInterpolatedSegments) pathAssumptions.push('includes_interpolated_segments');
@@ -101,6 +108,30 @@ export function computeMeasures(
     pathAssumptions.push(`excluded_gap_us:${pathMetrics.pathLengthExcludedGapUs}`);
   }
   if (!pxPerCm) pathAssumptions.push('scale_unavailable_px');
+
+  const speedQualityAssumptions = [
+    ...pathAssumptions,
+    pathMetrics.speedIntervalValidityPolicy,
+    `quality_gated_intervals:${pathMetrics.qualityGatedIntervalCount}`,
+    `raw_intervals:${pathMetrics.rawSpeedIntervalCount}`,
+    `excluded_zero_dt:${pathMetrics.excludedZeroDtPairs}`,
+    `excluded_timestamp_compression:${pathMetrics.excludedTimestampCompressionPairs}`,
+  ];
+  const speedDiagnosticAssumptions = [
+    ...pathAssumptions,
+    'diagnostic:unfiltered_d12_speed',
+    `raw_intervals:${pathMetrics.rawSpeedIntervalCount}`,
+    `excluded_zero_dt:${pathMetrics.excludedZeroDtPairs}`,
+  ];
+  const meanSpeedFlags =
+    pathMetrics.excludedTimestampCompressionPairs > 0 ? ['timestamp_quality_gated'] : [];
+  const maxSpeedFlags = [...meanSpeedFlags];
+  if (
+    pathMetrics.excludedTimestampCompressionPairs > 0 &&
+    pathMetrics.maxSpeedRawPxPerSec > pathMetrics.maxSpeedPxPerSec * 1.5
+  ) {
+    maxSpeedFlags.push('raw_diagnostic_exceeds_gated');
+  }
 
   const firstTarget = firstTargetInvestigation(events, targetId, opDefs.primaryLatencyVariant);
   const esc = escapeEvent(events);
@@ -309,24 +340,61 @@ export function computeMeasures(
       assumptions: pathAssumptions,
     }),
     meanSpeed: mv({
-      value: meanSpeed,
+      value: pathMetrics.qualityGatedIntervalCount > 0 ? meanSpeed : null,
+      unavailable: pathMetrics.qualityGatedIntervalCount === 0,
+      unavailableReason:
+        pathMetrics.qualityGatedIntervalCount === 0
+          ? 'No timestamp-quality-valid speed intervals after gating.'
+          : null,
       unit: speedUnit,
-      definitionId: 'mean_speed.v1',
+      definitionId: 'mean_speed.v2',
+      definitionVersion: '2',
       definitionLabel: 'Mean speed',
-      definitionSummary: 'Time-weighted mean over valid intervals',
-      assumptions: [
-        ...pathAssumptions,
-        `valid_intervals:${pathMetrics.validSpeedIntervalCount}`,
-        `excluded_zero_dt:${pathMetrics.excludedZeroDtPairs}`,
-      ],
+      definitionSummary:
+        'Time-weighted mean over timestamp-quality-valid intervals (speed_interval_validity.v1)',
+      assumptions: speedQualityAssumptions,
+      flags: meanSpeedFlags,
+    }),
+    meanSpeedDiagnostic: mv({
+      value: pathMetrics.rawSpeedIntervalCount > 0 ? meanSpeedRaw : null,
+      unavailable: pathMetrics.rawSpeedIntervalCount === 0,
+      unavailableReason:
+        pathMetrics.rawSpeedIntervalCount === 0 ? 'No raw D12 speed intervals.' : null,
+      unit: speedUnit,
+      definitionId: 'mean_speed_diagnostic.v1',
+      definitionVersion: '1',
+      definitionLabel: 'Mean speed (unfiltered diagnostic)',
+      definitionSummary: 'Time-weighted mean over all D12 Δt>0 intervals without timestamp-quality gate',
+      assumptions: speedDiagnosticAssumptions,
+      flags: ['diagnostic_only'],
     }),
     maxSpeed: mv({
-      value: maxSpeed,
+      value: pathMetrics.maxSpeedQualityValid ? maxSpeed : null,
+      unavailable: !pathMetrics.maxSpeedQualityValid,
+      unavailableReason: !pathMetrics.maxSpeedQualityValid
+        ? 'No timestamp-quality-valid speed intervals after gating.'
+        : null,
       unit: speedUnit,
-      definitionId: 'max_speed.v1',
+      definitionId: 'max_speed.v2',
+      definitionVersion: '2',
       definitionLabel: 'Max speed',
-      definitionSummary: 'Max instantaneous speed over valid intervals',
-      assumptions: pathAssumptions,
+      definitionSummary:
+        'Max instantaneous speed over timestamp-quality-valid intervals (speed_interval_validity.v1)',
+      assumptions: speedQualityAssumptions,
+      flags: maxSpeedFlags,
+    }),
+    maxSpeedDiagnostic: mv({
+      value: pathMetrics.rawSpeedIntervalCount > 0 ? maxSpeedRaw : null,
+      unavailable: pathMetrics.rawSpeedIntervalCount === 0,
+      unavailableReason:
+        pathMetrics.rawSpeedIntervalCount === 0 ? 'No raw D12 speed intervals.' : null,
+      unit: speedUnit,
+      definitionId: 'max_speed_diagnostic.v1',
+      definitionVersion: '1',
+      definitionLabel: 'Max speed (unfiltered diagnostic)',
+      definitionSummary: 'Max over all D12 Δt>0 intervals without timestamp-quality gate',
+      assumptions: speedDiagnosticAssumptions,
+      flags: ['diagnostic_only'],
     }),
     targetQuadrantFraction: quadrantUnavailable
       ? mv({
@@ -370,7 +438,7 @@ export function measuresFromAnalysis(
   analysis: EventAnalysis,
   geometry: Geometry,
   trialWindow: TrialWindow,
-  timestampIndex: { timeUs: number }[],
+  timestampIndex: TimestampIndexEntry[],
 ): MeasuresSnapshot | null {
   return computeMeasures(
     observations,
