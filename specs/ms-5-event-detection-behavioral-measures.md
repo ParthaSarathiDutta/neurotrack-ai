@@ -3,7 +3,11 @@
 Branch: `ms-5-event-detection-behavioral-measures`
 Base: `main` @ `e3ef219` (MS-4 complete)
 Constitution reference: `specs/constitution.md` → MS-5
-Status: **Plan only — not implemented**
+Status: **Plan only — revised per review (not implemented)**
+
+**Revision:** `b8cc1e7` → this commit. Architecture approved; scientific definitions corrected per Q1–Q10 decisions and plan-level review (September 6, 2026).
+
+---
 
 ## Inspection summary
 
@@ -24,12 +28,33 @@ Before writing this spec, the following were read and inspected:
 
 Key repository facts that shape MS-5:
 
-1. **MS-3 `absent_in_hole` is provisional and target-gated.** `classifyMissingObservation()` emits `absent_in_hole` only when `geometry.targetHoleConfirmedAt` is set, the nearest hole is the confirmed target, and a multi-frame temporal gate passes (hole interaction streak, area collapse, shrink/slow evidence). Non-target disappearances remain `lost`. This is **not** an escape event — MS-5 must build separate, reviewable events on top.
-2. **Observations do not store blob area or hole-darkening signals.** Escape evidence that depends on pixel statistics requires either (a) a lightweight on-demand frame pass over candidate windows via the existing `frame-worker`, or (b) extending the tracking worker — (a) is recommended to avoid re-tracking and to keep MS-3 raw observations immutable.
-3. **Nose is often absent by design.** MS-3 emits `noseXY` only when heading and shape agree; many rim/occlusion frames are body-only. Event detection must degrade gracefully — never infer a nose from body geometry.
-4. **Trajectory input for measures:** `resolveEffectiveObservations()` merges raw → manual → consumable cleaning. If applied cleaning is stale, measures fall back to **corrected-only** trajectory with a visible warning — never silently use stale cleaning (`consumableCleanedObservations()` returns `null`).
-5. **Target hole and `pxPerCm` may be unknown.** `Geometry.targetHoleConfirmedAt` and `Geometry.pxPerCm` are nullable; target-dependent measures must be `unavailable`, not fabricated.
-6. **All three sample clips end mid-entry** (constitution finding #3–#4). MS-5 validation must expect **right-censored total latency** on all three, never a silent “never escaped” or a numeric total latency equal to clip duration without a censor flag.
+1. **MS-3 `absent_in_hole` is provisional and target-gated.** Not an escape event — MS-5 builds separate, reviewable events on top.
+2. **Observations do not store blob area or hole-darkening signals.** Bounded on-demand frame pass for escape candidates only.
+3. **Nose is often absent by design.** Body fallback with explicit confidence; never synthetic nose.
+4. **Target hole and `pxPerCm` may be unknown.** Target-dependent measures stay `unavailable`; **validation must not assign sample target holes to make tests pass.**
+5. **All three sample clips end mid-entry** (constitution). Expect **incomplete-entry censoring** when progressive evidence exists — distinct from trials that simply end without observed entry evidence.
+
+---
+
+## Operational definitions (versioned, explicit)
+
+Published Barnes maze protocols disagree on latency, errors, and search-strategy criteria. NeuroTrack AI **must not present one threshold set as universal truth**. Every measure carries:
+
+- `definitionId` — stable identifier (e.g. `primary_latency.v1`)
+- `definitionVersion` — semver or integer bump when formulas change
+- `definitionLabel` — human-readable name shown in UI
+- `definitionSummary` — one-sentence operational rule
+- `parametersSnapshot` — thresholds used for this computation
+
+Session-level `AnalysisParams.operationalDefinitions` selects among **supported variants** (not free-form text). Defaults are NeuroTrack recommendations, labeled as such.
+
+| Definition | Default variant | Configurable alternatives |
+|---|---|---|
+| Primary latency | `first_target_investigation` (Q1 ✓) | `first_target_proximity`, `first_target_investigation_confirmed_only` |
+| Total latency | `protocol_completion_time` (Q8 ✓) | See D5 — completion event, not entry onset |
+| Primary / total errors | `confirmed_investigations` (Q9 ✓) | Provisional counts reported separately |
+| Target quadrant | `target_centered_90` (Q3 ✓) | `fixed_orientation_90` (compass-aligned) |
+| Search strategy | `heuristic_v1` (Q10 ✓) | Versioned; thresholds editable; `unclassified` allowed |
 
 ---
 
@@ -39,299 +64,415 @@ Key repository facts that shape MS-5:
 
 | # | Requirement |
 |---|---|
-| RA1 | Detect discrete **investigation** events per hole from trajectory + geometry, distinct from escape entry. |
-| RA2 | Investigation evidence combines **proximity** (nose preferred, body fallback), **dwell time** (container `timeUs` span), and optional **approach motion** (radial velocity toward hole center using real Δt). |
-| RA3 | Every auto-detected investigation carries **evidence** (distances, dwell, approach speed, nose vs body basis, frame range) and a **confidence** tier (`high` / `medium` / `low`), not a fabricated probability. |
-| RA4 | All thresholds are **visible, editable**, stored in `AnalysisParams.events`, and changing a threshold **immediately recomputes** auto events (manual events preserved per D9). |
-| RA5 | Scientist can **confirm**, **reject**, **add**, and **edit** investigations; manual events carry `origin: 'manual'` and survive reload. |
-| RA6 | Rejected auto events stay auditable (not deleted silently) with `status: 'rejected'`. |
-| RA7 | Investigations are keyed by `startFrameIndex` / `endFrameIndex` for identity; `startTimeUs` / `endTimeUs` copied from `timestampIndex` for all timing. |
-| RA8 | Pre-trial frames (`absent_pre_trial`) never contribute to investigations. |
+| RA1 | Detect discrete **investigation** events per hole, distinct from escape completion. |
+| RA2 | Evidence: proximity (nose preferred, body fallback), dwell (`timeUs`), optional approach motion (real Δt). |
+| RA3 | Each auto event: evidence object + confidence (`high` / `medium` / `low`); not a fabricated probability. |
+| RA4 | Thresholds visible, editable, versioned in `AnalysisParams.events`; changes recompute auto events (manual preserved per D9). |
+| RA5 | Scientist can confirm, reject, add, edit investigations; manual events persist with provenance. |
+| RA6 | Rejected events remain auditable (`status: 'rejected'`). |
+| RA7 | Identity: `startFrameIndex` / `endFrameIndex`; timing: `startTimeUs` / `endTimeUs` from container. |
+| RA8 | Pre-trial frames never contribute. |
+| RA9 | Error model distinguishes **distinct-hole errors** vs **re-visit errors** (Q2 ✓). |
 
 ### B. Escape detection and censoring
 
 | # | Requirement |
 |---|---|
-| RB1 | Escape is detected from **temporal progressive evidence**, not a single disappearance frame or binary blob-present rule. |
-| RB2 | Escape evidence combines: (1) sustained proximity to a **specific hole**, (2) **area decay** and/or motion loss in a trailing window, (3) optional **hole-region darkening** from a bounded frame pass — matching constitution finding #3. |
-| RB3 | Distinguish three outcomes: **`escape_entry`** (completed entry with sufficient evidence), **`escape_censored`** (entry in progress or unconfirmed at trial end / protocol cutoff), and **`tracking_loss`** (mid-platform or non-hole loss — never an escape). |
-| RB4 | **Do not assume completed escape** on any sample clip. End-of-recording descent with progressive evidence → **`escape_censored`**, not `escape_entry`, unless evidence crosses the completion threshold (likely never on supplied clips). |
-| RB5 | Censored total latency is reported with `censored: true` and explicit reason (`recording_end` | `protocol_cutoff`); never emit an uncensored number equal to clip duration without a flag. |
-| RB6 | MS-3 `absent_in_hole` observations are **supporting evidence only**, never auto-promoted to escape events without MS-5's full evidence model. |
-| RB7 | Escape events show evidence panel (hole id, evidence scores, frame/time range, censor reason if applicable). |
-| RB8 | Scientist can confirm, reject, or manually mark escape / censoring with provenance. |
+| RB1 | Escape from **temporal progressive evidence**, not single disappearance or binary present/absent. |
+| RB2 | Evidence: hole proximity, area decay / motion loss, optional hole darkening (bounded pixel pass). |
+| RB3 | Distinguish **four** outcomes (Q8 ✓): `escape_completed`, `escape_incomplete_censored`, `trial_censored_no_entry`, and **no escape record** (tracking loss / insufficient evidence). |
+| RB4 | Never infer **completion** from recording end. Total latency refers to **protocol completion time**, not entry onset. |
+| RB5 | When completion unobserved, preserve **observed follow-up duration** as a explicit **lower bound** on total latency. |
+| RB6 | Censor boundary (`recording_end` | `protocol_cutoff`) is separate from entry onset and completion time. |
+| RB7 | MS-3 `absent_in_hole` is supporting evidence only. |
+| RB8 | Escape records show evidence; pixel pass may be incomplete — must surface `evidenceComplete: false` (Q4 ✓). |
+| RB9 | Scientist can confirm, reject, or manually mark escape states with provenance. |
 
 ### C. Behavioral measures
 
 | # | Requirement |
 |---|---|
-| RC1 | Compute from the **measurement trajectory** (see D2): primary latency, total latency, primary errors, total errors, path length, mean speed, max speed, time in target quadrant, search strategy. |
-| RC2 | Each measure is a structured value: `{ value, unit, censored, unavailable, unavailableReason?, definitionId, assumptions[], flags[] }` — never a bare number in persistence. |
-| RC3 | **Primary latency** — time from trial start to first target-hole investigation (see D5; subject to approval). |
-| RC4 | **Total latency** — time from trial start to `escape_entry.startTimeUs`; if censored, `value = null`, `censored = true`, `flags` include censor reason. |
-| RC5 | **Primary errors** — count of non-target hole investigations whose **start** occurs strictly before first target investigation; unavailable if target unknown. |
-| RC6 | **Total errors** — count of non-target investigations before escape/censoring end boundary; unavailable if target unknown. |
-| RC7 | **Path length** — sum of Euclidean body displacements between consecutive in-trial frames with valid `bodyXY`, using only adjacent `timeUs` pairs; units cm if `pxPerCm` known else px with flag. |
-| RC8 | **Speed** — instantaneous speed from body displacements / Δ`timeUs`; report mean and max over in-trial tracked frames; same unit rules as path length. |
-| RC9 | **Target quadrant time** — fraction or seconds in the 90° sector centered on the confirmed target hole (see D6); unavailable if target unknown. |
-| RC10 | **Search strategy** — classify as `spatial`, `serial`, or `random` with **reasoning metrics shown**; scientist can **override** with persisted provenance. |
-| RC11 | Assumption violations (e.g. start not near platform center) add `assumptions[]` flags; do not silently score as spatial. |
-| RC12 | Measures recompute when trajectory, events, thresholds, target, geometry, window, or scale change — without re-tracking. |
+| RC1 | Compute from user-selected **measurement basis** (D2): Raw / Corrected / Cleaned. |
+| RC2 | Structured values: `{ value, unit, censored, unavailable, lowerBound?, definitionId, definitionVersion, assumptions[], flags[] }`. |
+| RC3 | **Primary latency** — configurable operational definition (default: first target investigation). |
+| RC4 | **Total latency** — time to **completion** when observed; censored with lower bound when not (D5). |
+| RC5 | **Errors** — finalized counts use **confirmed** investigations only; provisional counts shown separately (Q9 ✓). |
+| RC6 | Error breakdown: `distinctHoleErrors`, `revisitErrors` (Q2 ✓). |
+| RC7 | **Path length** — D12 rules (spatial sum; duplicate PTS handled separately from speed). |
+| RC8 | **Speed** — D12: valid intervals only; time-weighted mean; max over valid intervals. |
+| RC9 | **Target quadrant** — convention selectable (D6). |
+| RC10 | **Search strategy** — versioned heuristics; `unclassified` when insufficient evidence (Q10 ✓); override persisted. |
+| RC11 | Noncentral start → **assumption flag**, not automatic `random` classification. |
+| RC12 | Measures recompute on basis, trajectory, events, thresholds, target, geometry, window, scale — without re-tracking. |
 
 ### D. Scientific invariants
 
 | # | Requirement |
 |---|---|
-| RD1 | **`frameIndex`** is identity for events, corrections, and frame navigation; **`timeUs`** is authoritative for all latencies, dwells, speeds, and censor boundaries. |
-| RD2 | Never infer timing from nominal FPS, `frameIndex` deltas, or `nb_frames` metadata. |
-| RD3 | Never mutate `track.observations` (raw MS-3 output). Events and measures are derived layers on `TrialRecord`. |
-| RD4 | Never consume **stale** applied cleaning; fall back to corrected-only with warning (D2). |
-| RD5 | Never invent target hole identity or platform diameter — unavailable beats fabricated. |
-| RD6 | Preserve uncertainty: distinguish `auto`, `manual`, `interpolated`, `smoothed` trajectory origins in measure assumptions when cleaning was used. |
-| RD7 | Missing nose: investigations may use body with wider threshold and `low` confidence; never synthesize nose for event detection. |
+| RD1 | `frameIndex` = identity; `timeUs` = authoritative timing. |
+| RD2 | Never infer time from FPS or frame index. |
+| RD3 | Never mutate raw `track.observations`. |
+| RD4 | Never consume stale cleaning; Cleaned basis unavailable with explanation when stale. |
+| RD5 | Unknown target / scale → unavailable, never invented (including validation). |
+| RD6 | Trajectory provenance (`origin`) reflected in assumptions when basis ≠ raw. |
+| RD7 | Missing nose: body fallback with low confidence; never synthetic nose. |
 
 ### E. Manual review and recomputation
 
 | # | Requirement |
 |---|---|
-| RE1 | New **Events & Measures** panel in review view: event list, threshold controls, measure summary, evidence/reasoning disclosure. |
-| RE2 | Selecting an event seeks the player to `startFrameIndex` (identity), displays times from `timeUs`. |
-| RE3 | Event edits persist via Dexie / `migration.ts`. |
-| RE4 | Recomputation matrix (D10) is implemented consistently in store actions. |
-| RE5 | Re-run tracking clears events and measures (same discipline as corrections/cleaning). |
-| RE6 | Keyboard-accessible, labeled controls; `data-testid`s for Playwright. |
+| RE1 | **Events & Measures** panel: basis selector, definitions disclosure, thresholds, provisional vs confirmed counts, measures. |
+| RE2 | Event selection seeks `startFrameIndex`; times from `timeUs`. |
+| RE3 | Persist via Dexie / `migration.ts`. |
+| RE4 | Recomputation matrix (D10). |
+| RE5 | **Explicit “Detect events”** action for first run (Q6 ✓); auto re-detect when inputs change. |
+| RE6 | Re-run tracking clears events and measures. |
+| RE7 | Keyboard-accessible; `data-testid`s for Playwright. |
 
-### F. Scope boundary (MS-5 does NOT include)
+### F. Scope boundary
 
 | # | Requirement |
 |---|---|
-| RF1 | **No CSV/XLSX export** — MS-6. Measures must be structured for export but not exported yet. |
-| RF2 | **No trajectory heat maps, learning curves, or publication figures** — MS-6. |
-| RF3 | **No cohort batch queue** — stretch. |
-| RF4 | **No ML pose upgrade** — only if classical evidence proves insufficient, record in `AI_NOTES.md`; not default MS-5 scope. |
-| RF5 | **No per-filename tuning** — thresholds are global defaults validated on all three clips, not branched on `test50`/`test51`/`test53`. |
+| RF1 | No CSV/XLSX export (MS-6). |
+| RF2 | No publication figures / heat maps (MS-6). |
+| RF3 | No cohort batch queue. |
+| RF4 | No ML pose upgrade by default. |
+| RF5 | No per-filename tuning. |
+
+---
+
+## Approved decisions (Q1–Q10)
+
+| ID | Decision | Spec binding |
+|---|---|---|
+| **Q1** | Primary latency = first target **investigation**; **configurable** definition variants | D5, Operational definitions table |
+| **Q2** | Re-visits = separate errors; **distinct-hole vs re-visit** in data model | D7, `ErrorCounts` |
+| **Q3** | Target-centered 90° default; **fixed-orientation** option | D6 |
+| **Q4** | Bounded pixel evidence; **no silent truncation** | D4, D4b |
+| **Q5** | **Raw / Corrected / Cleaned** basis selector; default **corrected-only** | D2 |
+| **Q6** | Explicit **Detect events** initially; auto re-detect on input change | D10, Plan §11 |
+| **Q7** | Auto events **proposed** until reviewed | D9 |
+| **Q8** | Three censor/escape states + completion vs onset vs boundary + lower bound | D4, D5 |
+| **Q9** | Provisional vs **confirmed** counts; finalized measures use confirmed only | D7, D9 |
+| **Q10** | No mandatory center-start for spatial; **unclassified** allowed; versioned heuristics | D8 |
 
 ---
 
 ## Decisions
 
-### D1 — Events and measures are derived layers on `TrialRecord`
-
-Extend the constitution contract:
+### D1 — Derived layers on `TrialRecord`
 
 ```typescript
 TrialRecord.events: EventAnalysis | null
 TrialRecord.measures: MeasuresSnapshot | null
+TrialRecord.measurementBasis: MeasurementBasis  // persisted per trial
+
 AnalysisParams.events: EventDetectionParams
 AnalysisParams.quadrantConvention: QuadrantConvention
+AnalysisParams.operationalDefinitions: OperationalDefinitionSelections
+AnalysisParams.measurementBasisDefault: MeasurementBasis  // default 'corrected'
 ```
 
-`EventAnalysis` holds auto + manual events, params snapshot, `computedAt`, and optional `stale` / `staleReason` (mirrors applied-cleaning pattern). Raw tracking untouched.
+`EventAnalysis`: events, params snapshot, `computedAt`, optional `stale` / `staleReason`.
 
-### D2 — Measurement trajectory selection (recommended)
+### D2 — Measurement basis (Q5 ✓)
 
-Priority order for measure/event input:
+```typescript
+type MeasurementBasis = 'raw' | 'corrected' | 'cleaned';
+```
 
-1. If `consumableCleanedObservations(track)` is non-null → use cleaned + corrected trajectory; set measure flag `trajectory_basis: 'cleaned'`.
-2. Else if corrected trajectory exists → use `resolveEffectiveObservations()` without stale cleaning; flag `trajectory_basis: 'corrected'`.
-3. If track missing or no in-trial body points → measures `unavailable`.
-
-Never use stale `appliedCleaning`. UI shows a banner when measures run on corrected-only because cleaning is stale.
-
-**Tradeoff:** Some labs prefer raw-only measures; we defer raw-only mode to MS-6 export options unless you approve adding a toggle in MS-5.
-
-### D3 — Investigation detection algorithm (recommended)
-
-**Per-frame scoring (in-trial only):** For each hole `h`, compute:
-
-- `d_nose = dist(noseXY, h)` if `noseXY != null`
-- `d_body = dist(bodyXY, h)` if `bodyXY != null`
-- `d = d_nose` if nose present, else `d_body` (never both blended into one fake point)
-
-**Proximity thresholds** (defaults as fractions of `platformRadiusPx`):
-
-| Parameter | Default | Role |
+| Basis | Source | When unavailable |
 |---|---|---|
-| `investigationNoseProximityFraction` | 0.10 | Nose within this → in-zone |
-| `investigationBodyProximityFraction` | 0.14 | Body-only within this → in-zone (wider) |
-| `investigationMinDwellUs` | 400_000 (0.4 s) | Minimum contiguous in-zone span |
-| `investigationMergeGapUs` | 300_000 | Merge same-hole segments separated by ≤ this gap |
-| `investigationMinApproachSpeedPxPerSec` | null (off by default) | Optional radial approach filter |
+| **raw** | `track.observations` | No track |
+| **corrected** | manual corrections applied to raw (**default**) | No track |
+| **cleaned** | `consumableCleanedObservations()` only | Stale/missing applied cleaning → unavailable with banner; offer corrected fallback in UI |
 
-**Dwell** accumulates only while in-zone and `observed !== 'absent_pre_trial'`. Gaps in body/nose during dwell pause accumulation but do not reset if gap ≤ `investigationMergeGapUs`.
+**Implementation:** `resolveMeasurementObservations(track, basis)` pure function. UI selector in Events & Measures panel; persisted on `TrialRecord.measurementBasis`. Measures snapshot records `basisUsed` + assumption flags (`interpolated_fraction`, etc.).
 
-**Event creation:** When dwell ≥ `investigationMinDwellUs`, emit investigation with `startTimeUs`/`endTimeUs` from first/last in-zone frame's container times.
+**Tradeoff:** Three bases increase UI surface. Benefit: scientist sees exactly what trajectory produced numbers — not deferred to MS-6.
 
-**Confidence:**
+**Remaining approval:** None — Q5 decided.
 
-- `high` — nose-based dwell ≥ min, no `ambiguous_head_tail` in span
-- `medium` — nose-based with flags, or body-only dwell ≥ min
-- `low` — body-only with `lost`/`low_confidence` frames in span
+### D3 — Investigation detection
 
-**Non-target vs target:** Same detector; error/latency logic uses `geometry.targetHoleId` only when `targetHoleConfirmedAt` is set.
+Same core algorithm as prior plan; additions:
 
-### D4 — Escape detection: progressive evidence score (recommended)
+- **`visitIndex`** on investigation events — 1-based count of visits to that `holeId` (enables re-visit distinction).
+- **`isRevisit: boolean`** — true when `visitIndex > 1`.
 
-Escape is a **separate pipeline stage** from investigations, evaluated per hole candidate near trial end and on `absent_in_hole` streaks.
+**Proximity defaults** (fractions of `platformRadiusPx`, versioned in `EventDetectionParams v1`):
 
-**Phase A — Trajectory-only (always runs, no pixels):**
-
-For each hole `h`, scan trailing window `W` (default last 3 s of in-trial time or from first sustained proximity):
-
-| Signal | Computation |
+| Parameter | Default |
 |---|---|
-| Proximity streak | Consecutive frames with `min(d_nose, d_body) ≤ escapeProximityFraction × R` (default 0.12 × R) |
-| Motion decay | Mean body speed in last N frames vs prior N frames (Δ from `timeUs`) drops below `escapeMotionDecayRatio` (default 0.35) |
-| Position anchor | Last known body/nose near hole `h` |
+| `investigationNoseProximityFraction` | 0.10 |
+| `investigationBodyProximityFraction` | 0.14 |
+| `investigationMinDwellUs` | 400_000 |
+| `investigationMergeGapUs` | 300_000 |
 
-**Phase B — Pixel evidence (on-demand, bounded):**
+**Confidence:** `high` / `medium` / `low` as before. Body-only rim visits → typically `low`.
 
-When Phase A score ≥ `escapePixelPassThreshold` (default: proximity streak ≥ 8 frames at 30 fps equivalent **time span**, not frame count — use ≥ 250 ms), fetch frames via `frame-worker` for `[startFrameIndex .. endFrameIndex]` only:
+### D4 — Escape states and timing (Q8 ✓)
 
-| Signal | Computation |
+Escape is **not** a single `escape_censored` blob. Separate concepts:
+
+#### D4a — Escape event types
+
+| Type | Meaning |
 |---|---|
-| Area decay | Blob area fraction vs recent peak (reuse tracking foreground pipeline on single frames) |
-| Hole darkening | Mean gray in hole disk vs platform background in annulus |
+| `escape_completed` | Protocol completion observed with sufficient evidence |
+| `escape_incomplete_censored` | Progressive entry evidence at a **identified hole**, but completion not observed before censor boundary |
+| `trial_censored_no_entry` | Trial ended (recording or protocol cutoff) **without** sufficient entry evidence at any hole |
+| *(no record)* | Mid-platform tracking loss, rim exploration without entry pattern — not an escape claim |
 
-**Scoring:** Weighted sum → `escapeEvidenceScore` 0–1. Weights exposed as advanced params; defaults conservative.
+#### D4b — Timing fields (all from container `timeUs`)
 
-**Classification:**
-
-| Outcome | Condition |
+| Field | Definition |
 |---|---|
-| `escape_entry` | Score ≥ `escapeConfirmThreshold` (default 0.75) **and** area decay + proximity sustained **and** trial not ended before completion |
-| `escape_censored` | Score ≥ `escapeCensorThreshold` (default 0.45) but below confirm **or** trial/recording ends during progressive entry **or** protocol cutoff reached first |
-| No escape event | Score below censor threshold → no escape event; mid-platform `lost` streaks never score |
+| `entryOnsetTimeUs` | First frame where entry evidence crosses onset threshold (proximity + decay begin) — **not** total latency |
+| `completionTimeUs` | Frame/time where completion criteria met — **null** unless `escape_completed` |
+| `censorBoundaryTimeUs` | `min(recording_end, protocol_cutoff, trial_window_end)` in container time |
+| `observedFollowUpLowerBoundUs` | When completion unobserved but entry onset detected: `censorBoundaryTimeUs − trialStartTimeUs` — explicit lower bound on total latency |
 
-**Sample clips:** Expect **`escape_censored`** at recording end for all three with hole id = confirmed target (when target set). If target unknown, escape may cite hole by proximity only with `assumptions: ['target_unknown_hole_by_proximity']`.
+**Total latency (D5):** Value = `completionTimeUs − trialStartTimeUs` only when `escape_completed`. Otherwise `value: null`, `censored: true`, `lowerBound: observedFollowUpLowerBoundUs` when entry onset exists; if `trial_censored_no_entry`, no lower bound from entry (flag `no_entry_evidence`).
 
-**Tradeoff:** Phase B adds complexity but is necessary to distinguish constitution's progressive descent from mid-platform tracking loss. Phase A alone fails validation criterion “false escape prevention” on rim exploration. **Recommend Phase B for MS-5** with strict window bounding (≤ 150 frames fetched per trial).
+**Never:** Set total latency to censor boundary time without `censored: true` and explicit state.
 
-### D5 — Latency definitions (recommended; **requires approval**)
+#### D4c — Phase A (trajectory) + Phase B (pixel)
 
-| Measure | Definition | Trial start anchor |
-|---|---|---|
-| Primary latency | Time from **trial start** to **start** of first **target-hole investigation** | `trialWindow.startTimeUs` (confirmed or accepted-proposed) |
-| Total latency | Time from trial start to **start** of `escape_entry` | Same start anchor |
+Phase A unchanged in spirit: proximity streak, motion decay, position anchor.
 
-**Alternatives flagged for approval:**
+Phase B (Q4 ✓): On-demand fetch when Phase A passes time-based gate (≥ 250 ms proximity span, not frame count).
 
-- **A (recommended):** Primary = first target **investigation** (matches “reaches target hole” in task brief when investigation = operationalized hole visit).
-- **B:** Primary = first frame nose/body within target proximity regardless of dwell (more sensitive, noisier).
-- **C:** Primary = first target investigation with `confidence !== 'low'`.
+**Pixel budget policy (no silent truncation):**
 
-If **no target investigation** occurs before censoring: primary latency → `censored: true`, `value: null`, flag `no_target_visit`.
+```typescript
+interface PixelEvidenceRequest {
+  startFrameIndex: number;
+  endFrameIndex: number;
+  requestedFrameCount: number;
+}
 
-### D6 — Target quadrant convention (recommended; **requires approval**)
+interface PixelEvidenceResult {
+  framesAnalyzed: number;
+  framesRequested: number;
+  complete: boolean;  // false if budget stopped fetch early
+  unavailableReason?: 'budget_exceeded' | 'frame_worker_error' | 'missing_video_cache';
+  areaDecayScore: number | null;
+  holeDarkeningScore: number | null;
+}
+```
 
-**Target-centered quadrant:** Partition platform into 4 sectors of 90° each, anchored so the **confirmed target hole** lies at the **center** of quadrant 1 (the “target quadrant”). Quadrant boundaries are rays from `platformCenter` at angles `[θ_target − 45°, θ_target + 45°)` etc., where `θ_target = atan2(h_target − center)`.
+- Default soft budget: **300 frames per trial** (raised from 150 — tunable param, not hard silent cap).
+- If window exceeds budget: analyze **trailing** frames first (most recent evidence); set `complete: false`.
+- Classification when incomplete: **downgrade** escape confidence; never force `escape_completed`; may yield `escape_incomplete_censored` with flag `pixel_evidence_incomplete` or insufficient evidence → no escape record.
+- UI shows “Pixel evidence incomplete — N/M frames analyzed.”
 
-**Measure:** Sum of Δ`timeUs` for in-trial frames whose body angle from center falls in target quadrant / total in-trial duration → `targetQuadrantFraction` and `targetQuadrantTimeSec`.
+**Implementation:** `eventFrameEvidenceService.ts` returns `PixelEvidenceResult`; escape scorer consumes with explicit incomplete handling.
 
-Report convention string in UI and measures: `"Target-centered 90° sector (target at sector center)"`.
+**Tradeoff:** Incomplete pixel evidence may leave end-of-clip trials as `escape_incomplete_censored` with lower confidence rather than forced classification. Scientist can confirm manually.
+
+**Remaining approval:** Default pixel budget (300 vs adaptive by window duration) — recommend 300 trailing-first; flag if you prefer unlimited with progress UI only.
+
+### D5 — Latency operational definitions (Q1, Q8 ✓)
+
+**Trial start anchor:** `trialWindow.startTimeUs` (confirmed or accepted-proposed).
+
+**Primary latency** — selected variant:
+
+| Variant ID | Rule |
+|---|---|
+| `first_target_investigation` (**default**) | First **confirmed** target-hole investigation `startTimeUs − trialStart` |
+| `first_target_proximity` | First in-zone frame at target hole (dwell not required) |
+| `first_target_investigation_confirmed_only` | Same as default (alias for clarity in UI) |
+
+Provisional target investigations do **not** count for primary latency until confirmed (Q9 alignment).
+
+If no qualifying event before censor: `censored: true`, `value: null`, flag per escape state.
+
+**Total latency** — `protocol_completion_time` (fixed definition ID):
+
+- **Completion event** = criteria for `escape_completed.completionTimeUs`, not entry onset.
+- Aligns with task brief “time until it actually enters the escape box” — operationalized as **completed descent**, not first rim contact.
+
+**Remaining approval:** None for primary default. Completion criteria thresholds remain tunable under `EventDetectionParams`.
+
+### D6 — Quadrant conventions (Q3 ✓)
+
+| Convention | Rule |
+|---|---|
+| `target_centered_90` (**default**) | 90° sector centered on confirmed target hole |
+| `fixed_orientation_90` | Four quadrants from fixed compass angle `quadrantNorthDeg` (user-set, e.g. top of video = 0°) |
+
+Measure: time-weighted fraction of in-trial duration with body in target quadrant. Unavailable if target unconfirmed (target-centered mode) or `quadrantNorthDeg` unset (fixed mode).
+
+### D7 — Error counting (Q2, Q9 ✓)
+
+```typescript
+interface ErrorCounts {
+  /** Confirmed non-target investigations before boundary — finalized measure */
+  confirmed: {
+    total: number;
+    distinctHoleCount: number;
+    revisitCount: number;
+    byHoleId: Record<number, { visits: number; distinct: boolean }>;
+  };
+  /** Provisional (status=proposed OR confidence=low) — displayed, not in finalized totals */
+  provisional: {
+    total: number;
+    distinctHoleCount: number;
+    revisitCount: number;
+  };
+}
+```
+
+**Finalized primary/total errors** use **confirmed** investigations only:
+
+- `status === 'confirmed'` OR `origin === 'manual'` (manual defaults confirmed)
+- `status === 'proposed'` → provisional bucket only
+- `status === 'rejected'` → excluded
+- **`confidence === 'low'`** → provisional bucket unless scientist confirms (Q9 ✓)
+
+**Re-visit vs distinct (Q2):** First visit to hole H = distinct error; subsequent visits to same H before boundary = `revisitCount` increments separately. Both contribute to `confirmed.total` when confirmed.
+
+**Boundaries:**
+
+- Primary errors: before first confirmed target investigation (or primary latency event).
+- Total errors: before `censorBoundaryTimeUs`.
 
 Unavailable when target unconfirmed.
 
-### D7 — Error counting (recommended; **requires approval**)
+### D8 — Search strategy (Q10 ✓)
 
-- Count **investigation events**, not raw proximity frames.
-- A non-target investigation counts as one error if its `startTimeUs` is strictly before the first target investigation's `startTimeUs` (primary errors) or before escape/censor end boundary (total errors).
-- **Re-visits** to the same wrong hole count as separate errors (matches clicker-style counting); flag in UI.
-- Investigations with `status: 'rejected'` do not count.
-- Manual investigations count when `status: 'confirmed'` or `origin: 'manual'`.
+**Not universal standards** — labeled `Search strategy (heuristic v1)` in UI with link to parameter disclosure.
 
-### D8 — Search strategy classifier (recommended)
+```typescript
+type SearchStrategyClass = 'spatial' | 'serial' | 'random' | 'unclassified';
+```
 
-Compute from measurement trajectory between trial start and first target investigation (or censor end if no target visit):
+**Heuristic v1 defaults** (all editable, version-bumped when changed):
 
-| Class | Criteria (all use body path, container times) |
+| Class | Criteria |
 |---|---|
-| **spatial** | Directness index `DI = chord_length / path_length ≥ 0.55` **and** start within `centerStartFraction × R` (default 0.35) of platform center **and** first target investigation occurs without visiting ≥ 3 distinct non-target holes |
-| **serial** | Visit ≥ 4 distinct holes in monotonic angular order (clockwise or CCW) with ≤ 2 violations |
-| **random** | Neither spatial nor serial; or start not near center (assumption flag) |
+| **spatial** | `DI = chord_length / path_length ≥ diThreshold` (default 0.55) **and** ≤ `maxDistinctHolesBeforeTarget` (default 2) non-target confirmed investigations before first target |
+| **serial** | ≥ `minSerialHoles` (default 4) distinct holes visited in monotonic angular order with ≤ `maxSerialViolations` (default 2) |
+| **random** | High center-crossing count (≥ `centerCrossingThreshold`, default 2) **or** high distinct-hole count without serial pattern |
+| **unclassified** | Insufficient evidence for any class above confidence floor |
 
-Emit `strategyReason: { directnessIndex, distinctHolesVisited, angularMonotonicity, startDistanceFraction }`.
+**Removed:** Mandatory center-start for spatial (Q10 ✓).
 
-Manual override: `measures.searchStrategy.override = 'spatial'|'serial'|'random'` with `overrideReason` text; persisted.
+**Noncentral start:** If `startDistanceFraction > noncentralStartFlagFraction` (default 0.35), add assumption `noncentral_start` — does **not** auto-assign `random`.
 
-**Tradeoff:** Strategy from automated rules will disagree with human raters; overrides and visible reasoning are mandatory, not optional polish.
+**Reasoning payload:** `{ directnessIndex, distinctHolesVisited, angularMonotonicity, centerCrossings, startDistanceFraction, classifierVersion }`.
 
-### D9 — Manual event provenance
+Manual override persisted with reason.
+
+**Validation:** Synthetic fixtures + manual review examples documented in spec; thresholds not claimed to match any single paper.
+
+**Tradeoff:** More `unclassified` trials vs false confidence. Prefer honest unclassified.
+
+**Remaining approval:** None — Q10 decided.
+
+### D9 — Event provenance (Q7 ✓)
 
 ```typescript
 interface Event {
   id: string;
-  type: 'investigation' | 'escape_entry' | 'escape_censored';
+  type: 'investigation' | 'escape_completed' | 'escape_incomplete_censored' | 'trial_censored_no_entry';
   holeId: number | null;
   startFrameIndex: number;
   endFrameIndex: number;
   startTimeUs: number;
   endTimeUs: number;
+  entryOnsetTimeUs?: number | null;
+  completionTimeUs?: number | null;
+  censorBoundaryTimeUs?: number | null;
   origin: 'auto' | 'manual';
   status: 'proposed' | 'confirmed' | 'rejected';
   confidence: 'high' | 'medium' | 'low' | null;
+  visitIndex?: number;
+  isRevisit?: boolean;
   evidence: Record<string, number | string | boolean | null>;
   notes: string | null;
 }
 ```
 
-- Auto events default `status: 'proposed'` until scientist confirms (batch “Confirm all” allowed).
-- Manual add → `origin: 'manual'`, `status: 'confirmed'`.
-- Threshold recompute: regenerate auto events; **preserve** manual and confirmed/rejected state for events whose `(type, holeId, startFrameIndex)` matches within merge tolerance; otherwise mark `EventAnalysis.stale` and require review (safer than silent overwrite).
+Auto → `proposed`. Manual add → `confirmed`. Batch confirm allowed.
 
-### D10 — Recomputation matrix
+Threshold recompute: preserve manual + confirmed/rejected matches; else mark `EventAnalysis.stale`.
 
-| Trigger | Events | Measures | Cleaning staleness |
-|---|---|---|---|
-| Manual trajectory correction | Recompute auto events; mark analysis stale if manual escape edits exist | Recompute | Already stale (MS-4) |
-| Apply / re-apply cleaning | Recompute | Recompute | Cleared on apply |
-| Stale cleaning (no re-apply) | Recompute on corrected-only | Recompute with flag | — |
-| Event threshold change | Recompute auto | Recompute | — |
-| Manual event confirm/reject/add | Preserve manual | Recompute | — |
-| Target hole change | Recompute | Recompute; errors/latency may become unavailable | Stale cleaning (MS-4) |
-| Geometry / window / pxPerCm change | Recompute | Recompute | Stale cleaning |
-| Re-run tracking | Clear events & measures | Clear | Clear corrections & cleaning (existing) |
+### D10 — Detect events workflow (Q6 ✓)
 
-### D11 — Missing nose handling (explicit)
-
-| Situation | Investigation behavior |
+| When | Behavior |
 |---|---|
-| `noseXY` present | Use nose proximity; higher confidence |
-| `noseXY` null, `bodyXY` present | Body proximity with wider threshold; `confidence: low` or `medium` |
-| Both null | No in-zone score; may split dwell segments |
-| Manual nose correction | Treat as present for that `frameIndex` only |
+| First time after tracking | User clicks **Detect events** (disabled until track `done` + geometry/window satisfied) |
+| Trajectory / basis / geometry / window / target / event params change | Auto **re-detect** auto events; preserve manual per D9; recompute measures |
+| Manual event edit | Recompute measures only |
+| Re-run tracking | Clear events & measures |
 
-Measure assumptions include `nose_coverage_fraction` so reviewers see when body-only detection dominated.
+No silent auto-run on tracking complete.
 
-### D12 — Duplicate container PTS
+### D11 — Recomputation matrix
 
-When adjacent observations share `timeUs`:
+| Trigger | Events | Measures |
+|---|---|---|
+| Detect events (explicit) | Full detect | Compute |
+| Manual correction | Re-detect auto | Recompute |
+| Measurement basis change | — | Recompute |
+| Cleaning apply | Re-detect if events exist | Recompute |
+| Stale cleaning + basis=cleaned | — | Measures unavailable until re-apply or basis change |
+| Event threshold / definition change | Re-detect auto | Recompute |
+| Event confirm/reject | — | Recompute (provisional vs confirmed) |
+| Target / geometry / window | Re-detect | Recompute |
+| Re-track | Clear | Clear |
 
-- Dwell accumulation uses **one** in-zone sample per duplicate group (dedupe by `frameIndex` order).
-- Speed / path length: skip zero Δt pairs; never divide by zero.
-- Event boundaries remain keyed by `frameIndex`; displayed times use that frame's `timeUs` (may duplicate — show frame index in evidence).
+### D12 — Path length and speed (duplicate PTS correction)
+
+**Path length:**
+
+- Sum Euclidean **`bodyXY`** displacements between consecutive **in-trial** observations with valid body points, in `frameIndex` order.
+- **Duplicate PTS (`ΔtimeUs === 0`):** **Include spatial displacement** in path length (valid movement may occur between composition-time duplicates).
+- **Unsupported gaps** (`lost`, null body, `absent_pre_trial`, `absent_in_hole`): break path into segments; sum segments; report `pathLengthExcludedGapUs` in assumptions.
+- Do **not** silently bridge gaps unless basis=cleaned and point is `interpolated` — flag `includes_interpolated_segments`.
+
+**Speed:**
+
+- Instantaneous speed defined only when **`ΔtimeUs > 0`**: `speed = distance / (ΔtimeUs / 1e6)`.
+- **`ΔtimeUs === 0`:** speed **undefined** at that pair — exclude from speed aggregates (do not divide by zero).
+- **Mean speed:** time-weighted over valid intervals: `Σ (speed_i × Δt_i) / Σ Δt_i` (not frame-count average).
+- **Max speed:** max over valid instantaneous speeds.
+- Report `validSpeedIntervalCount` and `excludedZeroDtPairs` in assumptions.
+
+**Dwell (investigations):** One in-zone sample per duplicate-PTS group (dedupe by `frameIndex`).
+
+### D13 — Target hole and scale dependencies
+
+| Dependency | If missing |
+|---|---|
+| `targetHoleConfirmedAt` | Primary latency (target variants), errors, target quadrant (target-centered) → **unavailable** |
+| `pxPerCm` | Path length / speed in cm → **px with flag**; cm fields unavailable |
+| Target for validation | Scripts use **user-confirmed** state from Playwright flow — **never hard-code test50/test51/test53 target IDs** |
 
 ---
 
 ## Plan
 
-1. **Data model** — Add `Event`, `EventAnalysis`, `EventDetectionParams`, `MeasureValue`, `MeasuresSnapshot`, `QuadrantConvention` to `types.ts`. Extend `TrialRecord`, `AnalysisParams`. Defaults in `trialFactory.ts`.
-2. **Migration** — Backfill `events: null`, `measures: null`, default event params in `migration.ts`; bump `TOOL_VERSION`.
-3. **Trajectory gate** — Add `measurementObservations(track)` helper wrapping D2 logic + assumption flags.
-4. **Geometry helpers** — `holeProximity.ts`: distance to hole, nearest hole, rim band, target angle/quadrant (pure functions).
-5. **Investigation detector** — `src/domain/events/investigations.ts` — segment, dwell, merge, confidence (unit-tested).
-6. **Escape detector** — `src/domain/events/escape.ts` — Phase A scoring; Phase B interface + `escapeFrameEvidence.ts` using frame-worker adapter.
-7. **Frame evidence service** — `src/services/eventFrameEvidenceService.ts` — bounded fetch + blob area + hole darkness for candidate windows only.
-8. **Event orchestrator** — `src/domain/events/detectEvents.ts` — combines investigations + escape; returns `EventAnalysis`.
-9. **Measures** — `src/domain/measures/computeMeasures.ts` — latencies, errors, path, speed, quadrant, strategy from events + trajectory (unit-tested).
-10. **Staleness** — `src/domain/events/eventStaleness.ts` — mirror cleaning staleness; wire triggers in `sessionStore.ts`.
-11. **Store actions** — `runEventDetection`, `updateEventParams`, `confirmEvent`, `rejectEvent`, `addManualEvent`, `overrideSearchStrategy`, auto-run after tracking completes (optional toggle: default on).
-12. **UI** — `EventsMeasuresPanel.tsx` — threshold sliders/inputs, event list, measure cards with censored/unavailable badges, evidence disclosure, strategy override.
-13. **Overlay** — Highlight investigation spans and escape window on timeline; hole markers for event holes.
-14. **Unit tests** — `tests/investigations.test.ts`, `tests/escape.test.ts`, `tests/measures.test.ts`, `tests/eventStaleness.test.ts` — synthetic trajectories + edge cases (see Validation).
-15. **Offline script** — `scripts/validate-events-offline.mjs` — run detectors on persisted or synthetic tracks without browser.
-16. **Playwright** — `scripts/validate-ms5.mjs` + `npm run validate:ms5`.
-17. **Remove MS-5 placeholder** — Replace `ms5-event-note` in `CorrectionCleaningPanel` with link/panel entry point.
+1. **Data model** — Types above + `MeasurementBasis`, `ErrorCounts`, `OperationalDefinitionSelections`, escape timing fields.
+2. **Migration** — Backfill nulls; default `measurementBasis: 'corrected'`, `measurementBasisDefault: 'corrected'`.
+3. **`resolveMeasurementObservations(track, basis)`** — raw / corrected / consumable cleaned with stale gate.
+4. **Geometry helpers** — `holeProximity.ts`, quadrant math for both conventions.
+5. **`investigations.ts`** — dwell, merge, visitIndex, confidence.
+6. **`escape.ts`** — four-state classifier, onset/completion/boundary/lower-bound fields.
+7. **`escapeFrameEvidence.ts`** + service — trailing-first budget, `complete` flag.
+8. **`detectEvents.ts`** — orchestrator (pure).
+9. **`computeMeasures.ts`** — latencies, ErrorCounts provisional/confirmed, path (D12), speed (D12), quadrant, strategy v1.
+10. **`eventStaleness.ts`** + store wiring.
+11. **Store** — `detectEvents(trialId)` explicit action; auto re-detect on D11 triggers; **no** auto-run on track done.
+12. **`EventsMeasuresPanel.tsx`** — basis selector, Detect events, definitions/version disclosure, provisional vs confirmed error tables, censor state badges, lower bound display.
+13. **Overlay / timeline** — investigation spans; escape onset vs censor boundary markers (distinct styles).
+14. **Unit tests** — expanded per Validation Tier 1.
+15. **`validate-events-offline.mjs`** — synthetic states without browser.
+16. **`validate-ms5.mjs`** — Playwright; target confirmation in-flow, not baked-in sample IDs.
+17. Replace MS-5 placeholder in correction panel with Events & Measures entry.
 
 ---
 
@@ -341,104 +482,102 @@ When adjacent observations share `timeUs`:
 
 | # | Case |
 |---|---|
-| U1 | Investigation dwell uses Δ`timeUs`, not frame count — variable spacing fixture (`test51`-like). |
-| U2 | Body-only proximity creates `low`/`medium` confidence investigation; never fabricates nose. |
-| U3 | Merge same-hole segments across brief out-of-zone gap ≤ `investigationMergeGapUs`. |
-| U4 | Primary errors exclude target investigations; unavailable when `targetHoleConfirmedAt` null. |
-| U5 | Mid-platform `lost` streak → no escape event (Phase A score below censor). |
-| U6 | Trailing rim descent synthetic → `escape_censored`, not `escape_entry`. |
-| U7 | Recording end during entry → total latency censored, not numeric clip duration. |
-| U8 | Protocol cutoff before recording end → censor reason `protocol_cutoff`. |
-| U9 | Duplicate adjacent `timeUs` — path length skips zero-Δt; dwell deduped. |
-| U10 | Stale cleaning → measures use corrected-only + `trajectory_basis` flag. |
-| U11 | Manual event reject → excluded from error count. |
-| U12 | Strategy override persists and replaces auto class in measures. |
-| U13 | Rejected auto investigation → auditable, not counted. |
+| U1 | Dwell uses Δ`timeUs` (test51-like spacing). |
+| U2 | Body-only → low confidence; no synthetic nose. |
+| U3 | visitIndex / isRevisit on repeat hole visits. |
+| U4 | ErrorCounts: provisional low-confidence excluded from confirmed.total. |
+| U5 | Confirmed reject excluded; manual confirmed included. |
+| U6 | Mid-platform lost → no escape record. |
+| U7 | **`escape_completed`** synthetic → total latency = completion − start. |
+| U8 | **`escape_incomplete_censored`** → total latency censored + lower bound = censor − start. |
+| U9 | **`trial_censored_no_entry`** → censored, no entry lower bound, flag `no_entry_evidence`. |
+| U10 | Never set total latency to recording duration without censored flag. |
+| U11 | Duplicate PTS: path includes displacement; speed excludes zero-Δt pair. |
+| U12 | Time-weighted mean speed ≠ unweighted frame mean. |
+| U13 | Path segments break at unsupported gaps; assumptions report excluded time. |
+| U14 | Pixel budget exceeded → `complete: false`; no forced `escape_completed`. |
+| U15 | Measurement basis: raw vs corrected vs cleaned changes path length when corrections exist. |
+| U16 | Stale cleaning + basis=cleaned → measures unavailable. |
+| U17 | Strategy: noncentral start → flag, not auto-random; may be unclassified. |
+| U18 | Target unknown → errors/latency unavailable. |
+| U19 | distinctHoleCount vs revisitCount on multi-visit fixture. |
+| U20 | Primary latency definition switch changes result. |
 
 ### Tier 2 — Synthetic fixtures
 
 | Fixture | Purpose |
 |---|---|
-| `spatial_direct.json` | Center start → target investigation, high DI → spatial |
-| `serial_ring.json` | Sequential hole visits → serial |
-| `random_crossing.json` | Center crossings, many holes → random |
-| `false_escape_mid_platform.json` | Lost mid-platform → no escape |
-| `censored_end_descent.json` | Rim shrink pattern → escape_censored |
-| `unknown_target.json` | Investigations ok; errors/latency unavailable |
+| `escape_completed.json` | Full completion → numeric total latency |
+| `escape_incomplete_censored.json` | Entry onset + censor → lower bound only |
+| `trial_censored_no_entry.json` | End without entry evidence |
+| `false_rim_escape.json` | Rim exploration → no escape record |
+| `duplicate_pts_path.json` | Non-zero path, undefined speed pair |
+| `provisional_errors.json` | Low-confidence visits in provisional only |
+| `strategy_unclassified.json` | Insufficient pattern → unclassified |
+| `strategy_noncentral_spatial.json` | Direct path, rim start → spatial + flag |
+| `unknown_target.json` | Target-dependent measures unavailable |
 
-### Tier 3 — Automated browser (`validate:ms5`)
+### Tier 3 — Playwright (`validate:ms5`)
 
 | # | Criterion |
 |---|---|
-| V1 | After tracking + confirm target on test53, event detection runs; ≥ 1 investigation visible. |
-| V2 | Changing investigation dwell threshold changes event count (snapshot compare). |
-| V3 | Total latency shows **censored** on all three clips (not “never escaped”, not bare duration). |
-| V4 | Mid-platform flagged `lost` frame not linked to escape event. |
-| V5 | Manual add investigation → persists after reload → error count updates. |
-| V6 | Confirm/reject changes measure error count. |
-| V7 | Strategy reasoning visible; override persists. |
-| V8 | Target unknown → primary errors/latency unavailable with explanation. |
-| V9 | Stale cleaning banner; measures still compute on corrected-only. |
-| V10 | MS-1–MS-4 regression scripts remain green. |
+| V1 | Detect events (explicit click) after track + in-flow target confirm → investigations visible. |
+| V2 | Threshold change → event count changes. |
+| V3 | Sample clips: **not** `escape_completed`; show `escape_incomplete_censored` or `trial_censored_no_entry` appropriately — never bare duration as total latency. |
+| V4 | Lower bound shown when incomplete entry censored. |
+| V5 | No false escape on mid-platform lost. |
+| V6 | Confirm low-confidence investigation → moves from provisional to confirmed error count. |
+| V7 | Measurement basis toggle changes path length (with correction fixture). |
+| V8 | Strategy unclassified or flagged noncentral — not forced random. |
+| V9 | Pixel incomplete flag when budget exceeded (mock or small budget param). |
+| V10 | MS-1–MS-4 regressions green. |
 
-### Tier 4 — Manual review (scientist)
+**Validation policy:** Do not assign target holes in scripts except through UI confirmation step in test flow. Clips may be analyzed with target unknown to verify unavailable measures.
 
-- Inspect test53 end-of-clip: escape censored with progressive evidence shown, not “never escaped”.
-- Inspect test51: investigations detected despite low calibration confidence; no false escape from cylinder era.
-- Change investigation threshold: event list updates live.
-- Confirm manual investigation on a missed hole: errors update.
-- Verify times match container timestamps on `test51` non-integer spacing.
+### Tier 4 — Manual review
+
+- End-of-clip states verbally distinct in UI (“incomplete entry at censor” vs “trial ended without entry evidence”).
+- Operational definition labels visible on every measure card.
+- Provisional vs confirmed error tables match scientist expectation on test53.
+- test51: no escape from cylinder period.
 
 ---
 
-## Decisions requiring your approval
+## Remaining tradeoffs (minor — optional approval)
 
-| ID | Question | Recommendation | Tradeoff |
-|---|---|---|---|
-| **Q1** | Primary latency anchor: first target **investigation** vs first **proximity**? | Investigation (D5-A) | Investigation matches operational “visit”; proximity is noisier on fly-bys |
-| **Q2** | Count re-visits to same wrong hole as separate errors? | Yes (D7) | Matches clicker; may inflate vs some papers |
-| **Q3** | Target-centered quadrant vs fixed compass (N/E/S/W)? | Target-centered (D6) | Standard in Barnes literature; unusable until target confirmed |
-| **Q4** | Phase B pixel fetch for escape evidence in MS-5? | Yes, bounded window (D4) | +complexity; required to pass false-escape validation on rim exploration |
-| **Q5** | Default measurement trajectory: cleaned-if-consumable else corrected? | Yes (D2) | Labs wanting raw-only must wait for MS-6 export toggle |
-| **Q6** | Auto-run event detection after tracking completes? | Yes, with “Re-detect events” button | Faster demo; scientist may prefer manual trigger only |
-| **Q7** | Auto events default `proposed` vs auto-`confirmed`? | `proposed` until confirmed (D9) | Safer science; more clicks |
-| **Q8** | `escape_censored` as event type vs measure-only flag? | Both: event record + censored measure (D4) | Slight redundancy; makes timeline and export clearer |
-| **Q9** | Minimum investigation confidence for error/latency counting? | Count all non-`rejected`; weight display by confidence | Excluding `low` reduces false errors but hides body-only visits |
-| **Q10** | Strategy classifier: require center start for spatial? | Yes; flag assumption if not (D8) | test53 starts near rim → likely random/flagged, not spatial |
+| ID | Topic | Recommendation |
+|---|---|---|
+| **T1** | Default pixel budget | 300 frames trailing-first; param exposed |
+| **T2** | Auto re-detect on correction | Yes (D11) — may invalidate unreviewed proposed events; show stale banner |
+| **T3** | `first_target_proximity` variant | Ship but not default — noisier for fly-bys |
 
 ---
 
 ## Repository-specific recommendations
 
-1. **Reuse `TRACKING_HOLE_PROXIMITY_FRACTION` (0.12) as escape proximity default**, but use **tighter** nose investigation default (0.10) — investigations should be stricter than escape censoring.
-2. **Do not promote MS-3 `absent_in_hole` to escape** — use it as a hint to start Phase B fetch near trial end only when target confirmed.
-3. **Wire event staleness into the same store paths as cleaning** (`confirmGeometry`, `setTrialWindow`, etc.) — pattern already proven in MS-4.
-4. **Keep detectors pure functions** — `detectEvents(observations, geometry, window, params)` — enables offline validation without Playwright for scientific core.
-5. **Defer export and D3 visualizations to MS-6** — MS-5 UI is review-first: list + numbers + evidence, not figures.
-6. **Do not store blob area on every observation retroactively** — fetch on demand for escape candidates only; avoids MS-3 migration churn and keeps raw layer unchanged.
-7. **Explicit copy for sample clips:** UI should say “Recording ended during hole entry — total latency censored” rather than “mouse never escaped.”
+1. Reuse hole proximity constants as **starting points** only — label as heuristic v1.
+2. MS-3 `absent_in_hole` → hint for Phase B window only when target confirmed.
+3. Pure-function detectors for offline validation.
+4. UI copy: three censor states must not collapse to “never escaped.”
+5. No blob area on all observations — on-demand only with completeness flag.
 
 ---
 
 ## Known limitations (expected after MS-5)
 
-- Body-only investigations near rim when nose absent (common) — confidence tier communicates uncertainty.
-- Escape completion threshold may never fire on supplied clips — censored outcomes are correct, not failures.
-- Hole-darkening signal weak when compression artifact dominates — combined score reduces weight; manual escape marking available.
-- Search strategy automation will disagree with human raters — overrides are first-class.
-- Path length excludes gaps without body points — flagged in assumptions; cleaning optional fill does not hide gap spans in assumptions.
+- Heuristic strategy ≠ any single published method — overrides and unclassified required.
+- Body-only investigations common at rim — provisional until confirmed.
+- Sample clips likely never reach `escape_completed`.
+- Incomplete pixel evidence reduces auto confidence — manual confirmation path provided.
+- Path length across gaps discontinuous unless cleaned interpolated segments included (flagged).
 
 ---
 
-## Completion criteria (for future MS-5 sign-off)
+## Completion criteria (future sign-off)
 
-MS-5 is complete when:
+1. Tier 1–3 validation pass including new escape/censor/basis/strategy cases.
+2. Manual review of three-state censor model and provisional/confirmed errors.
+3. MS-1–MS-4 regressions green.
+4. `AI_NOTES.md` records Q1–Q10 binding decisions and any T1–T3 choices.
 
-1. All Tier 1 unit tests and Tier 3 Playwright criteria pass on all three clips.
-2. Manual review confirms censored total latency and no false mid-platform escapes.
-3. Threshold changes visibly alter events; manual overrides persist and recompute measures.
-4. MS-1–MS-4 regression suite green.
-5. Constitution MS-5 validation paragraph satisfied.
-6. `AI_NOTES.md` updated with any approved Q1–Q10 decisions and validation evidence.
-
-**Do not mark complete or merge until explicit review after implementation.**
+**Do not mark complete or merge until explicit post-implementation review.**
