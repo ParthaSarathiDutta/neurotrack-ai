@@ -157,7 +157,7 @@ async function main() {
     const wb = XLSX.read(readFileSync(xlsxPath), { type: 'buffer' });
     results.V_xlsx_sheets =
       JSON.stringify(wb.SheetNames) ===
-      JSON.stringify(['Summary', 'Events', 'Parameters', 'OperationalDefinitions', 'Provenance'])
+      JSON.stringify(['Results', 'Summary', 'Events', 'Parameters', 'OperationalDefinitions', 'Provenance'])
         ? 'PASS'
         : `FAIL:${wb.SheetNames.join(',')}`;
 
@@ -183,7 +183,10 @@ async function main() {
         ? 'PASS'
         : `FAIL:${JSON.stringify({ scale: test50Row?.scaleStatus, unit: test50Row?.pathLength_unit })}`;
 
-    const events = sheetRows(wb, 'Events');
+    const eventsWs = wb.Sheets['Events'];
+    const events = eventsWs
+      ? XLSX.utils.sheet_to_json(eventsWs, { defval: null, range: 1 })
+      : [];
     results.V_events_rows = events.length > 0 ? 'PASS' : 'FAIL:0';
 
     const csvDownload = page.waitForEvent('download', { timeout: 30_000 });

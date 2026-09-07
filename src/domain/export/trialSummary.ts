@@ -1,4 +1,4 @@
-import type { TrialRecord } from '../types';
+import type { MeasureValue, TrialRecord } from '../types';
 import { confirmedTargetHoleId } from '../events/holeProximity';
 import { effectiveTrialStartUs } from '../events/holeProximity';
 import { formatPresentationTimeSeconds } from '../timing';
@@ -39,6 +39,14 @@ export interface TrialSummaryRow {
   [key: string]: string | number | boolean | null | undefined;
 }
 
+function exportErrorCountField(
+  measure: MeasureValue | undefined,
+  count: number | undefined,
+): number | null {
+  if (!measure || measure.unavailable) return null;
+  return count ?? null;
+}
+
 export function buildTrialSummaryRow(trial: TrialRecord): TrialSummaryRow {
   const targetId = confirmedTargetHoleId(trial.geometry);
   const trialStart = effectiveTrialStartUs(trial.trialWindow);
@@ -76,10 +84,22 @@ export function buildTrialSummaryRow(trial: TrialRecord): TrialSummaryRow {
       : null,
     searchStrategyClassification: measures?.searchStrategy.classification ?? null,
     searchStrategyOverride: measures?.searchStrategy.override ?? null,
-    primaryErrorsConfirmed: measures?.errorCounts.confirmed.total ?? null,
-    primaryErrorsProvisional: measures?.errorCounts.provisional.total ?? null,
-    totalErrorsConfirmed: measures?.totalErrorCounts.confirmed.total ?? null,
-    totalErrorsProvisional: measures?.totalErrorCounts.provisional.total ?? null,
+    primaryErrorsConfirmed: exportErrorCountField(
+      measures?.primaryErrors,
+      measures?.errorCounts.confirmed.total,
+    ),
+    primaryErrorsProvisional: exportErrorCountField(
+      measures?.primaryErrors,
+      measures?.errorCounts.provisional.total,
+    ),
+    totalErrorsConfirmed: exportErrorCountField(
+      measures?.totalErrors,
+      measures?.totalErrorCounts.confirmed.total,
+    ),
+    totalErrorsProvisional: exportErrorCountField(
+      measures?.totalErrors,
+      measures?.totalErrorCounts.provisional.total,
+    ),
   };
 
   if (measures) {

@@ -7,6 +7,7 @@ import {
   operationalDefinitionRowsToObjects,
 } from './operationalDefinitions';
 import { buildProvenanceRows, provenanceRowsToObjects } from './provenanceSummary';
+import { buildResultsSummaryRows, resultsRowsToObjects } from './resultsSummary';
 
 export interface SessionExportData {
   exportedAt: string;
@@ -14,6 +15,7 @@ export interface SessionExportData {
   trialCount: number;
   summaryRows: ReturnType<typeof buildTrialSummaryRows>;
   summaryObjects: Record<string, string | number | boolean | null>[];
+  resultsObjects: Record<string, string>[];
   eventObjects: Record<string, string | number | boolean | null>[];
   parameterObjects: Record<string, string | number | boolean | null>[];
   operationalDefinitionObjects: Record<string, string | null>[];
@@ -32,6 +34,7 @@ export function buildSessionExportData(
   const exportableTrials = trials.filter((t) => t.track?.status === 'done');
 
   const summaryRows = buildTrialSummaryRows(exportableTrials);
+  const resultsObjects = resultsRowsToObjects(buildResultsSummaryRows(exportableTrials));
   const eventObjects = exportableTrials.flatMap((trial) =>
     eventRowsToObjects(
       buildEventExportRows(trial.id, trial.events?.events ?? [], trial.geometry),
@@ -49,6 +52,7 @@ export function buildSessionExportData(
     trialCount: exportableTrials.length,
     summaryRows,
     summaryObjects: summaryRowsToObjects(summaryRows),
+    resultsObjects,
     eventObjects,
     parameterObjects,
     operationalDefinitionObjects,

@@ -34,7 +34,7 @@ describe.skipIf(!outputsPresent)('MS-6 committed outputs integrity', () => {
 
     const xlsxBuffer = readFileSync(join(OUTPUTS, 'test53_report.xlsx'));
     expect(getXlsxSheetNames(xlsxBuffer.buffer.slice(xlsxBuffer.byteOffset, xlsxBuffer.byteOffset + xlsxBuffer.byteLength))).toEqual(
-      expect.arrayContaining(['Summary', 'Events', 'Parameters', 'OperationalDefinitions', 'Provenance']),
+      expect.arrayContaining(['Results', 'Summary', 'Events', 'Parameters', 'OperationalDefinitions', 'Provenance']),
     );
   });
 

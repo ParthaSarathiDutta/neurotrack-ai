@@ -14,6 +14,8 @@ export interface EventExportRow {
   holeIdInternal: number | null;
   startFrameIndex: number;
   endFrameIndex: number;
+  startFrameDisplay: number;
+  endFrameDisplay: number;
   startTimeSec: string;
   endTimeSec: string;
   entryOnsetTimeSec: string | null;
@@ -54,6 +56,8 @@ export function buildEventExportRows(
     holeIdInternal: ev.holeId,
     startFrameIndex: ev.startFrameIndex,
     endFrameIndex: ev.endFrameIndex,
+    startFrameDisplay: ev.startFrameIndex + 1,
+    endFrameDisplay: ev.endFrameIndex + 1,
     startTimeSec: secLabel(ev.startTimeUs) ?? '',
     endTimeSec: secLabel(ev.endTimeUs) ?? '',
     entryOnsetTimeSec: secLabel(ev.entryOnsetTimeUs),
@@ -85,6 +89,8 @@ export const EVENT_EXPORT_COLUMNS: (keyof EventExportRow)[] = [
   'holeIdInternal',
   'startFrameIndex',
   'endFrameIndex',
+  'startFrameDisplay',
+  'endFrameDisplay',
   'startTimeSec',
   'endTimeSec',
   'entryOnsetTimeSec',

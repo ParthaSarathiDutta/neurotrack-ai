@@ -1,6 +1,6 @@
-trialId,eventId,type,exportLabel,holeDisplay,holeIdInternal,startFrameIndex,endFrameIndex,startTimeSec,endTimeSec,entryOnsetTimeSec,completionTimeSec,censorBoundaryTimeSec,origin,status,confidence,visitIndex,isRevisit,bodyEntryPath,bodyEntryVersion,pixelEvidenceComplete,notes
-8df6325a-52d4-482b-a20f-688ba96ae0f5,b20de175-42d7-4c55-b8c8-32a957caf29c,investigation,investigation,1,0,150,265,5.066667,8.900000,,,,auto,proposed,medium,1,false,,,,
-8df6325a-52d4-482b-a20f-688ba96ae0f5,dd55033e-e80e-4725-aadc-df464b0a2d5c,investigation,investigation,2,1,270,430,9.066667,14.433333,,,,auto,proposed,medium,1,false,,,,
-8df6325a-52d4-482b-a20f-688ba96ae0f5,7521ef19-add7-4516-b3a1-8595d107dc4a,investigation,investigation,4,3,536,647,17.966667,21.666667,,,,auto,proposed,medium,1,false,,,,
-8df6325a-52d4-482b-a20f-688ba96ae0f5,5b96f4a0-36a1-4d99-b81a-d1e97a9d4621,investigation,investigation,2,1,737,904,24.700000,30.266667,,,,auto,proposed,medium,2,true,,,,
-8df6325a-52d4-482b-a20f-688ba96ae0f5,c417f59c-c9e9-49ff-ba29-d732c003160d,escape_completed,escape_completed_confirmed_candidate_hole,2,1,785,880,26.300000,29.466667,26.300000,29.466667,30.266667,auto,confirmed,high,,,,3,,
+trialId,eventId,type,exportLabel,holeDisplay,holeIdInternal,startFrameIndex,endFrameIndex,startFrameDisplay,endFrameDisplay,startTimeSec,endTimeSec,entryOnsetTimeSec,completionTimeSec,censorBoundaryTimeSec,origin,status,confidence,visitIndex,isRevisit,bodyEntryPath,bodyEntryVersion,pixelEvidenceComplete,notes
+8df6325a-52d4-482b-a20f-688ba96ae0f5,b20de175-42d7-4c55-b8c8-32a957caf29c,investigation,investigation,1,0,150,265,151,266,5.066667,8.900000,,,,auto,proposed,medium,1,false,,,,
+8df6325a-52d4-482b-a20f-688ba96ae0f5,dd55033e-e80e-4725-aadc-df464b0a2d5c,investigation,investigation,2,1,270,430,271,431,9.066667,14.433333,,,,auto,proposed,medium,1,false,,,,
+8df6325a-52d4-482b-a20f-688ba96ae0f5,7521ef19-add7-4516-b3a1-8595d107dc4a,investigation,investigation,4,3,536,647,537,648,17.966667,21.666667,,,,auto,proposed,medium,1,false,,,,
+8df6325a-52d4-482b-a20f-688ba96ae0f5,5b96f4a0-36a1-4d99-b81a-d1e97a9d4621,investigation,investigation,2,1,737,904,738,905,24.700000,30.266667,,,,auto,proposed,medium,2,true,,,,
+8df6325a-52d4-482b-a20f-688ba96ae0f5,c417f59c-c9e9-49ff-ba29-d732c003160d,escape_completed,escape_completed_confirmed_candidate_hole,2,1,785,880,786,881,26.300000,29.466667,26.300000,29.466667,30.266667,auto,confirmed,high,,,,3,,

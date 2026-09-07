@@ -213,7 +213,7 @@ function main(): void {
   mkdirSync(PUBLIC_EXAMPLE, { recursive: true });
 
   const inventory: string[] = [];
-  const requiredSheets = ['Summary', 'Events', 'Parameters', 'OperationalDefinitions', 'Provenance'];
+  const requiredSheets = ['Results', 'Summary', 'Events', 'Parameters', 'OperationalDefinitions', 'Provenance'];
 
   for (const trial of trials) {
     const prefix = clipPrefix(trial.fileName);

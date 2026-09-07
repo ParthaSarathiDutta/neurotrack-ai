@@ -10,7 +10,7 @@ import { buildEventExportRows } from '../src/domain/export/eventsTable';
 import { buildTrialSummaryRow } from '../src/domain/export/trialSummary';
 import { buildSessionExportData } from '../src/domain/export/sessionExport';
 import { buildSessionCsvFiles } from '../src/domain/export/csvExport';
-import { buildSessionXlsxArrayBuffer, getXlsxSheetNames } from '../src/domain/export/xlsxExport';
+import { buildSessionXlsxArrayBuffer, getXlsxSheetNames, readXlsxSheetRows, XLSX_SHEET_ORDER } from '../src/domain/export/xlsxExport';
 import { escapeExportLabel } from '../src/domain/export/escapeSummary';
 import { computeMeasures } from '../src/domain/measures/computeMeasures';
 import {
@@ -236,6 +236,10 @@ describe('MS-6 U4 target unknown summary', () => {
     expect(row.primaryLatency_valueKind).toBe('unavailable');
     expect(row.targetStatus).toBe('unknown');
     expect(row.targetQuadrantFraction_valueKind).toBe('unavailable');
+    expect(row.primaryErrorsConfirmed).toBeNull();
+    expect(row.totalErrorsConfirmed).toBeNull();
+    expect(row.primaryErrorsProvisional).toBeNull();
+    expect(row.totalErrorsProvisional).toBeNull();
   });
 });
 
@@ -267,6 +271,8 @@ describe('MS-6 U6 events detail columns', () => {
     expect(rows[0]?.origin).toBe('auto');
     expect(rows[0]?.bodyEntryVersion).toBe('3');
     expect(rows[0]?.bodyEntryPath).toBe('centroid_pixel');
+    expect(rows[0]?.startFrameDisplay).toBe(rows[0]!.startFrameIndex + 1);
+    expect(rows[0]?.endFrameDisplay).toBe(rows[0]!.endFrameIndex + 1);
   });
 });
 
@@ -300,20 +306,53 @@ describe('MS-6 U7 export does not detect events', () => {
 });
 
 describe('MS-6 U8 XLSX sheet names', () => {
-  it('includes required worksheets', () => {
+  it('includes Results first and all required worksheets', () => {
     const data = buildSessionExportData(
       [makeTrial()],
       analysisParams,
       '2026-01-01T00:00:00.000Z',
     );
     const buffer = buildSessionXlsxArrayBuffer(data);
-    expect(getXlsxSheetNames(buffer)).toEqual([
-      'Summary',
-      'Events',
-      'Parameters',
-      'OperationalDefinitions',
-      'Provenance',
-    ]);
+    expect(getXlsxSheetNames(buffer)).toEqual([...XLSX_SHEET_ORDER]);
+  });
+});
+
+describe('MS-6 Results worksheet', () => {
+  it('provides compact human-readable summary without zero error counts when unavailable', () => {
+    const measures = computeMeasures(
+      [],
+      [],
+      geometryNoTarget,
+      trialWindow,
+      [{ timeUs: 5_000_000 }],
+      defaultEventDetectionParams(),
+      defaultOperationalDefinitions(),
+      'corrected',
+    )!;
+    const data = buildSessionExportData(
+      [makeTrial({ geometry: geometryNoTarget, measures })],
+      analysisParams,
+    );
+    expect(data.resultsObjects).toHaveLength(1);
+    const row = data.resultsObjects[0]!;
+    expect(row.primaryErrorsConfirmedCount).toContain('Target hole not confirmed');
+    expect(row.primaryErrorsConfirmedCount).not.toBe('0');
+    expect(row.totalErrorsConfirmedCount).toContain('Target hole not confirmed');
+
+    const buffer = buildSessionXlsxArrayBuffer(data);
+    const resultsRows = readXlsxSheetRows(buffer, 'Results');
+    expect(resultsRows[0]?.fileName).toBeTruthy();
+    expect(resultsRows[0]?.primaryLatency).toContain('Unavailable');
+  });
+});
+
+describe('MS-6 Events frame display columns', () => {
+  it('exports 1-based display frame numbers alongside internal indices', () => {
+    const ev = makeEscapeEvent({ startFrameIndex: 10, endFrameIndex: 12 });
+    const rows = buildEventExportRows('trial-1', [ev], geometry);
+    expect(rows[0]?.startFrameIndex).toBe(10);
+    expect(rows[0]?.startFrameDisplay).toBe(11);
+    expect(rows[0]?.endFrameDisplay).toBe(13);
   });
 });
 

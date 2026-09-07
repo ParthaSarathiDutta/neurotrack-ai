@@ -496,3 +496,17 @@ Expected under definition: 33.17 s on-platform + 11.08 s off-platform = 44.24 s 
 ### Validated
 199 unit tests, lint, build, validate:ms6-outputs (31 checks), validate:ms6-viz, validate:import-empty, validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review; MS-6 not marked complete.
 
+## MS-6 Checkpoint 4 export review cleanup (2026-09-07)
+
+### Problem
+Manual review of `test53_report.xlsx` confirmed scientific content but flagged spreadsheet usability: ~152-column Summary sheet, standalone error-count fields exporting `0` when target-dependent measures were `unavailable`, and undocumented 0-based frame indices on Events.
+
+### Fix
+- Added **Results** worksheet (first tab) with compact human-readable columns, units, and explicit unavailable/censored display via `formatMeasureForDisplay`.
+- Preserved full machine-readable **Summary** sheet and CSV export contract unchanged aside from nulling standalone error counts when the corresponding measure is unavailable.
+- Events export: `startFrameDisplay` / `endFrameDisplay` (1-based) plus prominent convention note row in XLSX only; internal indices preserved.
+- Restrained XLSX layout: frozen headers, autofilter, column widths on Results/Summary/Events/Parameters/OperationalDefinitions/Provenance.
+
+### Validated
+201 unit tests, lint, build, validate:ms6-outputs (37 checks incl. Results sheet + error-count semantics + frame display), validate:ms6-viz, validate:ms5 — ALL PASS. test53 total latency 24.40 s numeric; speed v2/diagnostic unchanged. Stopped for manual review; MS-6 not marked complete.
+

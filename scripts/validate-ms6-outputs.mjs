@@ -17,7 +17,7 @@ const OUTPUTS = join(ROOT, 'outputs');
 const SESSION_BUNDLE = join(OUTPUTS, 'bundles', 'all-clips-session.neurotrack.json');
 const TEST53_MP4 = join(ROOT, 'data', 'barnes-maze', 'test53.mp4');
 const CLIPS = ['test50', 'test51', 'test53'];
-const REQUIRED_SHEETS = ['Summary', 'Events', 'Parameters', 'OperationalDefinitions', 'Provenance'];
+const REQUIRED_SHEETS = ['Results', 'Summary', 'Events', 'Parameters', 'OperationalDefinitions', 'Provenance'];
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
 const results = {};
@@ -55,6 +55,12 @@ function sheetRows(wb, name) {
   const ws = wb.Sheets[name];
   if (!ws) return [];
   return XLSX.utils.sheet_to_json(ws, { defval: null });
+}
+
+function eventSheetRows(wb) {
+  const ws = wb.Sheets['Events'];
+  if (!ws) return [];
+  return XLSX.utils.sheet_to_json(ws, { defval: null, range: 1 });
 }
 
 async function validateCommittedFiles() {
@@ -97,11 +103,45 @@ async function validateCommittedFiles() {
   results.O_test53_summary_latency =
     row53?.totalLatency_value === 24.4 && row53?.totalLatency_valueKind === 'numeric' ? 'PASS' : `FAIL:${JSON.stringify({ v: row53?.totalLatency_value, k: row53?.totalLatency_valueKind })}`;
 
-  const events53 = sheetRows(wb53, 'Events');
+  results.O_test53_error_counts_unavailable =
+    row53?.primaryErrorsConfirmed == null &&
+    row53?.totalErrorsConfirmed == null &&
+    row53?.primaryErrors_valueKind === 'unavailable'
+      ? 'PASS'
+      : `FAIL:${JSON.stringify({ primaryErrorsConfirmed: row53?.primaryErrorsConfirmed, totalErrorsConfirmed: row53?.totalErrorsConfirmed, kind: row53?.primaryErrors_valueKind })}`;
+
+  const results53 = sheetRows(wb53, 'Results');
+  const resultsRow53 = results53.find((r) => String(r.fileName ?? '').includes('test53'));
+  results.O_test53_results_sheet =
+    resultsRow53?.totalLatency && /24\.4/.test(String(resultsRow53.totalLatency)) ? 'PASS' : `FAIL:${JSON.stringify(resultsRow53?.totalLatency)}`;
+  results.O_test53_results_errors_not_zero =
+    resultsRow53?.primaryErrorsConfirmedCount &&
+    !/^0$/.test(String(resultsRow53.primaryErrorsConfirmedCount)) &&
+    String(resultsRow53.primaryErrorsConfirmedCount).includes('Target hole not confirmed')
+      ? 'PASS'
+      : `FAIL:${JSON.stringify(resultsRow53?.primaryErrorsConfirmedCount)}`;
+
+  const events53 = eventSheetRows(wb53);
   const confirmedEscape = events53.filter(
     (r) => String(r.type ?? '').includes('escape') && String(r.status) === 'confirmed',
   );
   results.O_test53_confirmed_escape_row = confirmedEscape.length >= 1 ? 'PASS' : 'FAIL';
+  results.O_test53_events_display_frames =
+    events53.length > 0 &&
+    events53.every(
+      (r) =>
+        r.startFrameDisplay === Number(r.startFrameIndex) + 1 &&
+        r.endFrameDisplay === Number(r.endFrameIndex) + 1,
+    )
+      ? 'PASS'
+      : 'FAIL';
+  const proposedInvestigations = events53.filter(
+    (r) => r.type === 'investigation' && r.status === 'proposed',
+  );
+  results.O_test53_investigation_provenance =
+    proposedInvestigations.length === 4 && confirmedEscape.length === 1
+      ? 'PASS'
+      : `FAIL:proposed=${proposedInvestigations.length},confirmedEscape=${confirmedEscape.length}`;
 
   const wb51 = XLSX.read(await readFile(join(OUTPUTS, 'test51_report.xlsx')), { type: 'buffer' });
   const summary51 = sheetRows(wb51, 'Summary');
