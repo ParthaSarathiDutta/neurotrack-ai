@@ -1,6 +1,27 @@
 # NeuroTrack AI
 
-Browser-based Barnes maze analysis pipeline (Salk Task 1). Architecture and roadmap: `specs/constitution.md`.
+**Live app:** https://parthasarathidutta.github.io/neurotrack-ai/  
+**Demo video:** *(placeholder — add unlisted YouTube or Loom URL here before submission)*  
+**Repository:** https://github.com/ParthaSarathiDutta/neurotrack-ai
+
+Browser-based Barnes maze analysis pipeline (Salk Task 1). Architecture and roadmap: `specs/constitution.md`. Demonstration script: `reference/demo-checklist.md`.
+
+## Quick start (evaluators)
+
+1. Open the [live app](https://parthasarathidutta.github.io/neurotrack-ai/) — no install or account.
+2. Click **Load example analysis** to import three pre-analyzed trials (test50, test51, test53).
+3. Select a trial → review **Results & export**, **Visualizations**, and download CSV/XLSX or a `.neurotrack.json` bundle.
+
+Sample videos are not bundled; download from [Salk sample data](https://github.com/talmolab/salk-airc-takehome/tree/main/data/barnes-maze) to run the full ingest-to-export pipeline locally or to relink video after bundle import.
+
+## Known limitations
+
+- **Protocol target unknown** on all three sample clips — primary latency, error counts, and quadrant measures export as **unavailable**, never as misleading zeros.
+- **Physical scale unknown** — path length and speeds report in px unless calibration supplies px/cm.
+- **Escape semantics** — test53 has confirmed *candidate-hole* completion (24.40 s); test51 uncertain entry (censored); test50 incomplete (censored). See `outputs/README.md`.
+- **Speed reporting** — primary mean/max use `speed_interval_validity.v1` / v2 definitions; diagnostic speeds retain ungated intervals for audit (`reference/speed-interval-validity.md`).
+- **Search strategy** — heuristic classifier with manual override; not tied to a single published method.
+- **Scope** — single-user, browser-local; no cohort batch queue, embedded video in bundles, or cross-session learning curves.
 
 ## Development
 
@@ -26,6 +47,7 @@ npm run validate:ms4
 npm run validate:ms5
 npm run validate:import-empty
 npm run validate:ms6          # validate:ms6-viz + validate:ms6-outputs
+npm run validate:deploy       # production GitHub Pages smoke test (after deploy)
 ```
 
 Unit tests alone: `npm test` (205 tests at MS-6 sign-off).
@@ -50,6 +72,28 @@ npm run validate:ms6-outputs
 ```
 
 Source analysis: `tests/fixtures/ms6/three-trial-session.neurotrack.json`.
+
+### Submission inventory (`outputs/`)
+
+| Artifact | Description |
+|----------|-------------|
+| `test{50,51,53}_summary.csv` | Machine-readable trial summary rows |
+| `test{50,51,53}_events.csv` | Event detail export |
+| `test{50,51,53}_report.xlsx` | Six-sheet workbook (Results + Summary + Events + Parameters + OperationalDefinitions + Provenance) |
+| `test{50,51,53}.neurotrack.json` | Per-clip analysis bundles |
+| `bundles/all-clips-session.neurotrack.json` | Three-trial session bundle |
+| `outputs/README.md` | Provenance, tool versions, regeneration instructions |
+| `public/example/all-clips-session.neurotrack.json` | Load-example copy served by GitHub Pages |
+
+No `.mp4` files are committed (see `.gitignore`).
+
+### Deployment
+
+GitHub Actions (`.github/workflows/ci.yml`) runs lint, test, and build on push; **main** deploys to GitHub Pages at `/neurotrack-ai/` base path. Verify after deploy:
+
+```bash
+npm run validate:deploy
+```
 
 ### Data handling
 

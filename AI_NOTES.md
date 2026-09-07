@@ -556,3 +556,22 @@ Constitution MS-6 ✅, MS-6 spec signed off, README persistence/bundle/load-exam
 
 Merged `ms-6-visualization-export-reload` → `main`. MS-6 complete.
 
+## Final submission preparation (2026-09-07)
+
+### Deployment fix
+
+GitHub Pages returned 404 because the `github-pages` environment allowed deployment only from `ms-2-review-player-maze-calibration-trial-window`. Added `main` to deployment branch policies via GitHub API; CI redeploy succeeded (run 34159534134).
+
+**Live URL:** https://parthasarathidutta.github.io/neurotrack-ai/
+
+### Deliverables
+
+- `reference/demo-checklist.md` — evaluator demonstration script
+- `scripts/validate-deploy.mjs` + `npm run validate:deploy` — production smoke test
+- README updated: live URL, demo video placeholder, limitations, submission inventory, deployment verification
+
+### Manual actions remaining
+
+- Record 2–3 minute demo video and replace README placeholder URL
+- Email repo link to talmo@salk.edu; add `talmo` collaborator if repo is private
+

@@ -22,6 +22,7 @@
     "generate:ms6-outputs": "npx tsx scripts/generate-ms6-outputs.ts",
     "validate:ms6-outputs": "node scripts/validate-ms6-outputs.mjs",
     "validate:ms6": "npm run validate:ms6-viz && npm run validate:ms6-outputs",
+    "validate:deploy": "node scripts/validate-deploy.mjs",
     "validate:events-offline": "npx tsx scripts/validate-events-offline.mjs",
     "validate:calibration": "npx tsx scripts/validate-calibration.mjs",
     "preview": "vite preview"
