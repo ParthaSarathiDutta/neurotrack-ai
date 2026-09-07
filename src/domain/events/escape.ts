@@ -22,11 +22,8 @@ export interface PixelEvidenceResult {
   unavailableReason?: 'budget_exceeded' | 'frame_worker_error' | 'missing_video_cache' | 'init_superseded';
   areaDecayScore: number | null;
   holeDarkeningScore: number | null;
-  /** Presentation-order frame indices successfully analyzed. */
   analyzedFrameIndices?: number[];
-  /** Presentation-order frame indices requested but not decoded. */
   failedFrameIndices?: number[];
-  /** Frame-specific body-entry completion (neurotrack_body_entry v2). */
   bodyEntry?: BodyEntryCompletionResult | null;
   errorMessage?: string | null;
 }
@@ -144,7 +141,6 @@ function scorePhaseA(
   return best;
 }
 
-/** Phase A trajectory gate for pixel pass and escape scoring. */
 export function getPhaseACandidate(
   observations: Observation[],
   geometry: Geometry,
@@ -192,6 +188,27 @@ function isTrackingLostAtCensor(
   return last?.observed === 'lost';
 }
 
+function bodyEntryEvidenceFlags(
+  bodyEntry: BodyEntryCompletionResult | null | undefined,
+): Record<string, string | number | boolean | null> {
+  if (!bodyEntry) return {};
+  return {
+    bodyEntryDefinitionId: bodyEntry.definitionId,
+    bodyEntryDefinitionVersion: bodyEntry.definitionVersion,
+    bodyEntryCompletionEstablished: bodyEntry.completionEstablished,
+    bodyEntryCompletionFrameIndex: bodyEntry.completionFrameIndex,
+    bodyEntryCompletionTimeUs: bodyEntry.completionTimeUs,
+    bodyEntryCompletionTemporalSupportFrames: bodyEntry.completionTemporalSupportFrames,
+    bodyEntryCompletionPath: bodyEntry.completionPath,
+    bodyEntryPossibleEntryEvidence: bodyEntry.possibleEntryEvidence,
+    bodyEntryPossibleEntryFrameIndex: bodyEntry.possibleEntryFrameIndex,
+    bodyEntryPossibleEntryTimeUs: bodyEntry.possibleEntryTimeUs,
+    bodyEntryPossibleEntryTemporalSupportFrames: bodyEntry.possibleEntryTemporalSupportFrames,
+    bodyEntryFailureReason: bodyEntry.failureReason,
+    bodyEntryEstablished: bodyEntry.completionEstablished,
+  };
+}
+
 /** Detect escape / censor outcome at trial end. */
 export function detectEscapeOutcome(
   observations: Observation[],
@@ -234,17 +251,10 @@ export function detectEscapeOutcome(
       pixelAnalyzedFrameIndices: ctx.pixelEvidence.analyzedFrameIndices?.join(',') ?? null,
       pixelFailedFrameIndices: ctx.pixelEvidence.failedFrameIndices?.join(',') ?? null,
       pixelErrorMessage: ctx.pixelEvidence.errorMessage ?? null,
-      bodyEntryDefinitionId: ctx.pixelEvidence.bodyEntry?.definitionId ?? null,
-      bodyEntryDefinitionVersion: ctx.pixelEvidence.bodyEntry?.definitionVersion ?? null,
-      bodyEntryEstablished: ctx.pixelEvidence.bodyEntry?.established ?? null,
-      bodyEntryCompletionFrameIndex: ctx.pixelEvidence.bodyEntry?.completionFrameIndex ?? null,
-      bodyEntryCompletionTimeUs: ctx.pixelEvidence.bodyEntry?.completionTimeUs ?? null,
-      bodyEntryTemporalSupportFrames: ctx.pixelEvidence.bodyEntry?.temporalSupportFrames ?? null,
-      bodyEntryCompletionPath: ctx.pixelEvidence.bodyEntry?.completionPath ?? null,
-      bodyEntryFailureReason: ctx.pixelEvidence.bodyEntry?.failureReason ?? null,
       areaDecaySupporting:
         ctx.pixelEvidence.areaDecayScore != null &&
         ctx.pixelEvidence.areaDecayScore >= params.escapeCompletionAreaRatio,
+      ...bodyEntryEvidenceFlags(ctx.pixelEvidence.bodyEntry),
     };
     if (ctx.pixelEvidence.areaDecayScore != null) {
       score += ctx.pixelEvidence.areaDecayScore * 0.2;
@@ -257,29 +267,29 @@ export function detectEscapeOutcome(
     }
   }
 
-  const bodyEntryEstablished = ctx.pixelEvidence?.bodyEntry?.established === true;
-  const bodyEntryCompletion = ctx.pixelEvidence?.bodyEntry ?? null;
+  const bodyEntry = ctx.pixelEvidence?.bodyEntry ?? null;
+  const completionEstablished = bodyEntry?.completionEstablished === true;
+  const possibleEntryEvidence = bodyEntry?.possibleEntryEvidence === true;
 
   const canComplete =
     pixelComplete &&
-    bodyEntryEstablished &&
-    bodyEntryCompletion?.completionTimeUs != null &&
-    bodyEntryCompletion.completionFrameIndex != null &&
+    completionEstablished &&
+    bodyEntry?.completionTimeUs != null &&
+    bodyEntry.completionFrameIndex != null &&
+    bodyEntry.completionPath === 'centroid_pixel' &&
     score >= params.escapeConfirmThreshold;
 
-  if (canComplete && phaseA && bodyEntryCompletion) {
-    const completionTimeUs = bodyEntryCompletion.completionTimeUs!;
-    const completionFrameIndex = bodyEntryCompletion.completionFrameIndex!;
+  if (canComplete && phaseA && bodyEntry) {
     return {
       id: newEventId(),
       type: 'escape_completed',
       holeId: phaseA.holeId,
       startFrameIndex: phaseA.entryOnsetFrameIndex,
-      endFrameIndex: completionFrameIndex,
+      endFrameIndex: bodyEntry.completionFrameIndex!,
       startTimeUs: phaseA.entryOnsetTimeUs,
-      endTimeUs: completionTimeUs,
+      endTimeUs: bodyEntry.completionTimeUs!,
       entryOnsetTimeUs: phaseA.entryOnsetTimeUs,
-      completionTimeUs,
+      completionTimeUs: bodyEntry.completionTimeUs!,
       censorBoundaryTimeUs: censorUs,
       origin: 'auto',
       status: 'proposed',
@@ -292,6 +302,43 @@ export function detectEscapeOutcome(
         proximitySpanUs: phaseA.proximitySpanUs,
         censorReason,
         observedFollowUpLowerBoundUs: followUpLowerBoundUs,
+        auto_completion_path: 'centroid_pixel',
+        ...pixelFlags,
+      },
+      notes: null,
+    };
+  }
+
+  if (phaseA && possibleEntryEvidence && !completionEstablished) {
+    const confidence: 'medium' | 'low' =
+      score >= params.escapeCensorThreshold && pixelComplete ? 'medium' : 'low';
+    return {
+      id: newEventId(),
+      type: 'escape_entry_uncertain',
+      holeId: phaseA.holeId,
+      startFrameIndex: phaseA.entryOnsetFrameIndex,
+      endFrameIndex: phaseA.endFrameIndex,
+      startTimeUs: phaseA.entryOnsetTimeUs,
+      endTimeUs: censorUs,
+      entryOnsetTimeUs: phaseA.entryOnsetTimeUs,
+      completionTimeUs: null,
+      censorBoundaryTimeUs: censorUs,
+      origin: 'auto',
+      status: 'proposed',
+      confidence,
+      visitIndex: null,
+      isRevisit: null,
+      evidence: {
+        phaseAScore: phaseA.score,
+        motionDecay: phaseA.motionDecay,
+        proximitySpanUs: phaseA.proximitySpanUs,
+        censorReason,
+        observedFollowUpLowerBoundUs: followUpLowerBoundUs,
+        body_entry_uncertain: true,
+        uncertain_reason:
+          'Occlusion-aware pixel evidence suggests progressive entry; torso completion not auto-established (Path A required).',
+        candidate_hole_entry_not_protocol_escape:
+          'Candidate hole entry at Phase-A hole — not confirmed escape through protocol target.',
         ...pixelFlags,
       },
       notes: null,
@@ -300,9 +347,7 @@ export function detectEscapeOutcome(
 
   if (phaseA) {
     const confidence: 'medium' | 'low' =
-      score >= params.escapeCensorThreshold && pixelComplete
-        ? 'medium'
-        : 'low';
+      score >= params.escapeCensorThreshold && pixelComplete ? 'medium' : 'low';
     return {
       id: newEventId(),
       type: 'escape_incomplete_censored',
@@ -325,9 +370,8 @@ export function detectEscapeOutcome(
         proximitySpanUs: phaseA.proximitySpanUs,
         censorReason,
         observedFollowUpLowerBoundUs: followUpLowerBoundUs,
-        ...(bodyEntryEstablished
-          ? {}
-          : { body_entry_not_established: true, body_entry_failure: bodyEntryCompletion?.failureReason ?? 'unknown' }),
+        body_entry_not_established: true,
+        body_entry_failure: bodyEntry?.failureReason ?? 'unknown',
         ...(pixelComplete ? {} : { pixel_evidence_incomplete: true }),
         ...pixelFlags,
       },
@@ -335,7 +379,6 @@ export function detectEscapeOutcome(
     };
   }
 
-  // Insufficient entry evidence — distinguish rim exploration vs trial censor vs no record
   if (isTrackingLostAtCensor(observations, trialStart, censorUs)) {
     return null;
   }
@@ -343,28 +386,28 @@ export function detectEscapeOutcome(
     return null;
   }
   return {
-      id: newEventId(),
-      type: 'trial_censored_no_entry',
-      holeId: null,
-      startFrameIndex: timestampIndex[timestampIndex.length - 1]?.frameIndex ?? 0,
-      endFrameIndex: timestampIndex[timestampIndex.length - 1]?.frameIndex ?? 0,
-      startTimeUs: censorUs,
-      endTimeUs: censorUs,
-      entryOnsetTimeUs: null,
-      completionTimeUs: null,
-      censorBoundaryTimeUs: censorUs,
-      origin: 'auto',
-      status: 'proposed',
-      confidence: null,
-      visitIndex: null,
-      isRevisit: null,
-      evidence: {
-        phaseAScore: 0,
-        censorReason,
-        observedFollowUpLowerBoundUs: followUpLowerBoundUs,
-        no_entry_evidence: true,
-        ...pixelFlags,
-      },
-      notes: null,
-    };
+    id: newEventId(),
+    type: 'trial_censored_no_entry',
+    holeId: null,
+    startFrameIndex: timestampIndex[timestampIndex.length - 1]?.frameIndex ?? 0,
+    endFrameIndex: timestampIndex[timestampIndex.length - 1]?.frameIndex ?? 0,
+    startTimeUs: censorUs,
+    endTimeUs: censorUs,
+    entryOnsetTimeUs: null,
+    completionTimeUs: null,
+    censorBoundaryTimeUs: censorUs,
+    origin: 'auto',
+    status: 'proposed',
+    confidence: null,
+    visitIndex: null,
+    isRevisit: null,
+    evidence: {
+      phaseAScore: 0,
+      censorReason,
+      observedFollowUpLowerBoundUs: followUpLowerBoundUs,
+      no_entry_evidence: true,
+      ...pixelFlags,
+    },
+    notes: null,
+  };
 }

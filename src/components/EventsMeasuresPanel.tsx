@@ -38,6 +38,7 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
   const [escapeType, setEscapeType] = useState<Exclude<EventType, 'investigation'>>('escape_incomplete_censored');
   const [escapeHoleId, setEscapeHoleId] = useState('');
   const [escapeEntryFrame, setEscapeEntryFrame] = useState('');
+  const [escapeCompletionFrame, setEscapeCompletionFrame] = useState('');
 
   const basis = trial.measurementBasis ?? 'corrected';
   const analysis = trial.events;
@@ -56,7 +57,7 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
       <h3>Events &amp; measures</h3>
       <p className={styles.hint}>
         Operational definitions are versioned recommendations — adjust thresholds to match your protocol.
-        Body-entry completion (NeuroTrack default v2): head and torso in hole; tail may remain visible — not a universal laboratory standard.
+        Body-entry completion (NeuroTrack default v3): auto completion requires Path A (centroid-confirmed); occlusion-path pixels are possible-entry evidence only.
       </p>
       {!targetConfirmed && (
         <p className={styles.diagnosticNote} data-testid="target-unknown-note">
@@ -125,12 +126,29 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
       )}
 
       {escapeEv ? (
-        <p data-testid="escape-state-label">
-          Escape state: <strong>{escapeEv.type.replace(/_/g, ' ')}</strong>
-          {escapeEv.evidence.observedFollowUpLowerBoundUs != null && (
-            <> — follow-up lower bound ≥ {formatPresentationTimeSeconds(Number(escapeEv.evidence.observedFollowUpLowerBoundUs))} s</>
+        <>
+          {escapeEv.type === 'escape_entry_uncertain' && (
+            <p className={styles.diagnosticNote} data-testid="escape-uncertain-note">
+              Body entry uncertain — progressive pixel evidence at candidate hole; completion not auto-established. Total latency remains censored until you confirm escape completed with a completion frame, or retain this outcome.
+              {escapeEv.evidence.bodyEntryPossibleEntryFrameIndex != null && (
+                <> Possible-entry evidence from frame {Number(escapeEv.evidence.bodyEntryPossibleEntryFrameIndex) + 1}.</>
+              )}
+            </p>
           )}
-        </p>
+
+          {escapeEv.type === 'escape_completed' && escapeEv.status === 'proposed' && escapeEv.origin === 'auto' && (
+            <p className={styles.diagnosticNote} data-testid="escape-proposed-note">
+              Proposed escape completed — confirm this event to finalize total latency, or reject and set a manual outcome.
+            </p>
+          )}
+
+          <p data-testid="escape-state-label">
+            Escape state: <strong>{escapeEv.type.replace(/_/g, ' ')}</strong>
+            {escapeEv.evidence.observedFollowUpLowerBoundUs != null && (
+              <> — follow-up lower bound ≥ {formatPresentationTimeSeconds(Number(escapeEv.evidence.observedFollowUpLowerBoundUs))} s</>
+            )}
+          </p>
+        </>
       ) : (
         analysis && (
           <p data-testid="escape-state-label">Escape state: <strong>no escape record</strong></p>
@@ -214,6 +232,7 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
                 onChange={(e) => setEscapeType(e.target.value as Exclude<EventType, 'investigation'>)}
               >
                 <option value="escape_completed">Escape completed</option>
+                <option value="escape_entry_uncertain">Entry uncertain (review)</option>
                 <option value="escape_incomplete_censored">Incomplete entry (censored)</option>
                 <option value="trial_censored_no_entry">Trial censored — no entry</option>
               </select>
@@ -240,6 +259,17 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
                 onChange={(e) => setEscapeEntryFrame(e.target.value)}
               />
             </label>
+            <label>
+              Completion frame (escape completed only)
+              <input
+                type="number"
+                min={1}
+                data-testid="manual-escape-completion-frame"
+                value={escapeCompletionFrame}
+                placeholder={String(currentFrameIndex + 1)}
+                onChange={(e) => setEscapeCompletionFrame(e.target.value)}
+              />
+            </label>
             <button
               type="button"
               data-testid="set-manual-escape-btn"
@@ -252,6 +282,10 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
                       : parseHoleDisplayId(Number(escapeHoleId)),
                   entryOnsetFrameIndex:
                     escapeEntryFrame === '' ? null : Number(escapeEntryFrame) - 1,
+                  completionFrameIndex:
+                    escapeType === 'escape_completed' && escapeCompletionFrame !== ''
+                      ? Number(escapeCompletionFrame) - 1
+                      : null,
                 })
               }
             >

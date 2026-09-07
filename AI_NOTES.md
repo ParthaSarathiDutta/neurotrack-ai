@@ -315,3 +315,31 @@ test50 not forced to complete (hole darkening high but no sustained pixel torso 
 ### Validated
 lint/test/build PASS (142 tests); validate:ms4 + validate:ms5 PASS. **Not merged / MS-5 not marked complete** — stopped for final review.
 
+## MS-5 body-entry v3 — scientific safety correction (2026-09-07)
+
+### Problem
+Read-only audit of test51 at v2: Path B auto-completed at display frame 674 (internal 673) via area/darkening proxies (~62% baseline area). Substantial body still visible at frame 701 — proxies cannot distinguish partial torso entry from full-body completion. Rejected per-sample 45% area / 0.25 darkening thresholds.
+
+### Fix
+- `neurotrack_body_entry` **v3** in `reference/neurotrack-body-entry-v3.md`.
+- **Path A only** may auto-establish completion (`centroid_pixel` + pixel + temporal support).
+- **Path B** (`occlusion_pixel`) → `possibleEntryEvidence` only → `escape_entry_uncertain` (not `escape_completed`).
+- Proposed auto `escape_completed` no longer yields numeric total latency until scientist confirms.
+- Manual escape supports explicit `completionFrameIndex`; migration marks v2 occlusion auto-completes stale.
+
+### Rejected
+- Tuning area/darkening thresholds per sample to reject test51 while keeping v2 semantics.
+- Treating centroid proximity alone as sufficient without pixel temporal support (unchanged from v1/v2 Path A requirements).
+
+### Validation outcome (target unknown, no cutoff)
+| Clip | Escape | Completion / evidence frame | Path | Total latency |
+|---|---|---|---|---|
+| test53 | escape_completed (proposed) | 880 (Path A); possible entry 822 | centroid_pixel | Censored ≥ 25.20 s until confirmed |
+| test51 | escape_entry_uncertain | possible entry 673 | occlusion only | Censored ≥ 44.24 s |
+| test50 | escape_incomplete_censored | — | not established | Censored ≥ 180.03 s |
+
+test51 no longer auto-completes at partial-entry frame 673. test53 Path A completion at 880 (not v2 occlusion frame 822); numeric latency withheld until scientist confirms proposed escape.
+
+### Validated
+lint/test/build PASS (147 tests); validate:ms4 + validate:ms5 PASS. **Not merged / MS-5 not marked complete** — stopped for manual review.
+

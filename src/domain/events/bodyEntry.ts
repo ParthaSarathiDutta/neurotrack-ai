@@ -1,12 +1,12 @@
 /**
- * NeuroTrack default body-entry completion (definition v2).
- * @see reference/neurotrack-body-entry-v2.md
+ * NeuroTrack default body-entry completion (definition v3).
+ * @see reference/neurotrack-body-entry-v3.md
  */
 import { dist } from './holeProximity';
 import type { EventDetectionParams, Hole, Observation } from '../types';
 
 export const BODY_ENTRY_DEFINITION_ID = 'neurotrack_body_entry';
-export const BODY_ENTRY_DEFINITION_VERSION = '2';
+export const BODY_ENTRY_DEFINITION_VERSION = '3';
 
 export type BodyEntryPath = 'centroid_pixel' | 'occlusion_pixel' | null;
 
@@ -16,27 +16,33 @@ export interface BodyEntryFrameMetrics {
   platformBlobArea: number;
   holeDarkening: number;
   bodyDistPx: number | null;
-  /** Strict 6% centroid gate — supporting evidence (Path A). */
+  /** Strict 6% centroid gate — required for auto completion (Path A). */
   meetsTorsoProximity: boolean;
   /** Phase-A approach zone (12% radius). */
   meetsApproachProximity: boolean;
   /** Hole darkening + reduced platform remnant. */
   meetsPixelTorsoEntry: boolean;
   /** @deprecated alias */ meetsPixelEntry: boolean;
-  /** Path A or Path B at this frame. */
   meetsBodyEntry: boolean;
   entryPath: BodyEntryPath;
 }
 
 export interface BodyEntryCompletionResult {
-  established: boolean;
+  /** Path A: auto completion timestamp permitted. */
+  completionEstablished: boolean;
   completionFrameIndex: number | null;
   completionTimeUs: number | null;
-  temporalSupportFrames: number;
+  completionTemporalSupportFrames: number;
+  completionPath: BodyEntryPath;
+  /** Path B: progressive/partial entry evidence — not auto-completion proof. */
+  possibleEntryEvidence: boolean;
+  possibleEntryFrameIndex: number | null;
+  possibleEntryTimeUs: number | null;
+  possibleEntryTemporalSupportFrames: number;
+  /** @deprecated use completionEstablished */ established: boolean;
+  /** @deprecated alias */ temporalSupportFrames: number;
   definitionId: string;
   definitionVersion: string;
-  completionPath: BodyEntryPath;
-  /** Aggregate area decay — supporting evidence only. */
   areaDecayScore: number | null;
   failureReason: string | null;
   frameMetrics: BodyEntryFrameMetrics[];
@@ -89,12 +95,31 @@ function frameEntryPath(
   return null;
 }
 
-function meetsBodyEntryAt(
+function qualifiesAtPath(
   metrics: BodyEntryFrameMetrics[],
   index: number,
   params: EventDetectionParams,
+  path: Exclude<BodyEntryPath, null>,
 ): boolean {
-  return frameEntryPath(metrics, index, params) != null;
+  return frameEntryPath(metrics, index, params) === path;
+}
+
+function findFirstRun(
+  metrics: BodyEntryFrameMetrics[],
+  params: EventDetectionParams,
+  path: Exclude<BodyEntryPath, null>,
+  minFrames: number,
+): { startIndex: number; length: number } | null {
+  for (let start = 0; start <= metrics.length - minFrames; start += 1) {
+    if (!qualifiesAtPath(metrics, start, params, path)) continue;
+    let run = 0;
+    for (let j = start; j < metrics.length; j += 1) {
+      if (!qualifiesAtPath(metrics, j, params, path)) break;
+      run += 1;
+    }
+    if (run >= minFrames) return { startIndex: start, length: run };
+  }
+  return null;
 }
 
 /** Per-frame torso + pixel entry signals (chronological samples). */
@@ -156,9 +181,22 @@ export function buildBodyEntryFrameMetrics(
   });
 }
 
+function recordingEndGuard(
+  metrics: BodyEntryFrameMetrics[],
+  startIndex: number,
+  runLength: number,
+  censorFrameIndex: number,
+): boolean {
+  const first = metrics[startIndex]!;
+  return (
+    first.frameIndex === censorFrameIndex &&
+    runLength === 1 &&
+    metrics.length > 1
+  );
+}
+
 /**
- * First temporally supported body-entry completion frame, or null if not established.
- * Never returns censor/recording frame unless that frame itself qualifies with support.
+ * Path A may establish auto completion; Path B is possible-entry evidence only.
  */
 export function detectBodyEntryCompletion(
   input: BodyEntryDetectionInput,
@@ -174,72 +212,64 @@ export function detectBodyEntryCompletion(
     earlyMean > 10 ? Math.max(0, Math.min(1, 1 - lateMean / earlyMean)) : 0;
 
   const minFrames = input.params.bodyEntryTemporalMinFrames;
+  const completionRun = findFirstRun(metrics, input.params, 'centroid_pixel', minFrames);
+  const possibleRun = findFirstRun(metrics, input.params, 'occlusion_pixel', minFrames);
+
+  let completionEstablished = false;
   let completionFrameIndex: number | null = null;
   let completionTimeUs: number | null = null;
-  let temporalSupportFrames = 0;
-  let completionPath: BodyEntryPath = null;
-
-  for (let start = 0; start <= metrics.length - minFrames; start += 1) {
-    if (!meetsBodyEntryAt(metrics, start, input.params)) continue;
-    let run = 0;
-    for (let j = start; j < metrics.length; j += 1) {
-      if (!meetsBodyEntryAt(metrics, j, input.params)) break;
-      run += 1;
-    }
-    if (run >= minFrames) {
-      const first = metrics[start]!;
-      completionFrameIndex = first.frameIndex;
-      completionTimeUs = first.timeUs;
-      temporalSupportFrames = run;
-      completionPath = first.entryPath;
-      break;
-    }
-  }
-
-  if (completionFrameIndex == null) {
-    return {
-      established: false,
-      completionFrameIndex: null,
-      completionTimeUs: null,
-      temporalSupportFrames: 0,
-      definitionId: BODY_ENTRY_DEFINITION_ID,
-      definitionVersion: BODY_ENTRY_DEFINITION_VERSION,
-      completionPath: null,
-      areaDecayScore,
-      failureReason: 'no_temporally_supported_body_entry',
-      frameMetrics: metrics,
-    };
-  }
+  let completionTemporalSupportFrames = 0;
 
   if (
-    completionFrameIndex === input.censorFrameIndex &&
-    temporalSupportFrames === 1 &&
-    metrics.length > 1
+    completionRun &&
+    !recordingEndGuard(metrics, completionRun.startIndex, completionRun.length, input.censorFrameIndex)
   ) {
-    return {
-      established: false,
-      completionFrameIndex: null,
-      completionTimeUs: null,
-      temporalSupportFrames: 0,
-      definitionId: BODY_ENTRY_DEFINITION_ID,
-      definitionVersion: BODY_ENTRY_DEFINITION_VERSION,
-      completionPath: null,
-      areaDecayScore,
-      failureReason: 'insufficient_temporal_support_at_recording_end',
-      frameMetrics: metrics,
-    };
+    const first = metrics[completionRun.startIndex]!;
+    completionEstablished = true;
+    completionFrameIndex = first.frameIndex;
+    completionTimeUs = first.timeUs;
+    completionTemporalSupportFrames = completionRun.length;
+  }
+
+  let possibleEntryEvidence = false;
+  let possibleEntryFrameIndex: number | null = null;
+  let possibleEntryTimeUs: number | null = null;
+  let possibleEntryTemporalSupportFrames = 0;
+
+  if (
+    possibleRun &&
+    !recordingEndGuard(metrics, possibleRun.startIndex, possibleRun.length, input.censorFrameIndex)
+  ) {
+    const first = metrics[possibleRun.startIndex]!;
+    possibleEntryEvidence = true;
+    possibleEntryFrameIndex = first.frameIndex;
+    possibleEntryTimeUs = first.timeUs;
+    possibleEntryTemporalSupportFrames = possibleRun.length;
+  }
+
+  let failureReason: string | null = null;
+  if (!completionEstablished && !possibleEntryEvidence) {
+    failureReason = 'no_temporally_supported_body_entry';
+  } else if (!completionEstablished && possibleEntryEvidence) {
+    failureReason = 'possible_entry_only_occlusion_path';
   }
 
   return {
-    established: true,
+    completionEstablished,
     completionFrameIndex,
     completionTimeUs,
-    temporalSupportFrames,
+    completionTemporalSupportFrames,
+    completionPath: completionEstablished ? 'centroid_pixel' : null,
+    possibleEntryEvidence,
+    possibleEntryFrameIndex,
+    possibleEntryTimeUs,
+    possibleEntryTemporalSupportFrames,
+    established: completionEstablished,
+    temporalSupportFrames: completionTemporalSupportFrames,
     definitionId: BODY_ENTRY_DEFINITION_ID,
     definitionVersion: BODY_ENTRY_DEFINITION_VERSION,
-    completionPath,
     areaDecayScore,
-    failureReason: null,
+    failureReason,
     frameMetrics: metrics,
   };
 }

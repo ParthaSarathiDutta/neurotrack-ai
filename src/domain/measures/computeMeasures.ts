@@ -63,6 +63,7 @@ function escapeEvent(events: BehavioralEvent[]): BehavioralEvent | null {
     events.find(
       (e) =>
         e.type === 'escape_completed' ||
+        e.type === 'escape_entry_uncertain' ||
         e.type === 'escape_incomplete_censored' ||
         e.type === 'trial_censored_no_entry',
     ) ?? null
@@ -140,13 +141,34 @@ export function computeMeasures(
           });
 
   let totalLatency: MeasureValue;
-  if (esc?.type === 'escape_completed' && esc.completionTimeUs != null) {
+  if (esc?.type === 'escape_completed' && esc.completionTimeUs != null && esc.status === 'confirmed') {
     totalLatency = mv({
       value: (esc.completionTimeUs - trialStart) / 1_000_000,
       unit: 's',
       definitionId: 'total_latency.v1',
       definitionLabel: 'Total latency',
-      definitionSummary: 'Protocol completion time (escape completed)',
+      definitionSummary: 'Protocol completion time (escape completed, confirmed)',
+      ...(esc.origin === 'manual' ? { assumptions: ['manual_completion'] } : {}),
+    });
+  } else if (esc?.type === 'escape_completed' && esc.completionTimeUs != null && esc.origin === 'manual') {
+    totalLatency = mv({
+      value: (esc.completionTimeUs - trialStart) / 1_000_000,
+      unit: 's',
+      definitionId: 'total_latency.v1',
+      definitionLabel: 'Total latency',
+      definitionSummary: 'Protocol completion time (manual escape completed)',
+      assumptions: ['manual_completion'],
+    });
+  } else if (esc?.type === 'escape_completed' && esc.completionTimeUs != null && esc.status === 'proposed') {
+    totalLatency = mv({
+      censored: true,
+      definitionId: 'total_latency.v1',
+      definitionLabel: 'Total latency',
+      definitionSummary: 'Protocol completion time — proposed, not confirmed',
+      unit: 's',
+      lowerBound: followUpLowerBoundSec,
+      lowerBoundUnit: 's',
+      flags: ['escape_completed_proposed'],
     });
   } else {
     totalLatency = mv({

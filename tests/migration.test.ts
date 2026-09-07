@@ -47,4 +47,43 @@ describe('migration', () => {
     expect(migrated.track?.manualCorrections).toEqual([]);
     expect(migrated.track?.appliedCleaning).toBeNull();
   });
+
+  it('marks stale auto escape when body-entry v3 supersedes v2 occlusion auto-complete', () => {
+    const stub = createTrialStub('abc', 'video.mp4');
+    const migrated = migrateTrialRecord({
+      ...stub,
+      events: {
+        basisUsed: 'corrected',
+        computedAt: 'x',
+        stale: false,
+        staleReason: null,
+        events: [
+          {
+            id: 'e1',
+            type: 'escape_completed',
+            holeId: 1,
+            startFrameIndex: 0,
+            endFrameIndex: 10,
+            startTimeUs: 0,
+            endTimeUs: 1_000_000,
+            entryOnsetTimeUs: 0,
+            completionTimeUs: 1_000_000,
+            censorBoundaryTimeUs: 2_000_000,
+            origin: 'auto',
+            status: 'proposed',
+            confidence: 'high',
+            visitIndex: null,
+            isRevisit: null,
+            evidence: {
+              bodyEntryDefinitionVersion: '2',
+              bodyEntryCompletionPath: 'occlusion_pixel',
+            },
+            notes: null,
+          },
+        ],
+      },
+    });
+    expect(migrated.events?.stale).toBe(true);
+    expect(migrated.events?.staleReason).toMatch(/v3|supersedes|occlusion/i);
+  });
 });

@@ -11,7 +11,6 @@ export function timeUsForFrame(
   return timestampIndex.find((e) => e.frameIndex === frameIndex)?.timeUs ?? null;
 }
 
-/** Recompute visitIndex / isRevisit for investigations in chronological order. */
 export function reindexInvestigationVisits(events: BehavioralEvent[]): BehavioralEvent[] {
   const visitCounts = new Map<number, number>();
   return events.map((e) => {
@@ -58,6 +57,7 @@ export function buildManualEscapeEvent(input: {
   type: Exclude<EventType, 'investigation'>;
   holeId: number | null;
   entryOnsetFrameIndex: number | null;
+  completionFrameIndex?: number | null;
   timestampIndex: TimestampIndexEntry[];
   censorBoundaryTimeUs: number;
   trialStartTimeUs: number;
@@ -75,16 +75,25 @@ export function buildManualEscapeEvent(input: {
   const entryFrame =
     input.entryOnsetFrameIndex ?? censorEntry.frameIndex;
 
+  const completionTimeUs =
+    input.type === 'escape_completed' && input.completionFrameIndex != null
+      ? timeUsForFrame(input.timestampIndex, input.completionFrameIndex)
+      : null;
+  const completionFrame =
+    input.type === 'escape_completed' && input.completionFrameIndex != null
+      ? input.completionFrameIndex
+      : null;
+
   return {
     id: newEventId(),
     type: input.type,
     holeId: input.holeId,
     startFrameIndex: entryFrame,
-    endFrameIndex: censorEntry.frameIndex,
+    endFrameIndex: completionFrame ?? censorEntry.frameIndex,
     startTimeUs: entryTimeUs ?? input.censorBoundaryTimeUs,
-    endTimeUs: input.censorBoundaryTimeUs,
+    endTimeUs: completionTimeUs ?? input.censorBoundaryTimeUs,
     entryOnsetTimeUs: entryTimeUs,
-    completionTimeUs: input.type === 'escape_completed' ? input.censorBoundaryTimeUs : null,
+    completionTimeUs,
     censorBoundaryTimeUs: input.censorBoundaryTimeUs,
     origin: 'manual',
     status: 'confirmed',
@@ -93,13 +102,13 @@ export function buildManualEscapeEvent(input: {
     isRevisit: null,
     evidence: {
       manual: true,
+      manual_completion_frame: completionFrame,
       observedFollowUpLowerBoundUs: input.censorBoundaryTimeUs - input.trialStartTimeUs,
     },
     notes: input.notes ?? null,
   };
 }
 
-/** Replace auto escape/censor record while preserving investigations. */
 export function replaceEscapeEvent(
   events: BehavioralEvent[],
   escape: BehavioralEvent,
@@ -126,6 +135,8 @@ export function mergeManualEventEdit(
     const endFrameIndex = patch.endFrameIndex ?? e.endFrameIndex;
     const startTimeUs = timeUsForFrame(timestampIndex, startFrameIndex) ?? e.startTimeUs;
     const endTimeUs = timeUsForFrame(timestampIndex, endFrameIndex) ?? e.endTimeUs;
+    const completionTimeUs =
+      (patch.type ?? e.type) === 'escape_completed' ? endTimeUs : e.completionTimeUs;
     return {
       ...e,
       ...patch,
@@ -133,7 +144,8 @@ export function mergeManualEventEdit(
       endFrameIndex,
       startTimeUs,
       endTimeUs,
-      origin: e.origin === 'manual' ? 'manual' : 'manual',
+      completionTimeUs,
+      origin: 'manual',
       status: patch.status ?? (e.origin === 'manual' ? 'confirmed' : e.status),
       evidence: {
         ...e.evidence,

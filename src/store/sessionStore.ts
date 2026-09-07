@@ -114,7 +114,13 @@ interface SessionState {
   updateEvent: (trialId: string, eventId: string, patch: Partial<Pick<BehavioralEvent, 'holeId' | 'startFrameIndex' | 'endFrameIndex' | 'type' | 'notes' | 'status'>>) => void;
   setManualEscapeOutcome: (
     trialId: string,
-    input: { type: Exclude<EventType, 'investigation'>; holeId: number | null; entryOnsetFrameIndex?: number | null; notes?: string },
+    input: {
+      type: Exclude<EventType, 'investigation'>;
+      holeId: number | null;
+      entryOnsetFrameIndex?: number | null;
+      completionFrameIndex?: number | null;
+      notes?: string;
+    },
   ) => void;
   updateEventParams: (patch: Partial<EventDetectionParams>) => void;
   updateOperationalDefinitions: (patch: Partial<OperationalDefinitionSelections>) => void;
@@ -1157,6 +1163,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           type: input.type,
           holeId: input.holeId,
           entryOnsetFrameIndex: input.entryOnsetFrameIndex ?? null,
+          completionFrameIndex: input.completionFrameIndex ?? null,
           timestampIndex: t.timestampIndex,
           censorBoundaryTimeUs: censorUs,
           trialStartTimeUs: trialStart,
@@ -1324,10 +1331,16 @@ if (typeof window !== 'undefined') {
         esc.evidence.areaDecayScore != null ? Number(esc.evidence.areaDecayScore) : null,
       holeDarkeningScore:
         esc.evidence.holeDarkeningScore != null ? Number(esc.evidence.holeDarkeningScore) : null,
-      bodyEntryEstablished: esc.evidence.bodyEntryEstablished === true,
+      bodyEntryEstablished: esc.evidence.bodyEntryCompletionEstablished === true,
+      bodyEntryCompletionEstablished: esc.evidence.bodyEntryCompletionEstablished === true,
+      bodyEntryPossibleEntry: esc.evidence.bodyEntryPossibleEntryEvidence === true,
       bodyEntryCompletionFrameIndex:
         esc.evidence.bodyEntryCompletionFrameIndex != null
           ? Number(esc.evidence.bodyEntryCompletionFrameIndex)
+          : null,
+      bodyEntryPossibleEntryFrameIndex:
+        esc.evidence.bodyEntryPossibleEntryFrameIndex != null
+          ? Number(esc.evidence.bodyEntryPossibleEntryFrameIndex)
           : null,
       bodyEntryFailureReason:
         esc.evidence.bodyEntryFailureReason != null

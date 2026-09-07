@@ -186,16 +186,15 @@ async function main() {
       outcome.escapeType === null ||
       [
         'escape_completed',
+        'escape_entry_uncertain',
         'escape_incomplete_censored',
         'trial_censored_no_entry',
       ].includes(outcome.escapeType)
         ? 'PASS'
         : `FAIL:${outcome.escapeType}`;
     results[`${clip}_total_latency_consistent`] =
-      outcome.escapeType === 'escape_completed'
-        ? outcome.totalLatency?.includes('Censored')
-          ? `FAIL:censored_on_completed:${outcome.totalLatency}`
-          : 'PASS'
+      outcome.escapeType === 'escape_completed' && !outcome.totalLatency?.includes('Censored')
+        ? `FAIL:finalized_without_confirm:${outcome.totalLatency}`
         : outcome.totalLatency?.includes('Censored') || outcome.totalLatency?.includes('Unavailable')
           ? 'PASS'
           : `FAIL:${outcome.totalLatency}`;
@@ -203,7 +202,7 @@ async function main() {
       outcome.escapeType !== 'escape_completed' ||
       (outcome.pixel?.complete === true &&
         outcome.pixel.framesAnalyzed > 0 &&
-        outcome.pixel.bodyEntryEstablished === true &&
+        outcome.pixel.bodyEntryCompletionEstablished === true &&
         outcome.pixel.bodyEntryCompletionFrameIndex != null)
         ? 'PASS'
         : `FAIL:${JSON.stringify(outcome.pixel)}`;

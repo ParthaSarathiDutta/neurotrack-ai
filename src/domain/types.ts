@@ -187,6 +187,7 @@ export type MeasurementBasis = 'raw' | 'corrected' | 'cleaned';
 export type EventType =
   | 'investigation'
   | 'escape_completed'
+  | 'escape_entry_uncertain'
   | 'escape_incomplete_censored'
   | 'trial_censored_no_entry';
 

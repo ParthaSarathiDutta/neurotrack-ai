@@ -1,4 +1,5 @@
-import type { AnalysisParams, Geometry, Hole, Track, TrialRecord, TrialWindow } from './types';
+import type { AnalysisParams, EventAnalysis, Geometry, Hole, Track, TrialRecord, TrialWindow } from './types';
+import { BODY_ENTRY_DEFINITION_VERSION } from './events/bodyEntry';
 import {
   defaultCleaningParams,
   defaultEventDetectionParams,
@@ -44,10 +45,37 @@ export function migrateTrialRecord(trial: TrialRecord): TrialRecord {
     geometry: migrateGeometry(trial.geometry),
     trialWindow: migrateTrialWindow(trial.trialWindow),
     track: migrateTrack(trial.track),
-    events: trial.events ?? null,
+    events: migrateEventAnalysis(trial.events),
     measures: trial.measures ?? null,
     measurementBasis: trial.measurementBasis ?? defaultMeasurementBasis(),
   };
+}
+
+function migrateEventAnalysis(events: EventAnalysis | null | undefined): EventAnalysis | null {
+  if (!events) return null;
+  const autoEsc = events.events.find((e) => e.type !== 'investigation' && e.origin === 'auto');
+  if (!autoEsc) return events;
+
+  const version = autoEsc.evidence.bodyEntryDefinitionVersion;
+  const completionPath = autoEsc.evidence.bodyEntryCompletionPath;
+  const supersededVersion =
+    version != null && String(version) !== BODY_ENTRY_DEFINITION_VERSION;
+  const supersededOcclusionAutoComplete =
+    autoEsc.type === 'escape_completed' &&
+    autoEsc.origin === 'auto' &&
+    autoEsc.status === 'proposed' &&
+    completionPath === 'occlusion_pixel';
+
+  if (supersededVersion || supersededOcclusionAutoComplete) {
+    return {
+      ...events,
+      stale: true,
+      staleReason: supersededVersion
+        ? `Body-entry definition v${BODY_ENTRY_DEFINITION_VERSION} supersedes stored v${String(version)} — re-detect events to refresh automatic escape and measures.`
+        : 'Occlusion-path auto-completion superseded — re-detect events (Path B is evidence only in v3).',
+    };
+  }
+  return events;
 }
 
 function migrateTrack(track: Track | null | undefined): Track | null {

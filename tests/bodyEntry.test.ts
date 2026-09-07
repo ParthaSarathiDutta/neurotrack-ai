@@ -27,6 +27,17 @@ const geometry: Geometry = {
   detection: null,
 };
 const hole = geometry.holes[0]!;
+const trialWindow = {
+  startTimeUs: 5_000_000,
+  endTimeUs: 30_000_000,
+  cutoffSeconds: null,
+  proposedStartTimeUs: 5_000_000,
+  proposedEndTimeUs: 30_000_000,
+  confirmedAt: 'x',
+  motionOnsetConfidence: 1,
+  detectionFailureReason: null,
+  source: 'manual' as const,
+};
 
 function obs(frameIndex: number, timeUs: number, body: { x: number; y: number }): Observation {
   return {
@@ -67,13 +78,34 @@ function makeInput(
   };
 }
 
-describe('neurotrack_body_entry v2', () => {
+function bodyEntryFromResult(result: ReturnType<typeof detectBodyEntryCompletion>) {
+  return {
+    completionEstablished: result.completionEstablished,
+    completionFrameIndex: result.completionFrameIndex,
+    completionTimeUs: result.completionTimeUs,
+    completionTemporalSupportFrames: result.completionTemporalSupportFrames,
+    completionPath: result.completionPath,
+    possibleEntryEvidence: result.possibleEntryEvidence,
+    possibleEntryFrameIndex: result.possibleEntryFrameIndex,
+    possibleEntryTimeUs: result.possibleEntryTimeUs,
+    possibleEntryTemporalSupportFrames: result.possibleEntryTemporalSupportFrames,
+    established: result.completionEstablished,
+    temporalSupportFrames: result.completionTemporalSupportFrames,
+    definitionId: BODY_ENTRY_DEFINITION_ID,
+    definitionVersion: BODY_ENTRY_DEFINITION_VERSION,
+    areaDecayScore: result.areaDecayScore,
+    failureReason: result.failureReason,
+    frameMetrics: result.frameMetrics,
+  };
+}
+
+describe('neurotrack_body_entry v3', () => {
   it('documents versioned definition id', () => {
     expect(BODY_ENTRY_DEFINITION_ID).toBe('neurotrack_body_entry');
-    expect(BODY_ENTRY_DEFINITION_VERSION).toBe('2');
+    expect(BODY_ENTRY_DEFINITION_VERSION).toBe('3');
   });
 
-  it('accepts body entry with visible tail (reduced platform area, not zero)', () => {
+  it('establishes completion on Path A with visible tail (reduced platform area, not zero)', () => {
     const nearHole = { x: 518, y: 240 };
     const result = detectBodyEntryCompletion(
       makeInput(
@@ -84,14 +116,14 @@ describe('neurotrack_body_entry v2', () => {
         12,
       ),
     );
-    expect(result.established).toBe(true);
+    expect(result.completionEstablished).toBe(true);
     expect(result.completionFrameIndex).toBe(11);
     expect(result.completionPath).toBe('centroid_pixel');
+    expect(result.possibleEntryEvidence).toBe(false);
     expect(result.frameMetrics[2]!.platformBlobArea).toBeGreaterThan(0);
   });
 
-  it('accepts occlusion-path entry when centroid lags outside strict torso gate', () => {
-    // Strict torso max = 12 px; approach max = 24 px. Body at 507 is 13 px from hole at 520.
+  it('treats occlusion-path pixels as possible entry evidence only, not auto completion', () => {
     const laggingCentroid = { x: 507, y: 240 };
     const result = detectBodyEntryCompletion(
       makeInput(
@@ -102,8 +134,10 @@ describe('neurotrack_body_entry v2', () => {
         42,
       ),
     );
-    expect(result.established).toBe(true);
-    expect(result.completionPath).toBe('occlusion_pixel');
+    expect(result.completionEstablished).toBe(false);
+    expect(result.possibleEntryEvidence).toBe(true);
+    expect(result.possibleEntryFrameIndex).toBe(41);
+    expect(result.failureReason).toBe('possible_entry_only_occlusion_path');
     expect(result.frameMetrics.every((m) => !m.meetsTorsoProximity)).toBe(true);
     expect(result.frameMetrics.every((m) => m.meetsApproachProximity)).toBe(true);
   });
@@ -119,7 +153,8 @@ describe('neurotrack_body_entry v2', () => {
         21,
       ),
     );
-    expect(result.established).toBe(false);
+    expect(result.completionEstablished).toBe(false);
+    expect(result.possibleEntryEvidence).toBe(false);
     expect(result.failureReason).toBe('no_temporally_supported_body_entry');
   });
 
@@ -134,10 +169,11 @@ describe('neurotrack_body_entry v2', () => {
         27,
       ),
     );
-    expect(result.established).toBe(false);
+    expect(result.completionEstablished).toBe(false);
+    expect(result.possibleEntryEvidence).toBe(false);
   });
 
-  it('detects genuine completion with temporal support via centroid path', () => {
+  it('detects genuine Path A completion with temporal support', () => {
     const deep = { x: 519, y: 240 };
     const result = detectBodyEntryCompletion(
       makeInput(
@@ -148,9 +184,9 @@ describe('neurotrack_body_entry v2', () => {
         33,
       ),
     );
-    expect(result.established).toBe(true);
+    expect(result.completionEstablished).toBe(true);
     expect(result.completionPath).toBe('centroid_pixel');
-    expect(result.temporalSupportFrames).toBeGreaterThanOrEqual(2);
+    expect(result.completionTemporalSupportFrames).toBeGreaterThanOrEqual(2);
     expect(result.completionFrameIndex).toBe(31);
   });
 
@@ -174,10 +210,11 @@ describe('neurotrack_body_entry v2', () => {
         9,
       ),
     );
-    expect(result.established).toBe(false);
+    expect(result.completionEstablished).toBe(false);
+    expect(result.possibleEntryEvidence).toBe(false);
   });
 
-  it('allows completion at recording boundary when temporally supported', () => {
+  it('allows Path A completion at recording boundary when temporally supported', () => {
     const deep = { x: 519, y: 240 };
     const result = detectBodyEntryCompletion(
       makeInput(
@@ -188,7 +225,7 @@ describe('neurotrack_body_entry v2', () => {
         100,
       ),
     );
-    expect(result.established).toBe(true);
+    expect(result.completionEstablished).toBe(true);
     expect(result.completionFrameIndex).toBe(98);
     expect(result.completionFrameIndex).not.toBe(100);
   });
@@ -204,7 +241,7 @@ describe('neurotrack_body_entry v2', () => {
         100,
       ),
     );
-    expect(result.established).toBe(false);
+    expect(result.completionEstablished).toBe(false);
     expect(result.failureReason).toBe('no_temporally_supported_body_entry');
   });
 
@@ -219,30 +256,58 @@ describe('neurotrack_body_entry v2', () => {
         51,
       ),
     );
-    expect(result.established).toBe(false);
+    expect(result.completionEstablished).toBe(false);
+    expect(result.possibleEntryEvidence).toBe(false);
+  });
+
+  it('classifies escape_entry_uncertain when only occlusion-path evidence exists', () => {
+    const observations: Observation[] = [];
+    for (let i = 0; i < 80; i += 1) {
+      observations.push(obs(i, 5_000_000 + i * 100_000, { x: 507, y: 240 }));
+    }
+    const ts = observations.map((o) => ({ timeUs: o.timeUs, frameIndex: o.frameIndex }));
+    const bodyEntry = detectBodyEntryCompletion(
+      makeInput(
+        [60, 61, 62],
+        [5000, 2900, 2700],
+        [0.14, 0.18, 0.22],
+        [{ x: 507, y: 240 }, { x: 507, y: 240 }, { x: 507, y: 240 }],
+        62,
+      ),
+    );
+    const esc = detectEscapeOutcome(
+      observations,
+      geometry,
+      trialWindow,
+      ts,
+      params,
+      {
+        pixelEvidence: {
+          framesAnalyzed: 50,
+          framesRequested: 50,
+          complete: true,
+          areaDecayScore: 0.5,
+          holeDarkeningScore: 0.3,
+          bodyEntry: bodyEntryFromResult(bodyEntry),
+        },
+      },
+    );
+    expect(esc?.type).toBe('escape_entry_uncertain');
+    expect(esc?.completionTimeUs).toBeNull();
+    expect(esc?.evidence.body_entry_uncertain).toBe(true);
+    expect(esc?.evidence.candidate_hole_entry_not_protocol_escape).toBeTruthy();
   });
 
   it('does not classify escape_completed from aggregate decay alone', () => {
-    const holeTarget = geometry.holes[0]!;
     const observations: Observation[] = [];
     for (let i = 0; i < 80; i += 1) {
-      observations.push(obs(i, 5_000_000 + i * 100_000, { x: holeTarget.x - 2, y: holeTarget.y }));
+      observations.push(obs(i, 5_000_000 + i * 100_000, { x: hole.x - 2, y: hole.y }));
     }
     const ts = observations.map((o) => ({ timeUs: o.timeUs, frameIndex: o.frameIndex }));
     const esc = detectEscapeOutcome(
       observations,
       geometry,
-      {
-        startTimeUs: 5_000_000,
-        endTimeUs: 30_000_000,
-        cutoffSeconds: null,
-        proposedStartTimeUs: 5_000_000,
-        proposedEndTimeUs: 30_000_000,
-        confirmedAt: 'x',
-        motionOnsetConfidence: 1,
-        detectionFailureReason: null,
-        source: 'manual',
-      },
+      trialWindow,
       ts,
       params,
       {
@@ -253,13 +318,19 @@ describe('neurotrack_body_entry v2', () => {
           areaDecayScore: 0.9,
           holeDarkeningScore: 0.8,
           bodyEntry: {
-            established: false,
+            completionEstablished: false,
             completionFrameIndex: null,
             completionTimeUs: null,
+            completionTemporalSupportFrames: 0,
+            completionPath: null,
+            possibleEntryEvidence: false,
+            possibleEntryFrameIndex: null,
+            possibleEntryTimeUs: null,
+            possibleEntryTemporalSupportFrames: 0,
+            established: false,
             temporalSupportFrames: 0,
             definitionId: BODY_ENTRY_DEFINITION_ID,
             definitionVersion: BODY_ENTRY_DEFINITION_VERSION,
-            completionPath: null,
             areaDecayScore: 0.9,
             failureReason: 'no_temporally_supported_body_entry',
             frameMetrics: [],
@@ -272,7 +343,7 @@ describe('neurotrack_body_entry v2', () => {
     expect(esc?.evidence.body_entry_not_established).toBe(true);
   });
 
-  it('classifies escape_completed when body entry is established', () => {
+  it('classifies proposed escape_completed only when Path A completion is established', () => {
     const observations: Observation[] = [];
     for (let i = 0; i < 120; i += 1) {
       observations.push(obs(i, 5_000_000 + i * 100_000, { x: 519, y: 240 }));
@@ -281,17 +352,7 @@ describe('neurotrack_body_entry v2', () => {
     const esc = detectEscapeOutcome(
       observations,
       geometry,
-      {
-        startTimeUs: 5_000_000,
-        endTimeUs: 17_000_000,
-        cutoffSeconds: null,
-        proposedStartTimeUs: 5_000_000,
-        proposedEndTimeUs: 17_000_000,
-        confirmedAt: 'x',
-        motionOnsetConfidence: 1,
-        detectionFailureReason: null,
-        source: 'manual',
-      },
+      { ...trialWindow, endTimeUs: 17_000_000, proposedEndTimeUs: 17_000_000 },
       ts,
       params,
       {
@@ -302,13 +363,19 @@ describe('neurotrack_body_entry v2', () => {
           areaDecayScore: 0.5,
           holeDarkeningScore: 0.3,
           bodyEntry: {
-            established: true,
+            completionEstablished: true,
             completionFrameIndex: 90,
             completionTimeUs: 14_000_000,
+            completionTemporalSupportFrames: 3,
+            completionPath: 'centroid_pixel',
+            possibleEntryEvidence: false,
+            possibleEntryFrameIndex: null,
+            possibleEntryTimeUs: null,
+            possibleEntryTemporalSupportFrames: 0,
+            established: true,
             temporalSupportFrames: 3,
             definitionId: BODY_ENTRY_DEFINITION_ID,
             definitionVersion: BODY_ENTRY_DEFINITION_VERSION,
-            completionPath: 'centroid_pixel',
             areaDecayScore: 0.5,
             failureReason: null,
             frameMetrics: [],
@@ -317,7 +384,9 @@ describe('neurotrack_body_entry v2', () => {
       },
     );
     expect(esc?.type).toBe('escape_completed');
+    expect(esc?.status).toBe('proposed');
     expect(esc?.completionTimeUs).toBe(14_000_000);
     expect(esc?.completionTimeUs).not.toBe(esc?.censorBoundaryTimeUs);
+    expect(esc?.evidence.auto_completion_path).toBe('centroid_pixel');
   });
 });

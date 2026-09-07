@@ -228,7 +228,7 @@ describe('MS-5 U6 mid-platform lost', () => {
 });
 
 describe('MS-5 U7 escape_completed total latency', () => {
-  it('yields numeric total latency from completion − start', () => {
+  it('yields numeric total latency from completion − start when confirmed', () => {
     const fixture = loadFixture('escape_completed.json');
     const measures = computeMeasures(
       fixture.observations,
@@ -242,6 +242,24 @@ describe('MS-5 U7 escape_completed total latency', () => {
     );
     expect(measures?.totalLatency.censored).toBe(false);
     expect(measures?.totalLatency.value).toBe(10);
+  });
+
+  it('censors total latency for proposed auto escape_completed', () => {
+    const fixture = loadFixture('escape_completed.json');
+    const proposed = fixture.events.map((e) => ({ ...e, status: 'proposed' as const, origin: 'auto' as const }));
+    const measures = computeMeasures(
+      fixture.observations,
+      proposed,
+      geometry,
+      trialWindow,
+      fixture.timestampIndex,
+      defaultEventDetectionParams(),
+      defaultOperationalDefinitions(),
+      'corrected',
+    );
+    expect(measures?.totalLatency.censored).toBe(true);
+    expect(measures?.totalLatency.value).toBeNull();
+    expect(measures?.totalLatency.flags).toContain('escape_completed_proposed');
   });
 });
 
@@ -391,7 +409,7 @@ describe('MS-5 U14 pixel budget incomplete', () => {
 });
 
 describe('MS-5 escape completion time', () => {
-  it('requires established body entry, not aggregate decay alone', () => {
+  it('requires Path A completion established, not aggregate decay alone', () => {
     const holeTarget = geometry.holes[0]!;
     const observations: Observation[] = [];
     for (let i = 0; i < 120; i += 1) {
@@ -415,12 +433,19 @@ describe('MS-5 escape completion time', () => {
           areaDecayScore: 0.9,
           holeDarkeningScore: 0.8,
           bodyEntry: {
-            established: true,
+            completionEstablished: true,
             completionFrameIndex: 90,
             completionTimeUs: 14_000_000,
+            completionTemporalSupportFrames: 2,
+            completionPath: 'centroid_pixel',
+            possibleEntryEvidence: false,
+            possibleEntryFrameIndex: null,
+            possibleEntryTimeUs: null,
+            possibleEntryTemporalSupportFrames: 0,
+            established: true,
             temporalSupportFrames: 2,
             definitionId: 'neurotrack_body_entry',
-            definitionVersion: '1',
+            definitionVersion: '3',
             areaDecayScore: 0.9,
             failureReason: null,
             frameMetrics: [],
@@ -432,6 +457,85 @@ describe('MS-5 escape completion time', () => {
     expect(esc?.completionTimeUs).toBe(14_000_000);
     expect(esc?.censorBoundaryTimeUs).toBeLessThanOrEqual(censorUs);
     expect(esc?.completionTimeUs).not.toBe(esc?.censorBoundaryTimeUs);
+  });
+
+  it('classifies escape_entry_uncertain when only occlusion-path evidence exists', () => {
+    const holeTarget = geometry.holes[0]!;
+    const observations: Observation[] = [];
+    for (let i = 0; i < 120; i += 1) {
+      observations.push(
+        obs(i, 5_000_000 + i * 100_000, holeTarget.x - 13, holeTarget.y, {
+          x: holeTarget.x - 13,
+          y: holeTarget.y,
+        }),
+      );
+    }
+    const ts = observations.map((o) => ({ timeUs: o.timeUs, frameIndex: o.frameIndex }));
+    const esc = detectEscapeOutcome(
+      observations,
+      geometry,
+      { ...trialWindow, endTimeUs: 17_000_000, cutoffSeconds: null },
+      ts,
+      defaultEventDetectionParams(),
+      {
+        pixelEvidence: {
+          framesAnalyzed: 50,
+          framesRequested: 50,
+          complete: true,
+          areaDecayScore: 0.6,
+          holeDarkeningScore: 0.4,
+          bodyEntry: {
+            completionEstablished: false,
+            completionFrameIndex: null,
+            completionTimeUs: null,
+            completionTemporalSupportFrames: 0,
+            completionPath: null,
+            possibleEntryEvidence: true,
+            possibleEntryFrameIndex: 88,
+            possibleEntryTimeUs: 13_800_000,
+            possibleEntryTemporalSupportFrames: 3,
+            established: false,
+            temporalSupportFrames: 0,
+            definitionId: 'neurotrack_body_entry',
+            definitionVersion: '3',
+            areaDecayScore: 0.6,
+            failureReason: 'possible_entry_only_occlusion_path',
+            frameMetrics: [],
+          },
+        },
+      },
+    );
+    expect(esc?.type).toBe('escape_entry_uncertain');
+    expect(esc?.completionTimeUs).toBeNull();
+    expect(esc?.entryOnsetTimeUs).not.toBeNull();
+    expect(esc?.censorBoundaryTimeUs).not.toBeNull();
+  });
+
+  it('manual escape_completed with completion frame yields numeric total latency', () => {
+    const fixture = loadFixture('escape_completed.json');
+    const manual = [
+      {
+        ...fixture.events[0]!,
+        origin: 'manual' as const,
+        status: 'confirmed' as const,
+        completionTimeUs: 12_000_000,
+        endTimeUs: 12_000_000,
+        endFrameIndex: 70,
+      },
+    ];
+    const measures = computeMeasures(
+      fixture.observations,
+      manual,
+      geometry,
+      trialWindow,
+      fixture.timestampIndex,
+      defaultEventDetectionParams(),
+      defaultOperationalDefinitions(),
+      'corrected',
+    );
+    expect(measures?.totalLatency.censored).toBe(false);
+    expect(measures?.totalLatency.value).toBe(7);
+    expect(measures?.totalLatency.assumptions).toContain('manual_completion');
   });
 });
 
