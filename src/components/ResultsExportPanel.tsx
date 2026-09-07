@@ -60,8 +60,8 @@ export function ResultsExportPanel({
     downloadText(csv, `${exportFileBaseName(trial.label, 'report')}.csv`);
   };
 
-  const handleExportTrialXlsx = () => {
-    const buffer = buildSessionXlsxArrayBuffer(trialExport);
+  const handleExportTrialXlsx = async () => {
+    const buffer = await buildSessionXlsxArrayBuffer(trialExport);
     downloadArrayBuffer(
       buffer,
       `${exportFileBaseName(trial.label, 'report')}.xlsx`,
@@ -74,8 +74,8 @@ export function ResultsExportPanel({
     downloadText(csv, `${sessionExportFileBaseName(sessionExport.exportedAt)}.csv`);
   };
 
-  const handleExportSessionXlsx = () => {
-    const buffer = buildSessionXlsxArrayBuffer(sessionExport);
+  const handleExportSessionXlsx = async () => {
+    const buffer = await buildSessionXlsxArrayBuffer(sessionExport);
     downloadArrayBuffer(
       buffer,
       `${sessionExportFileBaseName(sessionExport.exportedAt)}.xlsx`,

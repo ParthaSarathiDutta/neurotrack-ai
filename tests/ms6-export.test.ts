@@ -306,19 +306,19 @@ describe('MS-6 U7 export does not detect events', () => {
 });
 
 describe('MS-6 U8 XLSX sheet names', () => {
-  it('includes Results first and all required worksheets', () => {
+  it('includes Results first and all required worksheets', async () => {
     const data = buildSessionExportData(
       [makeTrial()],
       analysisParams,
       '2026-01-01T00:00:00.000Z',
     );
-    const buffer = buildSessionXlsxArrayBuffer(data);
+    const buffer = await buildSessionXlsxArrayBuffer(data);
     expect(getXlsxSheetNames(buffer)).toEqual([...XLSX_SHEET_ORDER]);
   });
 });
 
 describe('MS-6 Results worksheet', () => {
-  it('provides compact human-readable summary without zero error counts when unavailable', () => {
+  it('provides compact human-readable summary without zero error counts when unavailable', async () => {
     const measures = computeMeasures(
       [],
       [],
@@ -339,10 +339,10 @@ describe('MS-6 Results worksheet', () => {
     expect(row.primaryErrorsConfirmedCount).not.toBe('0');
     expect(row.totalErrorsConfirmedCount).toContain('Target hole not confirmed');
 
-    const buffer = buildSessionXlsxArrayBuffer(data);
+    const buffer = await buildSessionXlsxArrayBuffer(data);
     const resultsRows = readXlsxSheetRows(buffer, 'Results');
-    expect(resultsRows[0]?.fileName).toBeTruthy();
-    expect(resultsRows[0]?.primaryLatency).toContain('Unavailable');
+    expect(resultsRows[0]?.['File name']).toBeTruthy();
+    expect(resultsRows[0]?.['Primary latency']).toContain('Unavailable');
   });
 });
 

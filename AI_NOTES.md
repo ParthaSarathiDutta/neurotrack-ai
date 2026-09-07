@@ -510,3 +510,17 @@ Manual review of `test53_report.xlsx` confirmed scientific content but flagged s
 ### Validated
 201 unit tests, lint, build, validate:ms6-outputs (37 checks incl. Results sheet + error-count semantics + frame display), validate:ms6-viz, validate:ms5 — ALL PASS. test53 total latency 24.40 s numeric; speed v2/diagnostic unchanged. Stopped for manual review; MS-6 not marked complete.
 
+## MS-6 XLSX formatting serialization fix (2026-09-07)
+
+### Problem
+Manual inspection showed SheetJS community `xlsx` wrote column widths and autofilter to disk but **did not serialize cell styles, text wrapping, or freeze panes**. Results headers remained camelCase field names.
+
+### Fix
+- Switched XLSX **writer** to **ExcelJS** (kept `xlsx` for read-back/CSV parse only).
+- Added `resultsDisplayColumns.ts` with human-readable headers and column order.
+- ExcelJS layout: styled header row (`#D9E1F2`, bold, wrap), wrapped long-text columns, frozen panes, autofilter, custom widths.
+- Events: merged convention note row (styled), header/filter/freeze from row 2 (`ySplit=2` keeps note + header visible).
+
+### Validated
+205 unit tests incl. `tests/ms6-xlsx-formatting.test.ts` (XML + sharedStrings + read-back), lint, build, validate:ms6-outputs (43 checks incl. on-disk pane/style/filter verification). Stopped for final review; MS-6 not marked complete.
+

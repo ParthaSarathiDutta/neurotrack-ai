@@ -1,73 +1,123 @@
-import * as XLSX from 'xlsx';
+import type ExcelJS from 'exceljs';
 
 export const FRAME_INDEX_NOTE =
   'Frame indices: startFrameIndex and endFrameIndex are 0-based internal decoder indices. startFrameDisplay and endFrameDisplay add 1 for human-readable frame numbers.';
 
-export function applyWorksheetLayout(
-  ws: XLSX.WorkSheet,
-  options: {
-    freezeRow?: number;
-    columnWidths?: number[];
-    autoFilter?: boolean;
-  } = {},
+const HEADER_FILL: ExcelJS.Fill = {
+  type: 'pattern',
+  pattern: 'solid',
+  fgColor: { argb: 'FFD9E1F2' },
+};
+
+const NOTE_FILL: ExcelJS.Fill = {
+  type: 'pattern',
+  pattern: 'solid',
+  fgColor: { argb: 'FFFFF2CC' },
+};
+
+const HEADER_FONT: Partial<ExcelJS.Font> = {
+  bold: true,
+  size: 11,
+};
+
+const NOTE_FONT: Partial<ExcelJS.Font> = {
+  italic: true,
+  size: 10,
+};
+
+const HEADER_ALIGNMENT: Partial<ExcelJS.Alignment> = {
+  wrapText: true,
+  vertical: 'top',
+};
+
+const WRAP_ALIGNMENT: Partial<ExcelJS.Alignment> = {
+  wrapText: true,
+  vertical: 'top',
+};
+
+export function setColumnWidths(
+  worksheet: ExcelJS.Worksheet,
+  widths: number[],
 ): void {
-  const ref = ws['!ref'];
-  if (!ref) return;
+  widths.forEach((width, index) => {
+    worksheet.getColumn(index + 1).width = width;
+  });
+}
 
-  if (options.freezeRow != null && options.freezeRow > 0) {
-    ws['!views'] = [
-      {
-        state: 'frozen',
-        ySplit: options.freezeRow,
-        topLeftCell: XLSX.utils.encode_cell({ r: options.freezeRow, c: 0 }),
-        activeCell: XLSX.utils.encode_cell({ r: options.freezeRow, c: 0 }),
-      },
-    ];
-  }
-
-  if (options.autoFilter) {
-    ws['!autofilter'] = { ref };
-  }
-
-  if (options.columnWidths?.length) {
-    ws['!cols'] = options.columnWidths.map((wch) => ({ wch }));
+export function styleHeaderRow(worksheet: ExcelJS.Worksheet, rowNumber: number, columnCount: number): void {
+  const row = worksheet.getRow(rowNumber);
+  row.height = 36;
+  for (let col = 1; col <= columnCount; col++) {
+    const cell = row.getCell(col);
+    cell.font = HEADER_FONT;
+    cell.fill = HEADER_FILL;
+    cell.alignment = HEADER_ALIGNMENT;
   }
 }
 
-export function applyResultsSheetLayout(ws: XLSX.WorkSheet): void {
-  applyWorksheetLayout(ws, {
-    freezeRow: 1,
-    autoFilter: true,
-    columnWidths: [
-      18, 12, 14, 12, 10, 12, 28, 44, 18, 16, 16, 16, 16, 14, 14, 14, 14, 14, 12, 12, 18, 18, 18, 18, 14, 16,
-    ],
-  });
+export function styleNoteRow(
+  worksheet: ExcelJS.Worksheet,
+  rowNumber: number,
+  columnCount: number,
+  note: string,
+): void {
+  worksheet.mergeCells(rowNumber, 1, rowNumber, columnCount);
+  const cell = worksheet.getCell(rowNumber, 1);
+  cell.value = note;
+  cell.font = NOTE_FONT;
+  cell.fill = NOTE_FILL;
+  cell.alignment = WRAP_ALIGNMENT;
+  worksheet.getRow(rowNumber).height = 42;
 }
 
-export function applySummarySheetLayout(ws: XLSX.WorkSheet): void {
-  const ref = ws['!ref'];
-  const colCount = ref ? XLSX.utils.decode_range(ref).e.c + 1 : 20;
-  applyWorksheetLayout(ws, {
-    freezeRow: 1,
-    autoFilter: true,
-    columnWidths: Array(colCount).fill(14),
-  });
+export function applyWrapToColumns(
+  worksheet: ExcelJS.Worksheet,
+  columnIndexes: number[],
+  firstDataRow: number,
+  lastRow: number,
+): void {
+  for (let row = firstDataRow; row <= lastRow; row++) {
+    for (const col of columnIndexes) {
+      const cell = worksheet.getRow(row).getCell(col);
+      cell.alignment = { ...cell.alignment, ...WRAP_ALIGNMENT };
+    }
+  }
 }
 
-export function applyEventsSheetLayout(ws: XLSX.WorkSheet, headerRowIndex: number): void {
-  applyWorksheetLayout(ws, {
-    freezeRow: headerRowIndex + 1,
-    autoFilter: true,
-    columnWidths: [
-      14, 36, 22, 28, 10, 12, 18, 18, 18, 18, 16, 16, 16, 10, 12, 12, 10, 10, 14, 14, 18, 24,
-    ],
-  });
+export function freezeBelowRow(worksheet: ExcelJS.Worksheet, frozenRowCount: number): void {
+  worksheet.views = [
+    {
+      state: 'frozen',
+      ySplit: frozenRowCount,
+      xSplit: 0,
+      topLeftCell: worksheet.getCell(frozenRowCount + 1, 1).address,
+      activeCell: worksheet.getCell(frozenRowCount + 1, 1).address,
+    },
+  ];
 }
 
-export function applyDefaultTableLayout(ws: XLSX.WorkSheet): void {
-  applyWorksheetLayout(ws, {
-    freezeRow: 1,
-    autoFilter: true,
-    columnWidths: [22, 36, 48, 48],
+export function applyAutoFilter(
+  worksheet: ExcelJS.Worksheet,
+  headerRow: number,
+  lastRow: number,
+  columnCount: number,
+): void {
+  worksheet.autoFilter = {
+    from: { row: headerRow, column: 1 },
+    to: { row: lastRow, column: columnCount },
+  };
+}
+
+export function appendAoA(
+  worksheet: ExcelJS.Worksheet,
+  rows: (string | number | boolean | null)[][],
+  startRow = 1,
+): number {
+  rows.forEach((row, rowOffset) => {
+    const excelRow = worksheet.getRow(startRow + rowOffset);
+    row.forEach((value, colOffset) => {
+      excelRow.getCell(colOffset + 1).value = value ?? null;
+    });
   });
+  return startRow + rows.length - 1;
 }

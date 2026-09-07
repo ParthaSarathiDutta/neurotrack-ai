@@ -25,7 +25,7 @@ with `speed_interval_validity.v1` / `max_speed.v2` without re-detecting events.
 
 | Field | Value |
 |-------|-------|
-| Export timestamp | 2026-09-07T20:08:18.622Z |
+| Export timestamp | 2026-09-07T20:19:04.008Z |
 | Tool version | 0.5.0-ms5 |
 | Bundle schema | 1.0.0 (`neurotrack-analysis`) |
 | Speed gating | speed_interval_validity.v1 |

@@ -4,10 +4,10 @@
  */
 import { chromium } from 'playwright';
 import { createServer } from 'http';
+import { execSync } from 'child_process';
 import { readFile, access } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 import * as XLSX from 'xlsx';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +63,13 @@ function eventSheetRows(wb) {
   return XLSX.utils.sheet_to_json(ws, { defval: null, range: 1 });
 }
 
+function readWorksheetXml(xlsxPath, sheetFile) {
+  return execSync(`unzip -p "${xlsxPath}" "${sheetFile}"`, {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+}
+
 async function validateCommittedFiles() {
   for (const clip of CLIPS) {
     const summaryPath = join(OUTPUTS, `${clip}_summary.csv`);
@@ -104,22 +111,11 @@ async function validateCommittedFiles() {
     row53?.totalLatency_value === 24.4 && row53?.totalLatency_valueKind === 'numeric' ? 'PASS' : `FAIL:${JSON.stringify({ v: row53?.totalLatency_value, k: row53?.totalLatency_valueKind })}`;
 
   results.O_test53_error_counts_unavailable =
-    row53?.primaryErrorsConfirmed == null &&
-    row53?.totalErrorsConfirmed == null &&
+    (row53?.primaryErrorsConfirmed == null || row53?.primaryErrorsConfirmed === '') &&
+    (row53?.totalErrorsConfirmed == null || row53?.totalErrorsConfirmed === '') &&
     row53?.primaryErrors_valueKind === 'unavailable'
       ? 'PASS'
       : `FAIL:${JSON.stringify({ primaryErrorsConfirmed: row53?.primaryErrorsConfirmed, totalErrorsConfirmed: row53?.totalErrorsConfirmed, kind: row53?.primaryErrors_valueKind })}`;
-
-  const results53 = sheetRows(wb53, 'Results');
-  const resultsRow53 = results53.find((r) => String(r.fileName ?? '').includes('test53'));
-  results.O_test53_results_sheet =
-    resultsRow53?.totalLatency && /24\.4/.test(String(resultsRow53.totalLatency)) ? 'PASS' : `FAIL:${JSON.stringify(resultsRow53?.totalLatency)}`;
-  results.O_test53_results_errors_not_zero =
-    resultsRow53?.primaryErrorsConfirmedCount &&
-    !/^0$/.test(String(resultsRow53.primaryErrorsConfirmedCount)) &&
-    String(resultsRow53.primaryErrorsConfirmedCount).includes('Target hole not confirmed')
-      ? 'PASS'
-      : `FAIL:${JSON.stringify(resultsRow53?.primaryErrorsConfirmedCount)}`;
 
   const events53 = eventSheetRows(wb53);
   const confirmedEscape = events53.filter(
@@ -143,11 +139,43 @@ async function validateCommittedFiles() {
       ? 'PASS'
       : `FAIL:proposed=${proposedInvestigations.length},confirmedEscape=${confirmedEscape.length}`;
 
+  const test53Path = join(OUTPUTS, 'test53_report.xlsx');
+  const results53Display = sheetRows(wb53, 'Results');
+  const resultsXml = readWorksheetXml(test53Path, 'xl/worksheets/sheet1.xml');
+  const eventsXml = readWorksheetXml(test53Path, 'xl/worksheets/sheet3.xml');
+  const stylesXml = readWorksheetXml(test53Path, 'xl/styles.xml');
+  results.O_test53_xlsx_human_results_headers =
+    Object.keys(results53Display[0] ?? {}).includes('File name') &&
+    Object.keys(results53Display[0] ?? {}).includes('Escape / outcome')
+      ? 'PASS'
+      : 'FAIL';
+  results.O_test53_xlsx_frozen_panes =
+    /<pane\b/.test(resultsXml) && /<pane\b/.test(eventsXml) ? 'PASS' : 'FAIL';
+  results.O_test53_xlsx_wrap_styles = /wrapText="1"/.test(stylesXml) ? 'PASS' : 'FAIL';
+  results.O_test53_xlsx_header_fill = /FFD9E1F2/i.test(stylesXml) ? 'PASS' : 'FAIL';
+  results.O_test53_xlsx_events_filter_header_row =
+    /<autoFilter ref="A2:X\d+"/.test(eventsXml) ? 'PASS' : 'FAIL';
+  results.O_test53_xlsx_column_widths =
+    resultsXml.includes('customWidth="1"') && eventsXml.includes('customWidth="1"') ? 'PASS' : 'FAIL';
+
+  const resultsDisplayRow53 = results53Display.find((r) => String(r['File name'] ?? r.fileName ?? '').includes('test53'));
+  results.O_test53_results_sheet =
+    resultsDisplayRow53?.['Total latency'] && /24\.4/.test(String(resultsDisplayRow53['Total latency']))
+      ? 'PASS'
+      : `FAIL:${JSON.stringify(resultsDisplayRow53?.['Total latency'] ?? resultsDisplayRow53?.totalLatency)}`;
+  results.O_test53_results_errors_not_zero =
+    resultsDisplayRow53?.['Primary errors — confirmed count'] &&
+    !/^0$/.test(String(resultsDisplayRow53['Primary errors — confirmed count'])) &&
+    String(resultsDisplayRow53['Primary errors — confirmed count']).includes('Target hole not confirmed')
+      ? 'PASS'
+      : `FAIL:${JSON.stringify(resultsDisplayRow53?.['Primary errors — confirmed count'] ?? resultsDisplayRow53?.primaryErrorsConfirmedCount)}`;
+
   const wb51 = XLSX.read(await readFile(join(OUTPUTS, 'test51_report.xlsx')), { type: 'buffer' });
   const summary51 = sheetRows(wb51, 'Summary');
   const row51 = summary51.find((r) => String(r.fileName ?? '').includes('test51'));
   results.O_test51_censored_semantics =
-    row51?.totalLatency_valueKind === 'censored' && row51?.totalLatency_value == null
+    row51?.totalLatency_valueKind === 'censored' &&
+    (row51?.totalLatency_value == null || row51?.totalLatency_value === '')
       ? 'PASS'
       : `FAIL:${JSON.stringify({ k: row51?.totalLatency_valueKind, v: row51?.totalLatency_value })}`;
 
@@ -155,7 +183,8 @@ async function validateCommittedFiles() {
   const summary50 = sheetRows(wb50, 'Summary');
   const row50 = summary50.find((r) => String(r.fileName ?? '').includes('test50'));
   results.O_test50_censored_semantics =
-    row50?.totalLatency_valueKind === 'censored' && row50?.totalLatency_value == null
+    row50?.totalLatency_valueKind === 'censored' &&
+    (row50?.totalLatency_value == null || row50?.totalLatency_value === '')
       ? 'PASS'
       : `FAIL:${JSON.stringify({ k: row50?.totalLatency_valueKind, v: row50?.totalLatency_value })}`;
 

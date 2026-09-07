@@ -178,7 +178,7 @@ See the \`OperationalDefinitions\` worksheet in each \`*_report.xlsx\`, or
   writeFileSync(join(OUTPUTS, 'README.md'), readme, 'utf8');
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const raw = readFileSync(SOURCE_BUNDLE, 'utf8');
   const parsed = parseNeuroTrackBundleJson(raw);
   if (!parsed.ok) {
@@ -227,14 +227,15 @@ function main(): void {
 
     writeFileSync(summaryPath, csvFiles.summaryCsv, 'utf8');
     writeFileSync(eventsPath, csvFiles.eventsCsv, 'utf8');
-    writeFileSync(xlsxPath, Buffer.from(buildSessionXlsxArrayBuffer(exportData)));
+    const xlsxBuffer = await buildSessionXlsxArrayBuffer(exportData);
+    writeFileSync(xlsxPath, Buffer.from(xlsxBuffer));
     writeFileSync(
       bundlePath,
       serializeNeuroTrackBundle(buildNeuroTrackBundle([trial], analysisParams, trial.id, exportedAt)),
       'utf8',
     );
 
-    const sheets = getXlsxSheetNames(buildSessionXlsxArrayBuffer(exportData));
+    const sheets = getXlsxSheetNames(xlsxBuffer);
     for (const sheet of requiredSheets) {
       if (!sheets.includes(sheet)) {
         throw new Error(`${prefix}_report.xlsx missing sheet ${sheet}`);
@@ -268,4 +269,7 @@ function main(): void {
   console.log(`  updated ${FIXTURE_OUT.replace(`${ROOT}/`, '')}`);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
