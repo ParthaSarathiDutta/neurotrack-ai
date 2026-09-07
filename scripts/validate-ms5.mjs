@@ -203,7 +203,8 @@ async function main() {
       outcome.escapeType !== 'escape_completed' ||
       (outcome.pixel?.complete === true &&
         outcome.pixel.framesAnalyzed > 0 &&
-        outcome.pixel.areaDecayScore != null)
+        outcome.pixel.bodyEntryEstablished === true &&
+        outcome.pixel.bodyEntryCompletionFrameIndex != null)
         ? 'PASS'
         : `FAIL:${JSON.stringify(outcome.pixel)}`;
     results[`${clip}_primary_unavailable_without_target`] =

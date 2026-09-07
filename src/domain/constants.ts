@@ -120,6 +120,12 @@ export const EVENT_ESCAPE_CONFIRM_THRESHOLD = 0.75;
 export const EVENT_ESCAPE_CENSOR_THRESHOLD = 0.45;
 export const EVENT_ESCAPE_COMPLETION_AREA_RATIO = 0.35;
 export const EVENT_PIXEL_EVIDENCE_BUDGET_FRAMES = 300;
+/** Body-entry completion (neurotrack_body_entry v1) — not full-animal disappearance. */
+export const EVENT_BODY_ENTRY_TORSO_PROXIMITY_FRACTION = 0.06;
+export const EVENT_BODY_ENTRY_HOLE_DARKENING_MIN = 0.12;
+/** Max platform blob vs pre-entry baseline; values above allow visible tail remnant. */
+export const EVENT_BODY_ENTRY_PLATFORM_AREA_MAX_FRACTION = 0.62;
+export const EVENT_BODY_ENTRY_TEMPORAL_MIN_FRAMES = 2;
 export const EVENT_STRATEGY_DI_THRESHOLD = 0.55;
 export const EVENT_STRATEGY_MAX_DISTINCT_HOLES_BEFORE_TARGET = 2;
 export const EVENT_STRATEGY_MIN_SERIAL_HOLES = 4;

@@ -63,6 +63,36 @@ export interface AggregatedPixelScores {
   holeDarkeningScore: number;
 }
 
+export interface PerFramePixelMetrics {
+  frameIndex: number;
+  timeUs: number;
+  platformBlobArea: number;
+  holeDarkening: number;
+}
+
+/** Per-frame platform blob area and hole darkening (chronological). */
+export function computePerFramePixelMetrics(
+  samples: PixelFrameSample[],
+  background: Uint8ClampedArray,
+  width: number,
+  height: number,
+  hole: Hole,
+  platformCenter: { x: number; y: number },
+  platformRadiusPx: number,
+): PerFramePixelMetrics[] {
+  const roi: PlatformRoi = {
+    center: platformCenter,
+    radiusPx: platformRadiusPx,
+  };
+  const holeRadiusPx = Math.max(8, platformRadiusPx * 0.06);
+  return samples.map((s) => ({
+    frameIndex: s.frameIndex,
+    timeUs: s.timeUs,
+    platformBlobArea: animalBlobAreaPx(s.data, background, width, height, roi),
+    holeDarkening: holeDarkeningFraction(s.data, background, width, height, hole, holeRadiusPx),
+  }));
+}
+
 /** Aggregate trailing frame samples into conservative 0–1 scores. */
 export function aggregatePixelEvidenceScores(
   samples: PixelFrameSample[],

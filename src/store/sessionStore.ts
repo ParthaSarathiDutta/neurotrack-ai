@@ -1324,6 +1324,15 @@ if (typeof window !== 'undefined') {
         esc.evidence.areaDecayScore != null ? Number(esc.evidence.areaDecayScore) : null,
       holeDarkeningScore:
         esc.evidence.holeDarkeningScore != null ? Number(esc.evidence.holeDarkeningScore) : null,
+      bodyEntryEstablished: esc.evidence.bodyEntryEstablished === true,
+      bodyEntryCompletionFrameIndex:
+        esc.evidence.bodyEntryCompletionFrameIndex != null
+          ? Number(esc.evidence.bodyEntryCompletionFrameIndex)
+          : null,
+      bodyEntryFailureReason:
+        esc.evidence.bodyEntryFailureReason != null
+          ? String(esc.evidence.bodyEntryFailureReason)
+          : null,
       errorMessage: esc.evidence.pixelErrorMessage != null ? String(esc.evidence.pixelErrorMessage) : null,
     };
   };

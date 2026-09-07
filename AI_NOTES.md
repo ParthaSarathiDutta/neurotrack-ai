@@ -264,3 +264,31 @@ lint/test/build PASS (120 tests); validate:calibration, validate:ms1–ms4, vali
 - `escape_completed.completionTimeUs` uses trailing **pixel evidence anchor**, not censor boundary.
 - Events panel shows **Hole 1–20** (display) with internal 0–19 at API boundary only.
 
+## MS-5 body-entry completion v1 (2026-09-06)
+
+### Problem
+Manual review of all three sample videos: mouse may enter a hole while its tail remains visible. Prior pipeline treated aggregate platform area decay as a hard completion gate and anchored `escape_completed` to the last analyzed pixel frame (often recording end — e.g. test53 frame 904).
+
+### Fix
+- Versioned default documented in `reference/neurotrack-body-entry-v1.md` (`neurotrack_body_entry` v1): head + torso in hole; tail may remain visible; not claimed universal across labs.
+- New `bodyEntry.ts`: per-frame torso proximity + hole darkening + platform remnant allowance; ≥2 consecutive qualifying frames; first frame of earliest run = completion; recording-end guard rejects single-frame-only qualification at censor.
+- `escape.ts`: `canComplete` requires `bodyEntry.established`; area decay is supporting score only (+0.2), flagged in evidence.
+- Never uses recording endpoint as fallback timestamp.
+
+### Validation outcome (target unknown, no per-filename tuning)
+| Clip | Investigations | Escape | Total latency | Body entry | Completion frame | areaDecay (support) |
+|---|---|---|---|---|---|---|
+| test53 | 4 | escape_completed | 24.40 s | established | 880 | 0.568 |
+| test51 | 9 | escape_incomplete_censored | Censored ≥ 44.24 s | not established | — | 0.368 |
+| test50 | 59 | escape_incomplete_censored | Censored ≥ 180.03 s | not established | — | 0.026 |
+
+test51 no longer reaches `escape_completed` — prior completion was driven by area decay at recording end without temporally supported torso entry. test53 completion moves from frame ~904 to 880 (first defensible torso-entry frame).
+
+### Validated
+lint/test/build PASS (138 tests); validate:ms4 + validate:ms5 PASS. **Not merged / MS-5 not marked complete** — stopped for manual review.
+
+### Limitations
+- Body-entry thresholds are NeuroTrack defaults; scientists should confirm against their protocol.
+- Pixel evidence budget (120 frames) may miss very late entry if not in sampled window.
+- Target hole remains unknown unless scientist confirms; primary latency unavailable.
+

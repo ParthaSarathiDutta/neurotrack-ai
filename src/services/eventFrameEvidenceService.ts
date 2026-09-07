@@ -1,6 +1,8 @@
 import { buildBackgroundModel, sampleBackgroundFrameIndices } from '../domain/tracking/background';
+import { detectBodyEntryCompletion } from '../domain/events/bodyEntry';
 import {
   aggregatePixelEvidenceScores,
+  computePerFramePixelMetrics,
   type PixelFrameSample,
 } from '../domain/events/pixelEvidence';
 import { getPhaseACandidate } from '../domain/events/escape';
@@ -206,19 +208,37 @@ export async function fetchEscapePixelEvidence(
       radius,
     );
 
+    const perFrame = computePerFramePixelMetrics(
+      samples,
+      background,
+      width,
+      height,
+      hole,
+      center,
+      radius,
+    );
+    const observationsByFrame = new Map<number, Observation>();
+    for (const o of observations) {
+      observationsByFrame.set(o.frameIndex, o);
+    }
+    const timeUsByFrame = new Map(perFrame.map((m) => [m.frameIndex, m.timeUs]));
+
+    const bodyEntry = detectBodyEntryCompletion({
+      frameIndices: perFrame.map((m) => m.frameIndex),
+      timeUsByFrame,
+      platformBlobAreas: perFrame.map((m) => m.platformBlobArea),
+      holeDarkenings: perFrame.map((m) => m.holeDarkening),
+      observationsByFrame,
+      hole,
+      platformRadiusPx: radius,
+      params,
+      censorFrameIndex,
+    });
+
     const complete =
       failedFrameIndices.length === 0 &&
       samples.length >= framesRequested &&
       !truncated;
-
-    const lastAnalyzedIndex =
-      analyzedFrameIndices.length > 0
-        ? analyzedFrameIndices[analyzedFrameIndices.length - 1]!
-        : null;
-    const lastAnalyzedEntry =
-      lastAnalyzedIndex != null
-        ? trial.timestampIndex.find((e) => e.frameIndex === lastAnalyzedIndex)
-        : null;
 
     return {
       framesAnalyzed: samples.length,
@@ -228,8 +248,7 @@ export async function fetchEscapePixelEvidence(
       holeDarkeningScore: scores.holeDarkeningScore,
       analyzedFrameIndices,
       failedFrameIndices,
-      completionFrameIndex: lastAnalyzedIndex,
-      completionTimeUs: lastAnalyzedEntry?.timeUs ?? null,
+      bodyEntry,
       errorMessage: complete ? null : lastError,
       ...(complete
         ? {}

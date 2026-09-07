@@ -13,6 +13,8 @@ import {
   observationProximityToHole,
 } from './holeProximity';
 
+import type { BodyEntryCompletionResult } from './bodyEntry';
+
 export interface PixelEvidenceResult {
   framesAnalyzed: number;
   framesRequested: number;
@@ -24,9 +26,8 @@ export interface PixelEvidenceResult {
   analyzedFrameIndices?: number[];
   /** Presentation-order frame indices requested but not decoded. */
   failedFrameIndices?: number[];
-  /** Trailing pixel-evidence anchor — not the censor boundary. */
-  completionFrameIndex?: number | null;
-  completionTimeUs?: number | null;
+  /** Frame-specific body-entry completion (neurotrack_body_entry v1). */
+  bodyEntry?: BodyEntryCompletionResult | null;
   errorMessage?: string | null;
 }
 
@@ -233,8 +234,16 @@ export function detectEscapeOutcome(
       pixelAnalyzedFrameIndices: ctx.pixelEvidence.analyzedFrameIndices?.join(',') ?? null,
       pixelFailedFrameIndices: ctx.pixelEvidence.failedFrameIndices?.join(',') ?? null,
       pixelErrorMessage: ctx.pixelEvidence.errorMessage ?? null,
-      pixelCompletionFrameIndex: ctx.pixelEvidence.completionFrameIndex ?? null,
-      pixelCompletionTimeUs: ctx.pixelEvidence.completionTimeUs ?? null,
+      bodyEntryDefinitionId: ctx.pixelEvidence.bodyEntry?.definitionId ?? null,
+      bodyEntryDefinitionVersion: ctx.pixelEvidence.bodyEntry?.definitionVersion ?? null,
+      bodyEntryEstablished: ctx.pixelEvidence.bodyEntry?.established ?? null,
+      bodyEntryCompletionFrameIndex: ctx.pixelEvidence.bodyEntry?.completionFrameIndex ?? null,
+      bodyEntryCompletionTimeUs: ctx.pixelEvidence.bodyEntry?.completionTimeUs ?? null,
+      bodyEntryTemporalSupportFrames: ctx.pixelEvidence.bodyEntry?.temporalSupportFrames ?? null,
+      bodyEntryFailureReason: ctx.pixelEvidence.bodyEntry?.failureReason ?? null,
+      areaDecaySupporting:
+        ctx.pixelEvidence.areaDecayScore != null &&
+        ctx.pixelEvidence.areaDecayScore >= params.escapeCompletionAreaRatio,
     };
     if (ctx.pixelEvidence.areaDecayScore != null) {
       score += ctx.pixelEvidence.areaDecayScore * 0.2;
@@ -247,16 +256,19 @@ export function detectEscapeOutcome(
     }
   }
 
+  const bodyEntryEstablished = ctx.pixelEvidence?.bodyEntry?.established === true;
+  const bodyEntryCompletion = ctx.pixelEvidence?.bodyEntry ?? null;
+
   const canComplete =
     pixelComplete &&
-    score >= params.escapeConfirmThreshold &&
-    (ctx.pixelEvidence?.areaDecayScore ?? 0) >= params.escapeCompletionAreaRatio;
+    bodyEntryEstablished &&
+    bodyEntryCompletion?.completionTimeUs != null &&
+    bodyEntryCompletion.completionFrameIndex != null &&
+    score >= params.escapeConfirmThreshold;
 
-  if (canComplete && phaseA) {
-    const completionTimeUs =
-      ctx.pixelEvidence?.completionTimeUs ?? phaseA.endTimeUs;
-    const completionFrameIndex =
-      ctx.pixelEvidence?.completionFrameIndex ?? phaseA.endFrameIndex;
+  if (canComplete && phaseA && bodyEntryCompletion) {
+    const completionTimeUs = bodyEntryCompletion.completionTimeUs!;
+    const completionFrameIndex = bodyEntryCompletion.completionFrameIndex!;
     return {
       id: newEventId(),
       type: 'escape_completed',
@@ -312,6 +324,9 @@ export function detectEscapeOutcome(
         proximitySpanUs: phaseA.proximitySpanUs,
         censorReason,
         observedFollowUpLowerBoundUs: followUpLowerBoundUs,
+        ...(bodyEntryEstablished
+          ? {}
+          : { body_entry_not_established: true, body_entry_failure: bodyEntryCompletion?.failureReason ?? 'unknown' }),
         ...(pixelComplete ? {} : { pixel_evidence_incomplete: true }),
         ...pixelFlags,
       },

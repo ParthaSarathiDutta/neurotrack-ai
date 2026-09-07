@@ -391,12 +391,12 @@ describe('MS-5 U14 pixel budget incomplete', () => {
 });
 
 describe('MS-5 escape completion time', () => {
-  it('uses pixel evidence completion anchor, not censor boundary', () => {
-    const hole = geometry.holes[0]!;
+  it('requires established body entry, not aggregate decay alone', () => {
+    const holeTarget = geometry.holes[0]!;
     const observations: Observation[] = [];
     for (let i = 0; i < 120; i += 1) {
       observations.push(
-        obs(i, 5_000_000 + i * 100_000, hole.x, hole.y, { x: hole.x, y: hole.y - 5 }),
+        obs(i, 5_000_000 + i * 100_000, holeTarget.x, holeTarget.y, { x: holeTarget.x, y: holeTarget.y - 5 }),
       );
     }
     const ts = observations.map((o) => ({ timeUs: o.timeUs, frameIndex: o.frameIndex }));
@@ -404,7 +404,7 @@ describe('MS-5 escape completion time', () => {
     const esc = detectEscapeOutcome(
       observations,
       geometry,
-      { ...trialWindow, endTimeUs: censorUs },
+      { ...trialWindow, endTimeUs: censorUs, cutoffSeconds: null },
       ts,
       defaultEventDetectionParams(),
       {
@@ -414,8 +414,17 @@ describe('MS-5 escape completion time', () => {
           complete: true,
           areaDecayScore: 0.9,
           holeDarkeningScore: 0.8,
-          completionFrameIndex: 90,
-          completionTimeUs: 14_000_000,
+          bodyEntry: {
+            established: true,
+            completionFrameIndex: 90,
+            completionTimeUs: 14_000_000,
+            temporalSupportFrames: 2,
+            definitionId: 'neurotrack_body_entry',
+            definitionVersion: '1',
+            areaDecayScore: 0.9,
+            failureReason: null,
+            frameMetrics: [],
+          },
         },
       },
     );
