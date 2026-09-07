@@ -224,3 +224,7 @@ Manual review passed: body/nose correction and reset; persistence across reload;
 Pre-merge validation: lint/test/build PASS (95 tests); validate:calibration, validate:ms1, validate:ms2, validate:ms3, validate:tracking, validate:ms4, validate:ms4-ghost ALL PASS. Merged to `main`. MS-5 not started.
 
 **Documented limitations:** no full trajectory path overlay; sub-0.5 px smoothing shifts intentionally unchanged; offline ffmpeg vs live WebCodecs frame index offset for demo frames; no MS-5 events/measures/export; re-run tracking clears corrections and cleaning (with confirmation UI).
+
+## MS-5 implementation checkpoint (2026-09-06)
+
+Implemented on `ms-5-event-detection-behavioral-measures` (not merged). Event detection + measures with Raw/Corrected/Cleaned basis, explicit Detect events, provisional vs confirmed error counts, three-state escape/censor model, versioned operational definitions. Phase B pixel evidence deferred (trajectory-only escape scoring). Offline diagnostic: all three clips → `escape_incomplete_censored`, total latency censored with follow-up lower bound; no `escape_completed` on sample clips (expected). validate:ms5 PASS on test53 browser path; 100 unit tests PASS.

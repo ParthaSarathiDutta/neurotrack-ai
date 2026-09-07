@@ -11,6 +11,7 @@ import { CalibrationPanel } from './CalibrationPanel';
 import { TrialWindowPanel } from './TrialWindowPanel';
 import { TrackQualityPanel } from './TrackQualityPanel';
 import { CorrectionCleaningPanel } from './CorrectionCleaningPanel';
+import { EventsMeasuresPanel } from './EventsMeasuresPanel';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
 
@@ -148,6 +149,8 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
       <TrackQualityPanel trial={trial} onSeekToFrame={handleSeekToFrame} />
 
       <CorrectionCleaningPanel trial={trial} currentFrameIndex={currentFrameIndex} />
+
+      <EventsMeasuresPanel trial={trial} onSeekToFrame={handleSeekToFrame} />
 
       <div hidden aria-hidden="true" data-testid="trial-metadata-compat">
         <span data-testid="meta-frame-rate">{meta.containerFrameRateLabel}</span>

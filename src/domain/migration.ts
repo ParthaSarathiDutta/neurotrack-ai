@@ -1,5 +1,11 @@
 import type { AnalysisParams, Geometry, Hole, Track, TrialRecord, TrialWindow } from './types';
-import { defaultCleaningParams, defaultTrackingParams } from './trialFactory';
+import {
+  defaultCleaningParams,
+  defaultEventDetectionParams,
+  defaultMeasurementBasis,
+  defaultOperationalDefinitions,
+  defaultTrackingParams,
+} from './trialFactory';
 
 export type TrialReviewStatus =
   | 'needs_review'
@@ -38,6 +44,9 @@ export function migrateTrialRecord(trial: TrialRecord): TrialRecord {
     geometry: migrateGeometry(trial.geometry),
     trialWindow: migrateTrialWindow(trial.trialWindow),
     track: migrateTrack(trial.track),
+    events: trial.events ?? null,
+    measures: trial.measures ?? null,
+    measurementBasis: trial.measurementBasis ?? defaultMeasurementBasis(),
   };
 }
 
@@ -78,6 +87,12 @@ export function migrateAnalysisParams(params: AnalysisParams): AnalysisParams {
     ...params,
     tracking: params.tracking ?? defaultTrackingParams(),
     cleaning,
+    events: { ...defaultEventDetectionParams(), ...params.events },
+    operationalDefinitions: {
+      ...defaultOperationalDefinitions(),
+      ...params.operationalDefinitions,
+    },
+    measurementBasisDefault: params.measurementBasisDefault ?? defaultMeasurementBasis(),
   };
 }
 

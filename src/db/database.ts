@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { AnalysisParams, PersistedSession, TrialRecord } from '../domain/types';
-import { TOOL_VERSION, defaultCleaningParams, defaultTrackingParams } from '../domain/trialFactory';
+import { TOOL_VERSION, defaultCleaningParams, defaultEventDetectionParams, defaultMeasurementBasis, defaultOperationalDefinitions, defaultTrackingParams } from '../domain/trialFactory';
 
 export interface VideoBlobRecord {
   fingerprint: string;
@@ -37,6 +37,9 @@ export function defaultAnalysisParams(): AnalysisParams {
     toolVersion: TOOL_VERSION,
     tracking: defaultTrackingParams(),
     cleaning: defaultCleaningParams(),
+    events: defaultEventDetectionParams(),
+    operationalDefinitions: defaultOperationalDefinitions(),
+    measurementBasisDefault: defaultMeasurementBasis(),
     updatedAt: new Date().toISOString(),
   };
 }

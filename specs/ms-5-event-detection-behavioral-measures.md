@@ -3,9 +3,16 @@
 Branch: `ms-5-event-detection-behavioral-measures`
 Base: `main` @ `e3ef219` (MS-4 complete)
 Constitution reference: `specs/constitution.md` → MS-5
-Status: **Plan only — revised per review (not implemented)**
+Status: **Implementation in progress** (approved plan + consistency clarifications)
 
-**Revision:** `b8cc1e7` → this commit. Architecture approved; scientific definitions corrected per Q1–Q10 decisions and plan-level review (September 6, 2026).
+**Revision:** `b8cc1e7` → `2d12b75` (scientific review) → implementation branch.
+
+### Final consistency clarifications (pre-implementation)
+
+1. **Follow-up lower bound (all right-censored trials):** For any trial without observed completion, `observedFollowUpLowerBoundUs = censorBoundaryTimeUs − trialStartTimeUs` — including `trial_censored_no_entry`. Entry evidence (`entryOnsetTimeUs`) and censor reason remain separate fields; lower bound reflects observed trial duration, not inferred entry.
+2. **Measurement basis change:** Changing basis **re-detects** dependent automatic events and **recomputes** measures on the new trajectory. Manual reviews preserved per D9 merge rules; `EventAnalysis.basisUsed` recorded.
+3. **Status vs confidence:** `status` and `confidence` are orthogonal. **`status === 'confirmed'` counts in finalized measures regardless of `confidence`**. Only `status === 'proposed'` or `status === 'rejected'` exclude from confirmed counts (rejected never counts).
+4. **Incomplete pixel evidence:** `pixel_evidence_incomplete` downgrades confidence only — never forces `trial_censored_no_entry` or definitive “no entry” when Phase A is ambiguous.
 
 ---
 
@@ -231,9 +238,9 @@ Escape is **not** a single `escape_censored` blob. Separate concepts:
 | `entryOnsetTimeUs` | First frame where entry evidence crosses onset threshold (proximity + decay begin) — **not** total latency |
 | `completionTimeUs` | Frame/time where completion criteria met — **null** unless `escape_completed` |
 | `censorBoundaryTimeUs` | `min(recording_end, protocol_cutoff, trial_window_end)` in container time |
-| `observedFollowUpLowerBoundUs` | When completion unobserved but entry onset detected: `censorBoundaryTimeUs − trialStartTimeUs` — explicit lower bound on total latency |
+| `observedFollowUpLowerBoundUs` | For **any** right-censored trial without completion: `censorBoundaryTimeUs − trialStartTimeUs`. When entry onset also detected, both fields are populated — lower bound is still the observed follow-up duration, not entry time. |
 
-**Total latency (D5):** Value = `completionTimeUs − trialStartTimeUs` only when `escape_completed`. Otherwise `value: null`, `censored: true`, `lowerBound: observedFollowUpLowerBoundUs` when entry onset exists; if `trial_censored_no_entry`, no lower bound from entry (flag `no_entry_evidence`).
+**Total latency (D5):** Value = `completionTimeUs − trialStartTimeUs` only when `escape_completed`. Otherwise `value: null`, `censored: true`, `lowerBound: observedFollowUpLowerBoundUs` (always set for censored trials, including `trial_censored_no_entry`). Entry onset is informational only for total latency.
 
 **Never:** Set total latency to censor boundary time without `censored: true` and explicit state.
 
@@ -264,7 +271,7 @@ interface PixelEvidenceResult {
 
 - Default soft budget: **300 frames per trial** (raised from 150 — tunable param, not hard silent cap).
 - If window exceeds budget: analyze **trailing** frames first (most recent evidence); set `complete: false`.
-- Classification when incomplete: **downgrade** escape confidence; never force `escape_completed`; may yield `escape_incomplete_censored` with flag `pixel_evidence_incomplete` or insufficient evidence → no escape record.
+- Classification when incomplete: **downgrade** escape confidence; never force `escape_completed` or **`trial_censored_no_entry`** from insufficient pixel data alone. Ambiguous Phase A + incomplete pixel → no escape record or `escape_incomplete_censored` with `pixel_evidence_incomplete` flag only when Phase A supports entry evidence.
 - UI shows “Pixel evidence incomplete — N/M frames analyzed.”
 
 **Implementation:** `eventFrameEvidenceService.ts` returns `PixelEvidenceResult`; escape scorer consumes with explicit incomplete handling.
@@ -325,12 +332,12 @@ interface ErrorCounts {
 }
 ```
 
-**Finalized primary/total errors** use **confirmed** investigations only:
+**Finalized primary/total errors** use investigations with **`status === 'confirmed'`** OR **`origin === 'manual'`** (manual defaults confirmed):
 
-- `status === 'confirmed'` OR `origin === 'manual'` (manual defaults confirmed)
-- `status === 'proposed'` → provisional bucket only
-- `status === 'rejected'` → excluded
-- **`confidence === 'low'`** → provisional bucket unless scientist confirms (Q9 ✓)
+- `status === 'proposed'` → provisional bucket only (regardless of confidence)
+- `status === 'rejected'` → excluded entirely
+- **`status === 'confirmed'` → confirmed bucket even when `confidence === 'low'`** (status takes precedence)
+- **`confidence === 'low'` with `status === 'proposed'`** → provisional only until scientist confirms
 
 **Re-visit vs distinct (Q2):** First visit to hole H = distinct error; subsequent visits to same H before boundary = `revisitCount` increments separately. Both contribute to `confirmed.total` when confirmed.
 
@@ -417,7 +424,7 @@ No silent auto-run on tracking complete.
 |---|---|---|
 | Detect events (explicit) | Full detect | Compute |
 | Manual correction | Re-detect auto | Recompute |
-| Measurement basis change | — | Recompute |
+| Measurement basis change | **Re-detect auto events** + recompute measures (preserve manual per D9); record `basisUsed` |
 | Cleaning apply | Re-detect if events exist | Recompute |
 | Stale cleaning + basis=cleaned | — | Measures unavailable until re-apply or basis change |
 | Event threshold / definition change | Re-detect auto | Recompute |
@@ -490,7 +497,7 @@ No silent auto-run on tracking complete.
 | U6 | Mid-platform lost → no escape record. |
 | U7 | **`escape_completed`** synthetic → total latency = completion − start. |
 | U8 | **`escape_incomplete_censored`** → total latency censored + lower bound = censor − start. |
-| U9 | **`trial_censored_no_entry`** → censored, no entry lower bound, flag `no_entry_evidence`. |
+| U9 | **`trial_censored_no_entry`** → censored + lower bound = censor − start; entry fields null. |
 | U10 | Never set total latency to recording duration without censored flag. |
 | U11 | Duplicate PTS: path includes displacement; speed excludes zero-Δt pair. |
 | U12 | Time-weighted mean speed ≠ unweighted frame mean. |

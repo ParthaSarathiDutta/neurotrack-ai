@@ -181,6 +181,138 @@ export interface Track {
   error: string | null;
 }
 
+/** MS-5 — trajectory layer used for event detection and measures. */
+export type MeasurementBasis = 'raw' | 'corrected' | 'cleaned';
+
+export type EventType =
+  | 'investigation'
+  | 'escape_completed'
+  | 'escape_incomplete_censored'
+  | 'trial_censored_no_entry';
+
+export type EventStatus = 'proposed' | 'confirmed' | 'rejected';
+export type EventConfidence = 'high' | 'medium' | 'low';
+
+export type SearchStrategyClass = 'spatial' | 'serial' | 'random' | 'unclassified';
+
+export type PrimaryLatencyVariant =
+  | 'first_target_investigation'
+  | 'first_target_proximity'
+  | 'first_target_investigation_confirmed_only';
+
+export type QuadrantConventionId = 'target_centered_90' | 'fixed_orientation_90';
+
+export interface EventDetectionParams {
+  investigationNoseProximityFraction: number;
+  investigationBodyProximityFraction: number;
+  investigationMinDwellUs: number;
+  investigationMergeGapUs: number;
+  escapeProximityFraction: number;
+  escapeMotionDecayRatio: number;
+  escapeProximityMinSpanUs: number;
+  escapeConfirmThreshold: number;
+  escapeCensorThreshold: number;
+  escapeCompletionAreaRatio: number;
+  pixelEvidenceBudgetFrames: number;
+  strategyDiThreshold: number;
+  strategyMaxDistinctHolesBeforeTarget: number;
+  strategyMinSerialHoles: number;
+  strategyMaxSerialViolations: number;
+  strategyCenterCrossingThreshold: number;
+  strategyNoncentralStartFlagFraction: number;
+  toolVersion: string;
+}
+
+export interface OperationalDefinitionSelections {
+  primaryLatencyVariant: PrimaryLatencyVariant;
+  quadrantConvention: QuadrantConventionId;
+  /** Required when quadrantConvention is fixed_orientation_90. */
+  quadrantNorthDeg: number | null;
+}
+
+export interface BehavioralEvent {
+  id: string;
+  type: EventType;
+  holeId: number | null;
+  startFrameIndex: number;
+  endFrameIndex: number;
+  startTimeUs: number;
+  endTimeUs: number;
+  entryOnsetTimeUs: number | null;
+  completionTimeUs: number | null;
+  censorBoundaryTimeUs: number | null;
+  origin: 'auto' | 'manual';
+  status: EventStatus;
+  confidence: EventConfidence | null;
+  visitIndex: number | null;
+  isRevisit: boolean | null;
+  evidence: Record<string, number | string | boolean | null>;
+  notes: string | null;
+}
+
+export interface EventAnalysis {
+  events: BehavioralEvent[];
+  params: EventDetectionParams;
+  operationalDefinitions: OperationalDefinitionSelections;
+  basisUsed: MeasurementBasis;
+  computedAt: string;
+  stale?: boolean;
+  staleReason?: string | null;
+}
+
+export interface MeasureValue {
+  value: number | null;
+  unit: string;
+  censored: boolean;
+  unavailable: boolean;
+  unavailableReason?: string | null;
+  lowerBound?: number | null;
+  lowerBoundUnit?: string | null;
+  definitionId: string;
+  definitionVersion: string;
+  definitionLabel: string;
+  definitionSummary: string;
+  assumptions: string[];
+  flags: string[];
+}
+
+export interface ErrorCountBucket {
+  total: number;
+  distinctHoleCount: number;
+  revisitCount: number;
+}
+
+export interface ErrorCounts {
+  confirmed: ErrorCountBucket;
+  provisional: ErrorCountBucket;
+}
+
+export interface SearchStrategyResult {
+  classification: SearchStrategyClass;
+  override: SearchStrategyClass | null;
+  overrideReason: string | null;
+  reasoning: Record<string, number | string | boolean | null>;
+  classifierVersion: string;
+}
+
+export interface MeasuresSnapshot {
+  basisUsed: MeasurementBasis;
+  computedAt: string;
+  primaryLatency: MeasureValue;
+  totalLatency: MeasureValue;
+  primaryErrors: MeasureValue;
+  totalErrors: MeasureValue;
+  errorCounts: ErrorCounts;
+  totalErrorCounts: ErrorCounts;
+  pathLength: MeasureValue;
+  meanSpeed: MeasureValue;
+  maxSpeed: MeasureValue;
+  targetQuadrantFraction: MeasureValue;
+  targetQuadrantTimeSec: MeasureValue;
+  searchStrategy: SearchStrategyResult;
+  assumptions: string[];
+}
+
 export interface TrialRecord {
   id: string;
   fingerprint: string;
@@ -194,6 +326,9 @@ export interface TrialRecord {
   trialWindow: TrialWindow;
   geometry: Geometry;
   track: Track | null;
+  events: EventAnalysis | null;
+  measures: MeasuresSnapshot | null;
+  measurementBasis: MeasurementBasis;
   progress: {
     lastIngestAt: string | null;
     decodeWallClockMs: number | null;
@@ -207,6 +342,9 @@ export interface AnalysisParams {
   toolVersion: string;
   tracking: TrackingParams;
   cleaning: CleaningParams;
+  events: EventDetectionParams;
+  operationalDefinitions: OperationalDefinitionSelections;
+  measurementBasisDefault: MeasurementBasis;
   updatedAt: string;
 }
 

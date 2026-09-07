@@ -4,6 +4,23 @@ import {
   CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT,
   CLEANING_SMOOTHING_WINDOW_DEFAULT,
   DEFAULT_CUTOFF_SECONDS,
+  EVENT_ESCAPE_CENSOR_THRESHOLD,
+  EVENT_ESCAPE_COMPLETION_AREA_RATIO,
+  EVENT_ESCAPE_CONFIRM_THRESHOLD,
+  EVENT_ESCAPE_MOTION_DECAY_RATIO,
+  EVENT_ESCAPE_PROXIMITY_FRACTION,
+  EVENT_ESCAPE_PROXIMITY_MIN_SPAN_US,
+  EVENT_INVESTIGATION_BODY_PROXIMITY_FRACTION,
+  EVENT_INVESTIGATION_MERGE_GAP_US,
+  EVENT_INVESTIGATION_MIN_DWELL_US,
+  EVENT_INVESTIGATION_NOSE_PROXIMITY_FRACTION,
+  EVENT_PIXEL_EVIDENCE_BUDGET_FRAMES,
+  EVENT_STRATEGY_CENTER_CROSSING_THRESHOLD,
+  EVENT_STRATEGY_DI_THRESHOLD,
+  EVENT_STRATEGY_MAX_DISTINCT_HOLES_BEFORE_TARGET,
+  EVENT_STRATEGY_MAX_SERIAL_VIOLATIONS,
+  EVENT_STRATEGY_MIN_SERIAL_HOLES,
+  EVENT_STRATEGY_NONCENTRAL_START_FLAG_FRACTION,
   TRACKING_BACKGROUND_SAMPLE_COUNT,
   TRACKING_LOW_CONFIDENCE_THRESHOLD,
   TRACKING_MAX_BLOB_AREA_FRACTION,
@@ -12,7 +29,10 @@ import {
 } from './constants';
 import type {
   CleaningParams,
+  EventDetectionParams,
   Geometry,
+  MeasurementBasis,
+  OperationalDefinitionSelections,
   TrialRecord,
   TrialWindow,
   Track,
@@ -20,7 +40,7 @@ import type {
   VideoMetadata,
 } from './types';
 
-export const TOOL_VERSION = '0.4.0-ms4';
+export const TOOL_VERSION = '0.5.0-ms5';
 
 export function defaultTrackingParams(): TrackingParams {
   return {
@@ -31,6 +51,41 @@ export function defaultTrackingParams(): TrackingParams {
     lowConfidenceThreshold: TRACKING_LOW_CONFIDENCE_THRESHOLD,
     toolVersion: TOOL_VERSION,
   };
+}
+
+export function defaultEventDetectionParams(): EventDetectionParams {
+  return {
+    investigationNoseProximityFraction: EVENT_INVESTIGATION_NOSE_PROXIMITY_FRACTION,
+    investigationBodyProximityFraction: EVENT_INVESTIGATION_BODY_PROXIMITY_FRACTION,
+    investigationMinDwellUs: EVENT_INVESTIGATION_MIN_DWELL_US,
+    investigationMergeGapUs: EVENT_INVESTIGATION_MERGE_GAP_US,
+    escapeProximityFraction: EVENT_ESCAPE_PROXIMITY_FRACTION,
+    escapeMotionDecayRatio: EVENT_ESCAPE_MOTION_DECAY_RATIO,
+    escapeProximityMinSpanUs: EVENT_ESCAPE_PROXIMITY_MIN_SPAN_US,
+    escapeConfirmThreshold: EVENT_ESCAPE_CONFIRM_THRESHOLD,
+    escapeCensorThreshold: EVENT_ESCAPE_CENSOR_THRESHOLD,
+    escapeCompletionAreaRatio: EVENT_ESCAPE_COMPLETION_AREA_RATIO,
+    pixelEvidenceBudgetFrames: EVENT_PIXEL_EVIDENCE_BUDGET_FRAMES,
+    strategyDiThreshold: EVENT_STRATEGY_DI_THRESHOLD,
+    strategyMaxDistinctHolesBeforeTarget: EVENT_STRATEGY_MAX_DISTINCT_HOLES_BEFORE_TARGET,
+    strategyMinSerialHoles: EVENT_STRATEGY_MIN_SERIAL_HOLES,
+    strategyMaxSerialViolations: EVENT_STRATEGY_MAX_SERIAL_VIOLATIONS,
+    strategyCenterCrossingThreshold: EVENT_STRATEGY_CENTER_CROSSING_THRESHOLD,
+    strategyNoncentralStartFlagFraction: EVENT_STRATEGY_NONCENTRAL_START_FLAG_FRACTION,
+    toolVersion: TOOL_VERSION,
+  };
+}
+
+export function defaultOperationalDefinitions(): OperationalDefinitionSelections {
+  return {
+    primaryLatencyVariant: 'first_target_investigation',
+    quadrantConvention: 'target_centered_90',
+    quadrantNorthDeg: null,
+  };
+}
+
+export function defaultMeasurementBasis(): MeasurementBasis {
+  return 'corrected';
 }
 
 export function defaultCleaningParams(): CleaningParams {
@@ -107,6 +162,9 @@ export function createTrialStub(
     trialWindow: createEmptyTrialWindow(),
     geometry: createEmptyGeometry(),
     track: null,
+    events: null,
+    measures: null,
+    measurementBasis: defaultMeasurementBasis(),
     progress: {
       lastIngestAt: null,
       decodeWallClockMs: null,
