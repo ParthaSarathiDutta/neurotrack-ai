@@ -115,9 +115,43 @@ export function censorBoundaryTimeUs(
   if (start == null || timestampIndex.length === 0) return null;
   const recordingEnd = timestampIndex[timestampIndex.length - 1]!.timeUs;
   const windowEnd = window.endTimeUs ?? window.proposedEndTimeUs ?? recordingEnd;
-  const cutoffSec = window.cutoffSeconds ?? 180;
-  const cutoffUs = start + cutoffSec * 1_000_000;
-  return Math.min(recordingEnd, windowEnd, cutoffUs);
+  let boundary = Math.min(recordingEnd, windowEnd);
+  if (window.cutoffSeconds != null && window.cutoffSeconds > 0) {
+    boundary = Math.min(boundary, start + window.cutoffSeconds * 1_000_000);
+  }
+  return boundary;
+}
+
+/** Last presentation-order frame at or before the effective analysis boundary. */
+export function censorBoundaryFrameIndex(
+  window: Parameters<typeof censorBoundaryTimeUs>[0],
+  timestampIndex: { timeUs: number; frameIndex: number }[],
+): number | null {
+  const censorUs = censorBoundaryTimeUs(window, timestampIndex);
+  if (censorUs == null || timestampIndex.length === 0) return null;
+  let best: { timeUs: number; frameIndex: number } | null = null;
+  for (const entry of timestampIndex) {
+    if (entry.timeUs <= censorUs) best = entry;
+    else break;
+  }
+  return best?.frameIndex ?? null;
+}
+
+/** Presentation-order frames from entry onset through the analysis boundary (inclusive). */
+export function entryToCensorFrameIndices(
+  timestampIndex: { timeUs: number; frameIndex: number }[],
+  entryFrameIndex: number,
+  censorUs: number,
+  censorFrameIndex: number,
+): number[] {
+  return timestampIndex
+    .filter(
+      (e) =>
+        e.frameIndex >= entryFrameIndex &&
+        e.frameIndex <= censorFrameIndex &&
+        e.timeUs <= censorUs,
+    )
+    .map((e) => e.frameIndex);
 }
 
 export function isInTrial(obs: Observation, trialStartUs: number, censorUs: number): boolean {

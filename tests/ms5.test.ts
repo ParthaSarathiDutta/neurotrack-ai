@@ -390,6 +390,42 @@ describe('MS-5 U14 pixel budget incomplete', () => {
   });
 });
 
+describe('MS-5 escape completion time', () => {
+  it('uses pixel evidence completion anchor, not censor boundary', () => {
+    const hole = geometry.holes[0]!;
+    const observations: Observation[] = [];
+    for (let i = 0; i < 120; i += 1) {
+      observations.push(
+        obs(i, 5_000_000 + i * 100_000, hole.x, hole.y, { x: hole.x, y: hole.y - 5 }),
+      );
+    }
+    const ts = observations.map((o) => ({ timeUs: o.timeUs, frameIndex: o.frameIndex }));
+    const censorUs = 17_000_000;
+    const esc = detectEscapeOutcome(
+      observations,
+      geometry,
+      { ...trialWindow, endTimeUs: censorUs },
+      ts,
+      defaultEventDetectionParams(),
+      {
+        pixelEvidence: {
+          framesAnalyzed: 50,
+          framesRequested: 50,
+          complete: true,
+          areaDecayScore: 0.9,
+          holeDarkeningScore: 0.8,
+          completionFrameIndex: 90,
+          completionTimeUs: 14_000_000,
+        },
+      },
+    );
+    expect(esc?.type).toBe('escape_completed');
+    expect(esc?.completionTimeUs).toBe(14_000_000);
+    expect(esc?.censorBoundaryTimeUs).toBeLessThanOrEqual(censorUs);
+    expect(esc?.completionTimeUs).not.toBe(esc?.censorBoundaryTimeUs);
+  });
+});
+
 describe('MS-5 U15 measurement basis path length', () => {
   it('corrected path differs from raw when manual correction exists', () => {
     const base = [obs(0, 5_000_000, 0, 0), obs(1, 5_100_000, 10, 0)];

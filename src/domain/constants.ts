@@ -1,7 +1,7 @@
 /** Standard 20-hole Barnes maze — Salk task assay contract. Not user-configurable. */
 export const HOLE_COUNT = 20;
 export const HOLE_SPACING_DEG = 360 / HOLE_COUNT;
-export const DEFAULT_CUTOFF_SECONDS = 180;
+export const DEFAULT_CUTOFF_SECONDS = 180; // Legacy sessions only — new trials default to null (no cutoff).
 
 /** Motion-onset detection defaults. */
 export const MOTION_FLOOR_MULTIPLIER = 3;

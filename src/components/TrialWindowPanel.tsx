@@ -102,21 +102,41 @@ export function TrialWindowPanel({ trial }: TrialWindowPanelProps) {
       </div>
 
       <div className={styles.labelField}>
-        <label htmlFor="cutoff-sec">Protocol cutoff from start (s)</label>
+        <label htmlFor="cutoff-sec">Protocol cutoff (optional, s from trial start)</label>
+        <p className={styles.hint} data-testid="cutoff-hint">
+          Maximum analysis duration measured from trial start — not the video end time. Leave unset
+          to analyze through the confirmed trial end or recording end, whichever is earlier.
+        </p>
         <input
           id="cutoff-sec"
           type="number"
           min={1}
           step={1}
-          value={tw.cutoffSeconds ?? 180}
+          value={tw.cutoffSeconds ?? ''}
+          placeholder="None — full trial"
           onChange={(e) => {
-            const sec = parseFloat(e.target.value);
-            if (!Number.isNaN(sec)) {
+            const raw = e.target.value.trim();
+            if (raw === '') {
+              updateTrialWindow(trial.id, { cutoffSeconds: null });
+              return;
+            }
+            const sec = parseFloat(raw);
+            if (!Number.isNaN(sec) && sec > 0) {
               updateTrialWindow(trial.id, { cutoffSeconds: sec });
             }
           }}
           data-testid="cutoff-input"
         />
+        {tw.cutoffSeconds != null && (
+          <button
+            type="button"
+            className={styles.button}
+            onClick={() => updateTrialWindow(trial.id, { cutoffSeconds: null })}
+            data-testid="clear-cutoff-btn"
+          >
+            Clear cutoff (use full trial)
+          </button>
+        )}
       </div>
 
       <div className={styles.actions}>

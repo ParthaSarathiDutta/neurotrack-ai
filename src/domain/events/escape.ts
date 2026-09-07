@@ -24,6 +24,9 @@ export interface PixelEvidenceResult {
   analyzedFrameIndices?: number[];
   /** Presentation-order frame indices requested but not decoded. */
   failedFrameIndices?: number[];
+  /** Trailing pixel-evidence anchor — not the censor boundary. */
+  completionFrameIndex?: number | null;
+  completionTimeUs?: number | null;
   errorMessage?: string | null;
 }
 
@@ -202,10 +205,17 @@ export function detectEscapeOutcome(
   if (trialStart == null || censorUs == null) return null;
 
   const followUpLowerBoundUs = censorUs - trialStart;
+  const recordingEnd = timestampIndex[timestampIndex.length - 1]?.timeUs;
+  const cutoffUs =
+    trialWindow.cutoffSeconds != null && trialWindow.cutoffSeconds > 0
+      ? trialStart + trialWindow.cutoffSeconds * 1_000_000
+      : null;
   const censorReason =
-    censorUs === timestampIndex[timestampIndex.length - 1]?.timeUs
+    censorUs === recordingEnd
       ? 'recording_end'
-      : 'protocol_cutoff';
+      : cutoffUs != null && censorUs === cutoffUs
+        ? 'protocol_cutoff'
+        : 'trial_end';
 
   const phaseA = scorePhaseA(observations, geometry, trialStart, censorUs, params);
   let score = phaseA?.score ?? 0;
@@ -223,6 +233,8 @@ export function detectEscapeOutcome(
       pixelAnalyzedFrameIndices: ctx.pixelEvidence.analyzedFrameIndices?.join(',') ?? null,
       pixelFailedFrameIndices: ctx.pixelEvidence.failedFrameIndices?.join(',') ?? null,
       pixelErrorMessage: ctx.pixelEvidence.errorMessage ?? null,
+      pixelCompletionFrameIndex: ctx.pixelEvidence.completionFrameIndex ?? null,
+      pixelCompletionTimeUs: ctx.pixelEvidence.completionTimeUs ?? null,
     };
     if (ctx.pixelEvidence.areaDecayScore != null) {
       score += ctx.pixelEvidence.areaDecayScore * 0.2;
@@ -241,16 +253,20 @@ export function detectEscapeOutcome(
     (ctx.pixelEvidence?.areaDecayScore ?? 0) >= params.escapeCompletionAreaRatio;
 
   if (canComplete && phaseA) {
+    const completionTimeUs =
+      ctx.pixelEvidence?.completionTimeUs ?? phaseA.endTimeUs;
+    const completionFrameIndex =
+      ctx.pixelEvidence?.completionFrameIndex ?? phaseA.endFrameIndex;
     return {
       id: newEventId(),
       type: 'escape_completed',
       holeId: phaseA.holeId,
       startFrameIndex: phaseA.entryOnsetFrameIndex,
-      endFrameIndex: phaseA.endFrameIndex,
+      endFrameIndex: completionFrameIndex,
       startTimeUs: phaseA.entryOnsetTimeUs,
-      endTimeUs: censorUs,
+      endTimeUs: completionTimeUs,
       entryOnsetTimeUs: phaseA.entryOnsetTimeUs,
-      completionTimeUs: censorUs,
+      completionTimeUs,
       censorBoundaryTimeUs: censorUs,
       origin: 'auto',
       status: 'proposed',

@@ -3,6 +3,7 @@ import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
 import type { TrialRecord, MeasurementBasis, BehavioralEvent, EventType } from '../domain/types';
 import { formatPresentationTimeSeconds } from '../domain/timing';
+import { formatHoleDisplayId, parseHoleDisplayId } from '../domain/holeDisplay';
 
 interface EventsMeasuresPanelProps {
   trial: TrialRecord;
@@ -31,7 +32,7 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
   const updateEventParams = useSessionStore((s) => s.updateEventParams);
   const eventsBusy = useSessionStore((s) => s.eventsBusy);
 
-  const [manualHoleId, setManualHoleId] = useState('0');
+  const [manualHoleId, setManualHoleId] = useState('1');
   const [manualStartFrame, setManualStartFrame] = useState('');
   const [manualEndFrame, setManualEndFrame] = useState('');
   const [escapeType, setEscapeType] = useState<Exclude<EventType, 'investigation'>>('escape_incomplete_censored');
@@ -155,11 +156,11 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
           <summary>Add / edit manual events</summary>
           <div className={styles.eventFormRow}>
             <label>
-              Investigation hole
+              Investigation hole (1–20)
               <input
                 type="number"
-                min={0}
-                max={19}
+                min={1}
+                max={20}
                 data-testid="manual-investigation-hole"
                 value={manualHoleId}
                 onChange={(e) => setManualHoleId(e.target.value)}
@@ -194,7 +195,7 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
                 const start = Number(manualStartFrame || currentFrameIndex + 1) - 1;
                 const end = Number(manualEndFrame || currentFrameIndex + 1) - 1;
                 addManualInvestigation(trial.id, {
-                  holeId: Number(manualHoleId),
+                  holeId: parseHoleDisplayId(Number(manualHoleId)) ?? 0,
                   startFrameIndex: start,
                   endFrameIndex: Math.max(start, end),
                 });
@@ -217,11 +218,11 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
               </select>
             </label>
             <label>
-              Hole (optional)
+              Hole (optional, 1–20)
               <input
                 type="number"
-                min={0}
-                max={19}
+                min={1}
+                max={20}
                 data-testid="manual-escape-hole"
                 value={escapeHoleId}
                 onChange={(e) => setEscapeHoleId(e.target.value)}
@@ -244,7 +245,10 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
               onClick={() =>
                 setManualEscapeOutcome(trial.id, {
                   type: escapeType,
-                  holeId: escapeHoleId === '' ? null : Number(escapeHoleId),
+                  holeId:
+                    escapeHoleId === ''
+                      ? null
+                      : parseHoleDisplayId(Number(escapeHoleId)),
                   entryOnsetFrameIndex:
                     escapeEntryFrame === '' ? null : Number(escapeEntryFrame) - 1,
                 })
@@ -313,14 +317,14 @@ function EventRow({
   onEditFrames: (start: number, end: number) => void;
 }) {
   const [editMode, setEditMode] = useState(false);
-  const [holeInput, setHoleInput] = useState(String(ev.holeId ?? 0));
+  const [holeInput, setHoleInput] = useState(formatHoleDisplayId(ev.holeId));
   const [startInput, setStartInput] = useState(String(ev.startFrameIndex + 1));
   const [endInput, setEndInput] = useState(String(ev.endFrameIndex + 1));
 
   return (
     <li data-testid={`event-row-${ev.type}-${ev.holeId ?? 'none'}-${ev.startFrameIndex}`}>
       <button type="button" onClick={onSeek}>
-        {ev.type} hole {ev.holeId ?? '—'} frames {ev.startFrameIndex + 1}–{ev.endFrameIndex + 1} ({ev.origin}/{ev.status}, {ev.confidence ?? '—'})
+        {ev.type} hole {formatHoleDisplayId(ev.holeId)} frames {ev.startFrameIndex + 1}–{ev.endFrameIndex + 1} ({ev.origin}/{ev.status}, {ev.confidence ?? '—'})
       </button>
       {ev.status === 'proposed' && (
         <>
@@ -335,14 +339,14 @@ function EventRow({
       )}
       {editMode && ev.type === 'investigation' && (
         <span className={styles.eventFormRow}>
-          <input type="number" value={holeInput} onChange={(e) => setHoleInput(e.target.value)} aria-label="Hole id" />
+          <input type="number" min={1} max={20} value={holeInput} onChange={(e) => setHoleInput(e.target.value)} aria-label="Hole number (1–20)" />
           <input type="number" value={startInput} onChange={(e) => setStartInput(e.target.value)} aria-label="Start frame" />
           <input type="number" value={endInput} onChange={(e) => setEndInput(e.target.value)} aria-label="End frame" />
           <button
             type="button"
             data-testid={`save-event-${ev.id}`}
             onClick={() => {
-              onEditHole(Number(holeInput));
+              onEditHole(parseHoleDisplayId(Number(holeInput)) ?? ev.holeId ?? 0);
               onEditFrames(Number(startInput) - 1, Number(endInput) - 1);
               setEditMode(false);
             }}

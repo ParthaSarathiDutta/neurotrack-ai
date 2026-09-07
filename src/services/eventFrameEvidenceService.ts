@@ -6,8 +6,10 @@ import {
 import { getPhaseACandidate } from '../domain/events/escape';
 import type { PixelEvidenceResult } from '../domain/events/escape';
 import {
+  censorBoundaryFrameIndex,
   censorBoundaryTimeUs,
   effectiveTrialStartUs,
+  entryToCensorFrameIndices,
 } from '../domain/events/holeProximity';
 import type {
   EventDetectionParams,
@@ -107,19 +109,23 @@ export async function fetchEscapePixelEvidence(
   const hole = geometry.holes.find((h) => h.id === phaseA.holeId);
   if (!hole) return null;
 
-  const lastFrameIndex = trial.timestampIndex[trial.timestampIndex.length - 1]?.frameIndex;
-  if (lastFrameIndex == null) {
+  const censorFrameIndex = censorBoundaryFrameIndex(trialWindow, trial.timestampIndex);
+  if (censorFrameIndex == null) {
     return unavailableResult({
       framesRequested: 0,
       unavailableReason: 'frame_worker_error',
-      errorMessage: 'Missing timestamp index',
+      errorMessage: 'Missing censor boundary frame',
     });
   }
 
   const budget = params.pixelEvidenceBudgetFrames;
-  const inRangeCount = trial.timestampIndex.filter(
-    (e) => e.frameIndex >= phaseA.entryOnsetFrameIndex && e.frameIndex <= lastFrameIndex,
-  ).length;
+  const allCandidates = entryToCensorFrameIndices(
+    trial.timestampIndex,
+    phaseA.entryOnsetFrameIndex,
+    censorUs,
+    censorFrameIndex,
+  );
+  const inRangeCount = allCandidates.length;
   const framesRequested = Math.min(inRangeCount, budget);
   const truncated = inRangeCount > budget;
 
@@ -175,12 +181,6 @@ export async function fetchEscapePixelEvidence(
       height,
     );
 
-    const allCandidates = trial.timestampIndex
-      .filter(
-        (e) => e.frameIndex >= phaseA.entryOnsetFrameIndex && e.frameIndex <= lastFrameIndex,
-      )
-      .map((e) => e.frameIndex);
-
     const {
       samples,
       analyzedFrameIndices,
@@ -211,6 +211,15 @@ export async function fetchEscapePixelEvidence(
       samples.length >= framesRequested &&
       !truncated;
 
+    const lastAnalyzedIndex =
+      analyzedFrameIndices.length > 0
+        ? analyzedFrameIndices[analyzedFrameIndices.length - 1]!
+        : null;
+    const lastAnalyzedEntry =
+      lastAnalyzedIndex != null
+        ? trial.timestampIndex.find((e) => e.frameIndex === lastAnalyzedIndex)
+        : null;
+
     return {
       framesAnalyzed: samples.length,
       framesRequested,
@@ -219,6 +228,8 @@ export async function fetchEscapePixelEvidence(
       holeDarkeningScore: scores.holeDarkeningScore,
       analyzedFrameIndices,
       failedFrameIndices,
+      completionFrameIndex: lastAnalyzedIndex,
+      completionTimeUs: lastAnalyzedEntry?.timeUs ?? null,
       errorMessage: complete ? null : lastError,
       ...(complete
         ? {}

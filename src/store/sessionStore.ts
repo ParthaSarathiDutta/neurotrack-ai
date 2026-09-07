@@ -659,7 +659,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             trialWindow: {
               ...t.trialWindow,
               ...proposal.trialWindow,
-              cutoffSeconds: t.trialWindow.cutoffSeconds ?? 180,
+              cutoffSeconds: t.trialWindow.cutoffSeconds,
               startTimeUs: proposal.success
                 ? (proposal.trialWindow.startTimeUs ?? t.trialWindow.startTimeUs)
                 : t.trialWindow.startTimeUs,

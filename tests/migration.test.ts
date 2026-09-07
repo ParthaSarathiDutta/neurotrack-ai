@@ -11,7 +11,17 @@ describe('migration', () => {
     expect(migrated.geometry.targetHoleConfirmedAt).toBeNull();
     expect(migrated.trialWindow.proposedStartTimeUs).toBeNull();
     expect(migrated.trialWindow.confirmedAt).toBeNull();
+    expect(migrated.trialWindow.cutoffSeconds).toBeNull();
     expect(migrated.track).toBeNull();
+  });
+
+  it('preserves explicitly saved cutoff on migrated sessions', () => {
+    const stub = createTrialStub('abc', 'video.mp4');
+    const migrated = migrateTrialRecord({
+      ...stub,
+      trialWindow: { ...stub.trialWindow, cutoffSeconds: 15 },
+    });
+    expect(migrated.trialWindow.cutoffSeconds).toBe(15);
   });
 
   it('adds MS-4 track correction fields', () => {

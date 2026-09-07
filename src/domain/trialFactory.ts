@@ -3,7 +3,6 @@ import {
   CLEANING_MAX_GAP_FRAMES_DEFAULT,
   CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT,
   CLEANING_SMOOTHING_WINDOW_DEFAULT,
-  DEFAULT_CUTOFF_SECONDS,
   EVENT_ESCAPE_CENSOR_THRESHOLD,
   EVENT_ESCAPE_COMPLETION_AREA_RATIO,
   EVENT_ESCAPE_CONFIRM_THRESHOLD,
@@ -134,7 +133,7 @@ export function createEmptyTrialWindow(): TrialWindow {
   return {
     startTimeUs: null,
     endTimeUs: null,
-    cutoffSeconds: DEFAULT_CUTOFF_SECONDS,
+    cutoffSeconds: null,
     source: 'manual',
     proposedStartTimeUs: null,
     proposedEndTimeUs: null,

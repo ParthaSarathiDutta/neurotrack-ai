@@ -257,3 +257,10 @@ test53/test51 reach `escape_completed` only when Phase B pixel pass is **complet
 ### Validated
 lint/test/build PASS (120 tests); validate:calibration, validate:ms1–ms4, validate:tracking, validate:ms5 PASS. **Not merged / MS-5 not marked complete** — stopped for manual review.
 
+## MS-5 optional cutoff + hole display (2026-09-06)
+
+- Protocol cutoff is **optional** (`null` = analyze through trial/recording end). No implicit 180 s default on new trials; saved values preserved on migration and window re-proposal.
+- Pixel evidence window capped at **censor boundary frame**, fixing 15 s cutoff vs frame 904 mismatch.
+- `escape_completed.completionTimeUs` uses trailing **pixel evidence anchor**, not censor boundary.
+- Events panel shows **Hole 1–20** (display) with internal 0–19 at API boundary only.
+
