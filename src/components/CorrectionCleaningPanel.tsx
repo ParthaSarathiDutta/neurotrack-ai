@@ -1,8 +1,13 @@
 import type { TrialRecord } from '../domain/types';
 import { isAppliedCleaningConsumable } from '../domain/trajectory/cleaningStaleness';
 import { isEstimatedBodyPosition } from '../domain/trajectory/observationEstimate';
-import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
+import {
+  compareCleaningPreviewFrame,
+  formatCleaningPreviewCompareLine,
+} from '../domain/trajectory/cleaningPreviewCompare';
+import { applyManualCorrections } from '../domain/trajectory/manualCorrection';
 import { formatCleaningQualityFlags } from '../domain/trajectory/cleaningLabels';
+import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
 import { useSessionStore, type CorrectionMode } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
 
@@ -35,6 +40,19 @@ export function CorrectionCleaningPanel({
   const appliedStale = Boolean(appliedCleaning?.stale);
 
   const effective = resolveEffectiveObservations(track, { cleaningPreview });
+  const correctedBase = track?.observations?.length
+    ? applyManualCorrections(track.observations, track.manualCorrections ?? [])
+    : [];
+  const previewCompare =
+    hasPreview && track
+      ? compareCleaningPreviewFrame(
+          correctedBase,
+          cleaningPreview!,
+          track.manualCorrections ?? [],
+          currentFrameIndex,
+          cleaningParams,
+        )
+      : null;
   const currentObs = effective.find((o) => o.frameIndex === currentFrameIndex) ?? null;
   const hasManualOnFrame = track?.manualCorrections.some((c) => c.frameIndex === currentFrameIndex);
 
@@ -120,6 +138,11 @@ export function CorrectionCleaningPanel({
         <li><span className={styles.legendManual} aria-hidden="true" /> Manual (square)</li>
         <li><span className={styles.legendInterpolated} aria-hidden="true" /> Interpolated (dashed circle)</li>
         <li><span className={styles.legendSmoothed} aria-hidden="true" /> Smoothed (double circle)</li>
+        {hasPreview ? (
+          <li data-testid="legend-preview-raw">
+            Hollow dashed circle — raw corrected body during preview (when shift ≥ 0.5 px)
+          </li>
+        ) : null}
       </ul>
 
       <h3 className={styles.subheading}>Trajectory cleaning</h3>
@@ -221,9 +244,21 @@ export function CorrectionCleaningPanel({
       </div>
 
       {hasPreview && (
-        <p className={styles.warningBox} data-testid="clean-preview-active">
-          Preview active — trajectory shows proposed cleaning (not saved until Apply).
-        </p>
+        <>
+          <p className={styles.warningBox} data-testid="clean-preview-active">
+            Preview active — compare raw vs proposed cleaning below (not saved until Apply).
+          </p>
+          {previewCompare ? (
+            <p className={styles.hint} data-testid="clean-preview-compare">
+              {formatCleaningPreviewCompareLine(previewCompare)}
+            </p>
+          ) : null}
+          {previewCompare?.skipNote ? (
+            <p className={styles.hint} data-testid="clean-preview-skip-note">
+              {previewCompare.skipNote}
+            </p>
+          ) : null}
+        </>
       )}
       <span
         hidden

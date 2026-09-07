@@ -1,5 +1,9 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import type { TrialRecord } from '../domain/types';
+import { applyManualCorrections } from '../domain/trajectory/manualCorrection';
+import {
+  compareCleaningPreviewFrame,
+} from '../domain/trajectory/cleaningPreviewCompare';
 import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
 import { getTrialReviewStatus, reviewStatusLabel } from '../domain/migration';
 import { VideoPlayer } from './VideoPlayer';
@@ -21,6 +25,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
   const applyManualBodyCorrection = useSessionStore((s) => s.applyManualBodyCorrection);
   const applyManualNoseCorrection = useSessionStore((s) => s.applyManualNoseCorrection);
   const cleaningPreview = useSessionStore((s) => s.cleaningPreviewByTrialId[trial.id] ?? null);
+  const cleaningParams = useSessionStore((s) => s.analysisParams.cleaning);
   const [selectedHoleId, setSelectedHoleId] = useState<number | null>(null);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const manualClickRef = useRef<((x: number, y: number) => void) | null>(null);
@@ -54,6 +59,28 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
     setSelectedHoleId(null);
     setCurrentFrameIndex(0);
   }, [trial.id]);
+
+  const correctedBase = useMemo(
+    () =>
+      trial.track?.observations?.length
+        ? applyManualCorrections(trial.track.observations, trial.track.manualCorrections ?? [])
+        : [],
+    [trial.track?.observations, trial.track?.manualCorrections],
+  );
+  const previewFrameCompare = useMemo(() => {
+    if (!cleaningPreview?.length || !trial.track) return null;
+    return compareCleaningPreviewFrame(
+      correctedBase,
+      cleaningPreview,
+      trial.track.manualCorrections ?? [],
+      currentFrameIndex,
+      cleaningParams,
+    );
+  }, [cleaningPreview, correctedBase, trial.track, currentFrameIndex, cleaningParams]);
+  const previewRawBodyXY =
+    previewFrameCompare?.meaningfulChange && previewFrameCompare.rawBody
+      ? previewFrameCompare.rawBody
+      : null;
 
   if (!trial.metadata || !trial.videoCached) {
     return (
@@ -99,6 +126,7 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
         geometry={trial.geometry}
         trialWindow={trial.trialWindow}
         observations={effectiveObservations}
+        previewRawBodyXY={previewRawBodyXY}
         selectedHoleId={selectedHoleId}
         onFrameIndexChange={setCurrentFrameIndex}
         onRegisterSeek={registerSeekApi}

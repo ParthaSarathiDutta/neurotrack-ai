@@ -105,3 +105,5 @@ export const CLEANING_MAX_GAP_FRAMES_DEFAULT = 3;
 export const CLEANING_MAX_GAP_DURATION_US_DEFAULT = 500_000;
 export const CLEANING_SMOOTHING_WINDOW_DEFAULT = 3;
 export const CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT = 2.0;
+/** Minimum body shift (px) before smoothing updates origin to `smoothed`. */
+export const CLEANING_SMOOTHING_MIN_DISPLACEMENT_PX = 0.5;

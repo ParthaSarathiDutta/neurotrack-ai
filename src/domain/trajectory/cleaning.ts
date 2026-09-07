@@ -1,3 +1,4 @@
+import { CLEANING_SMOOTHING_MIN_DISPLACEMENT_PX } from '../constants';
 import type { CleaningParams, Observation, ObservationQualityFlag } from '../types';
 import { isSpeedOutlier, mergeQualityFlags } from '../tracking/trackQuality';
 
@@ -192,7 +193,9 @@ function smoothBodies(observations: Observation[], windowSize: number): Observat
     const avgX = neighbors.reduce((s, p) => s + p.x, 0) / neighbors.length;
     const avgY = neighbors.reduce((s, p) => s + p.y, 0) / neighbors.length;
     if (!Number.isFinite(avgX) || !Number.isFinite(avgY)) continue;
-    if (Math.hypot(avgX - currentBody.x, avgY - currentBody.y) < 0.5) continue;
+    if (Math.hypot(avgX - currentBody.x, avgY - currentBody.y) < CLEANING_SMOOTHING_MIN_DISPLACEMENT_PX) {
+      continue;
+    }
     result[i] = {
       ...result[i],
       bodyXY: { x: avgX, y: avgY },

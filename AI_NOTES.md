@@ -186,3 +186,16 @@ Post-review at `d0208b5`. Approved minimal changes — no MS-4 redesign.
 
 ### Validated
 lint/test/build PASS (83 tests); `validate:ms4` PASS (~16 s) including V_stale_initial/after_correction/banner/cleared_on_reapply; validate:calibration, validate:ms1, validate:ms2, validate:ms3 PASS. New unit tests: `tests/cleaningStaleness.test.ts`, expanded `tests/trajectory.test.ts`.
+
+## MS-4 cleaning preview UX (2026-09-06)
+
+### Problem
+Scientists could not see raw vs preview cleaning differences — overlay draws one marker per frame; 6 px shifts look identical; offline frame recommendations misaligned with live WebCodecs tracking by ~10 frames on test50.
+
+### Fix
+- Panel compare line during preview: raw → preview bodyXY, Δ px, origin; skip-note when smoothing below 0.5 px threshold.
+- Hollow dashed raw marker on overlay when preview shift ≥ 0.5 px.
+- `updateCleaningParams` clears active preview (no stale banner).
+
+### Validated
+88 unit tests; validate:ms4 V_preview_compare + V_preview_cleared_on_param_change PASS.

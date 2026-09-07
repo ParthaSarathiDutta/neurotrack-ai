@@ -8,6 +8,8 @@ interface VideoOverlayProps {
   displayBox: VideoDisplayBox;
   selectedHoleId: number | null;
   observation?: Observation | null;
+  /** During cleaning preview — hollow marker at raw corrected body when shift is meaningful. */
+  previewRawBodyXY?: { x: number; y: number } | null;
   onHoleClick?: (holeId: number) => void;
   onCanvasClick?: (x: number, y: number) => void;
 }
@@ -17,6 +19,7 @@ export function VideoOverlay({
   displayBox,
   selectedHoleId,
   observation,
+  previewRawBodyXY = null,
   onHoleClick,
   onCanvasClick,
 }: VideoOverlayProps) {
@@ -112,6 +115,17 @@ export function VideoOverlay({
       ctx.fillText(label, p.x + 8, p.y - 8);
     }
 
+    if (previewRawBodyXY && observation?.bodyXY) {
+      const rawPt = videoToDisplay(previewRawBodyXY, displayBox);
+      ctx.beginPath();
+      ctx.arc(rawPt.x, rawPt.y, 7, 0, 2 * Math.PI);
+      ctx.strokeStyle = 'rgba(70, 70, 70, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     if (observation?.bodyXY) {
       const body = videoToDisplay(observation.bodyXY, displayBox);
       ctx.beginPath();
@@ -178,7 +192,7 @@ export function VideoOverlay({
       ctx.fillStyle = '#111111';
       ctx.fillText('?', body.x + 10, body.y - 10);
     }
-  }, [geometry, displayBox, selectedHoleId, observation]);
+  }, [geometry, displayBox, selectedHoleId, observation, previewRawBodyXY]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();

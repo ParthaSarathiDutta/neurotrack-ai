@@ -17,6 +17,7 @@ interface VideoPlayerProps {
   geometry: Geometry;
   trialWindow: TrialWindow;
   observations?: Observation[];
+  previewRawBodyXY?: { x: number; y: number } | null;
   selectedHoleId: number | null;
   onHoleClick?: (holeId: number) => void;
   onCanvasClick?: (x: number, y: number) => void;
@@ -37,6 +38,7 @@ export function VideoPlayer({
   geometry,
   trialWindow,
   observations = [],
+  previewRawBodyXY = null,
   selectedHoleId,
   onHoleClick,
   onCanvasClick,
@@ -223,6 +225,7 @@ export function VideoPlayer({
           displayBox={displayBox}
           selectedHoleId={selectedHoleId}
           observation={currentObservation}
+          previewRawBodyXY={previewRawBodyXY}
           onHoleClick={onHoleClick}
           onCanvasClick={onCanvasClick}
         />
@@ -240,6 +243,8 @@ export function VideoPlayer({
         <span data-testid="observation-estimated">
           {isEstimatedBodyPosition(currentObservation) ? 'true' : 'false'}
         </span>
+        <span data-testid="preview-raw-body-x">{previewRawBodyXY?.x ?? ''}</span>
+        <span data-testid="preview-raw-body-y">{previewRawBodyXY?.y ?? ''}</span>
       </div>
 
       <div className={styles.playerControls}>

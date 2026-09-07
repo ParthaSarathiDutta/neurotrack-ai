@@ -814,13 +814,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (cleaningParamsMatch(t.track.appliedCleaning.params, cleaning)) return t;
         return staleTrialTrack(t, STALE_REASON_CLEANING_PARAMS);
       });
+      const clearedPreviews = Object.fromEntries(
+        Object.keys(state.cleaningPreviewByTrialId).map((trialId) => [trialId, null]),
+      );
       return {
         trials,
+        cleaningPreviewByTrialId: clearedPreviews,
         analysisParams: {
           ...state.analysisParams,
           cleaning,
           updatedAt: new Date().toISOString(),
         },
+        statusMessage: Object.values(state.cleaningPreviewByTrialId).some((p) => p != null)
+          ? 'Cleaning parameters changed — preview cleared. Click Preview cleaning to refresh.'
+          : state.statusMessage,
       };
     });
     scheduleSave(get, set);

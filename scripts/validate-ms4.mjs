@@ -387,6 +387,21 @@ async function main() {
     console.error('MS-4: cleaning preview active');
     results.V5_preview = 'PASS';
 
+    const compareVisible = await page
+      .locator('[data-testid="clean-preview-compare"]')
+      .isVisible();
+    results.V_preview_compare = compareVisible ? 'PASS' : 'FAIL';
+
+    await page.locator('[data-testid="clean-smoothing-window"]').fill('7');
+    const previewAfterParamChange = await page
+      .locator('[data-testid="cleaning-preview-state"]')
+      .getAttribute('data-active');
+    results.V_preview_cleared_on_param_change =
+      previewAfterParamChange === 'false' ? 'PASS' : `FAIL: ${previewAfterParamChange}`;
+
+    await previewCleaning(page);
+    console.error('MS-4: cleaning preview re-run after param change');
+
     const originDuringPreview = await page.evaluate(
       ({ tid, idx }) => window.__ntGetEffectiveOriginAt?.(tid, idx) ?? null,
       { tid: trialId, idx: 0 },
@@ -476,6 +491,9 @@ async function main() {
       failures.push(`V_dup_persist: ${results.V_dup_pts_persistence}`);
     }
     if (results.V5_preview !== 'PASS') failures.push('V5: preview');
+    if (results.V_preview_cleared_on_param_change !== 'PASS') {
+      failures.push('V_preview_param: preview not cleared on param change');
+    }
     if (results.V8_apply !== 'PASS') failures.push('V8: apply');
     if (results.V9_apply_persistence !== 'PASS') failures.push('V9: apply persistence');
     if (results.V_stale_after_correction !== 'PASS') failures.push('V_stale: after correction');
