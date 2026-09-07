@@ -842,6 +842,20 @@
   fill: #222;
 }
 
+.timelineRegionLabel {
+  font-size: 9px;
+  fill: #555;
+  font-weight: 600;
+}
+
+.legendAbsentNote {
+  margin: var(--space-xs) 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  max-width: 42rem;
+}
+
 .accountingGrid {
   display: grid;
   grid-template-columns: minmax(10rem, 14rem) 1fr;
@@ -860,6 +874,13 @@
   flex-wrap: wrap;
   gap: var(--space-lg);
   align-items: flex-start;
+  max-width: 100%;
+}
+
+.occupancyLayout svg[data-testid='occupancy-svg'] {
+  flex: 1 1 280px;
+  max-width: 360px;
+  min-width: 240px;
 }
 
 .occupancyLegendPanel {

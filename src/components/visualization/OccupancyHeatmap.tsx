@@ -3,6 +3,7 @@ import {
   buildOccupancyGrid,
   occupancyCellColor,
   occupancyDisplayIntensity,
+  occupancyHoleLabelPosition,
   summarizeOccupancyAccounting,
   videoToOccupancySvg,
 } from '../../domain/visualization/occupancyGrid';
@@ -17,8 +18,20 @@ interface OccupancyHeatmapProps {
   censorUs: number;
 }
 
-const SVG_SIZE = 300;
-const LEGEND_WIDTH = 200;
+const SVG_SIZE = 360;
+const MARGIN = 34;
+const INNER = SVG_SIZE - MARGIN * 2;
+const LEGEND_WIDTH = 220;
+
+function mapToInner(
+  x: number,
+  y: number,
+  center: { x: number; y: number },
+  radius: number,
+): { cx: number; cy: number } {
+  const pt = videoToOccupancySvg(x, y, center, radius, INNER);
+  return { cx: pt.cx + MARGIN, cy: pt.cy + MARGIN };
+}
 
 export function OccupancyHeatmap({
   observations,
@@ -45,31 +58,36 @@ export function OccupancyHeatmap({
   const minX = center.x - radius;
   const minY = center.y - radius;
   const span = radius * 2;
-  const cellPx = SVG_SIZE / size;
+  const cellPx = INNER / size;
   const maxBinSec = model.maxWeightUs / 1_000_000;
+  const platformCx = SVG_SIZE / 2;
+  const platformCy = SVG_SIZE / 2;
+  const platformR = INNER / 2 - 2;
 
   return (
     <figure className={styles.vizFigure} data-testid="occupancy-heatmap">
       <figcaption>Time-weighted occupancy on platform</figcaption>
       <p className={styles.vizDescription} data-testid="occupancy-description">
-        Darker blue bins indicate more accumulated time (seconds) at that platform location. This shows
-        where the tracked body spent time — not escape direction, protocol target, or hole preference unless
-        separately confirmed in events.
+        Each square is shaded by how long the mouse spent there. Darker squares indicate more
+        accumulated time. This map does not independently identify the protocol target, escape
+        direction, or hole preference.
       </p>
 
       <div className={styles.occupancyLayout}>
         <svg
-          width={SVG_SIZE}
+          width="100%"
           height={SVG_SIZE}
+          viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
+          preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label="Occupancy heatmap on platform"
           className={styles.vizSvg}
-          viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
+          data-testid="occupancy-svg"
         >
           <circle
-            cx={SVG_SIZE / 2}
-            cy={SVG_SIZE / 2}
-            r={SVG_SIZE / 2 - 3}
+            cx={platformCx}
+            cy={platformCy}
+            r={platformR}
             className={styles.occupancyPlatformOutline}
           />
           {Array.from({ length: size * size }, (_, idx) => {
@@ -85,39 +103,62 @@ export function OccupancyHeatmap({
             return (
               <rect
                 key={idx}
-                x={col * cellPx}
-                y={row * cellPx}
+                x={MARGIN + col * cellPx}
+                y={MARGIN + row * cellPx}
                 width={cellPx}
                 height={cellPx}
                 fill={occupancyCellColor(intensity)}
+                stroke="rgba(255,255,255,0.35)"
+                strokeWidth={0.35}
                 data-testid="occupancy-cell"
                 data-weight-sec={binSec.toFixed(3)}
               >
-                <title>{`${binSec.toFixed(2)} s accumulated in bin`}</title>
+                <title>{`${binSec.toFixed(2)} s in this bin`}</title>
               </rect>
             );
           })}
 
           {geometry.holes.map((hole) => {
-            const p = videoToOccupancySvg(hole.x, hole.y, center, radius, SVG_SIZE);
+            const p = mapToInner(hole.x, hole.y, center, radius);
+            const label = occupancyHoleLabelPosition(
+              hole.x,
+              hole.y,
+              center,
+              radius,
+              INNER,
+              14,
+            );
+            const lx = label.lx + MARGIN;
+            const ly = label.ly + MARGIN;
             const isTarget = targetId != null && hole.id === targetId;
             const displayNum = hole.id + 1;
             return (
-              <g key={hole.id} data-testid={isTarget ? 'occupancy-target-hole' : 'occupancy-hole-marker'}>
+              <g
+                key={hole.id}
+                data-testid={isTarget ? 'occupancy-target-hole' : 'occupancy-hole-marker'}
+                data-hole-display={displayNum}
+              >
                 <circle
                   cx={p.cx}
                   cy={p.cy}
-                  r={isTarget ? 5 : 3}
+                  r={isTarget ? 4.5 : 2.5}
                   fill={isTarget ? '#111' : '#fff'}
                   stroke={isTarget ? '#005ea2' : '#333'}
                   strokeWidth={isTarget ? 2 : 1}
                 />
                 <text
-                  x={p.cx + 6}
-                  y={p.cy - 4}
-                  fontSize={9}
+                  x={lx}
+                  y={ly}
+                  fontSize={8}
+                  fontWeight={600}
+                  textAnchor={label.anchor}
+                  dominantBaseline="middle"
                   fill="#111"
+                  stroke="#fff"
+                  strokeWidth={2.5}
+                  paintOrder="stroke"
                   className={styles.occupancyHoleLabel}
+                  data-testid="occupancy-hole-label"
                 >
                   {displayNum}
                 </text>
@@ -125,25 +166,11 @@ export function OccupancyHeatmap({
               </g>
             );
           })}
-
-          <line
-            x1={SVG_SIZE / 2}
-            y1={SVG_SIZE / 2}
-            x2={SVG_SIZE / 2}
-            y2={8}
-            stroke="#666"
-            strokeWidth={1}
-            strokeDasharray="2 2"
-            aria-hidden="true"
-          />
-          <text x={SVG_SIZE / 2 + 4} y={10} fontSize={8} fill="#666">
-            platform up
-          </text>
         </svg>
 
         <div className={styles.occupancyLegendPanel} data-testid="occupancy-color-legend">
           <p className={styles.occupancyLegendTitle}>Accumulated time per bin (s)</p>
-          <svg width={LEGEND_WIDTH} height={16} aria-hidden="true">
+          <svg width={LEGEND_WIDTH} height={18} aria-hidden="true">
             <defs>
               <linearGradient id="occupancy-legend-gradient" x1="0" y1="0" x2="1" y2="0">
                 {[0, 0.25, 0.5, 0.75, 1].map((t) => (
@@ -151,16 +178,15 @@ export function OccupancyHeatmap({
                 ))}
               </linearGradient>
             </defs>
-            <rect x={0} y={2} width={LEGEND_WIDTH} height={12} fill="url(#occupancy-legend-gradient)" stroke="#888" strokeWidth={0.5} />
+            <rect x={0} y={2} width={LEGEND_WIDTH} height={14} fill="url(#occupancy-legend-gradient)" stroke="#666" strokeWidth={0.75} />
           </svg>
           <div className={styles.occupancyLegendTicks}>
             <span>0 s</span>
             <span>{(maxBinSec / 2).toFixed(2)} s</span>
-            <span data-testid="occupancy-max-bin-sec">{maxBinSec.toFixed(2)} s max</span>
+            <span data-testid="occupancy-max-bin-sec">{maxBinSec.toFixed(2)} s max bin</span>
           </div>
-          <p className={styles.hint}>
-            Display: linear normalization ({model.displayNormalization}). Each bin shaded by its own
-            accumulated seconds relative to the darkest bin ({maxBinSec.toFixed(2)} s).
+          <p className={styles.hint} data-testid="occupancy-legend-note">
+            Linear scale: bin shading proportional to seconds accumulated in that bin (darkest = max bin).
           </p>
         </div>
       </div>

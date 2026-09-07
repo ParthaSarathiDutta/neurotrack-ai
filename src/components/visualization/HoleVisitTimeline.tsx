@@ -1,4 +1,9 @@
 import type { HoleVisitTimelineModel, InvestigationSpan, EscapeMarkerKind } from '../../domain/visualization/holeVisitTimeline';
+import {
+  resolveTimelineLegend,
+  type TimelineLegendKind,
+  LEGEND_LABELS,
+} from '../../domain/visualization/timelineLegend';
 import styles from '../../styles/app.module.css';
 
 interface HoleVisitTimelineProps {
@@ -7,11 +12,13 @@ interface HoleVisitTimelineProps {
 }
 
 const ROW_HEIGHT = 18;
-const LEFT_PAD = 52;
-const TOP_PAD = 36;
-const BOTTOM_PAD = 44;
-const RIGHT_PAD = 12;
-const CHART_WIDTH = 640;
+const Y_TITLE_X = 10;
+const TICK_LABEL_X = 64;
+const PLOT_LEFT = 72;
+const TOP_PAD = 40;
+const BOTTOM_PAD = 52;
+const RIGHT_PAD = 16;
+const CHART_WIDTH = 680;
 
 function xTicks(durationSec: number): number[] {
   if (durationSec <= 0) return [0];
@@ -19,7 +26,7 @@ function xTicks(durationSec: number): number[] {
     durationSec <= 15 ? 5 : durationSec <= 30 ? 10 : durationSec <= 60 ? 15 : 30;
   const ticks: number[] = [0];
   for (let t = step; t < durationSec; t += step) ticks.push(t);
-  ticks.push(durationSec);
+  if (ticks[ticks.length - 1] !== durationSec) ticks.push(durationSec);
   return ticks;
 }
 
@@ -43,53 +50,71 @@ function investigationStroke(status: InvestigationSpan['status'], origin: Invest
   };
 }
 
-function LegendSample({ kind }: { kind: 'confirmed' | 'proposed' | 'manual' | 'completion' | 'candidate' | 'censor' }) {
-  const w = 36;
-  const h = 14;
-  if (kind === 'confirmed') {
+function LegendSample({ kind }: { kind: TimelineLegendKind }) {
+  const w = 40;
+  const h = 16;
+  if (kind === 'confirmed_investigation') {
     return (
       <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
-        <rect x={2} y={4} width={32} height={6} fill="#2b2b2b" stroke="#1a1a1a" strokeWidth={0.75} />
+        <rect x={2} y={5} width={36} height={6} fill="#2b2b2b" stroke="#1a1a1a" strokeWidth={0.75} />
       </svg>
     );
   }
-  if (kind === 'proposed') {
+  if (kind === 'proposed_investigation') {
     return (
       <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
         <defs>
-          <pattern id="legend-proposed-hatch" width={4} height={4} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1={0} y1={0} x2={0} y2={4} stroke="#666" strokeWidth={1} />
+          <pattern id="legend-proposed-hatch" width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1={0} y1={0} x2={0} y2={5} stroke="#666" strokeWidth={1.2} />
           </pattern>
         </defs>
-        <rect x={2} y={4} width={32} height={6} fill="url(#legend-proposed-hatch)" stroke="#4a4a4a" strokeWidth={1} strokeDasharray="3 2" />
+        <rect x={2} y={5} width={36} height={6} fill="url(#legend-proposed-hatch)" stroke="#4a4a4a" strokeWidth={1} strokeDasharray="3 2" />
       </svg>
     );
   }
-  if (kind === 'manual') {
+  if (kind === 'manual_provenance') {
     return (
       <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
-        <rect x={2} y={4} width={32} height={6} fill="#2b2b2b" stroke="#005ea2" strokeWidth={2.5} />
+        <rect x={2} y={5} width={36} height={6} fill="#2b2b2b" stroke="#005ea2" strokeWidth={2.5} />
       </svg>
     );
   }
-  if (kind === 'completion') {
+  if (kind === 'entry_onset') {
     return (
       <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
-        <line x1={18} y1={2} x2={18} y2={12} stroke="#111" strokeWidth={2.5} />
-        <polygon points="18,1 21,5 15,5" fill="#111" />
+        <line x1={20} y1={2} x2={20} y2={14} stroke="#555" strokeWidth={1.5} strokeDasharray="3 3" />
+        <rect x={17} y={1} width={6} height={4} fill="#555" />
       </svg>
     );
   }
-  if (kind === 'candidate') {
+  if (kind === 'confirmed_completion') {
     return (
       <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
-        <line x1={18} y1={2} x2={18} y2={12} stroke="#7a4a00" strokeWidth={2} strokeDasharray="4 3" />
+        <line x1={20} y1={2} x2={20} y2={14} stroke="#111" strokeWidth={2.5} />
+        <polygon points="20,1 24,6 16,6" fill="#111" />
+      </svg>
+    );
+  }
+  if (kind === 'candidate_entry') {
+    return (
+      <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
+        <line x1={20} y1={2} x2={20} y2={14} stroke="#c45c00" strokeWidth={2} strokeDasharray="5 4" />
+        <circle cx={20} cy={3} r={3} fill="none" stroke="#c45c00" strokeWidth={1.5} />
+      </svg>
+    );
+  }
+  if (kind === 'pre_trial_region') {
+    return (
+      <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
+        <rect x={2} y={4} width={16} height={8} fill="rgba(120,120,120,0.15)" stroke="#888" strokeWidth={0.75} />
+        <rect x={22} y={5} width={16} height={6} fill="#2b2b2b" />
       </svg>
     );
   }
   return (
     <svg width={w} height={h} aria-hidden="true" className={styles.legendSampleSvg}>
-      <rect x={4} y={3} width={28} height={8} fill="rgba(120,120,120,0.25)" stroke="#888" strokeWidth={1} />
+      <rect x={2} y={4} width={16} height={8} fill="#2b2b2b" />
+      <rect x={22} y={4} width={16} height={8} fill="rgba(120,120,120,0.25)" stroke="#888" strokeWidth={0.75} />
     </svg>
   );
 }
@@ -98,29 +123,31 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
   const width = CHART_WIDTH;
   const plotHeight = model.holeDisplays.length * ROW_HEIGHT;
   const height = TOP_PAD + plotHeight + BOTTOM_PAD;
-  const plotWidth = width - LEFT_PAD - RIGHT_PAD;
+  const plotWidth = width - PLOT_LEFT - RIGHT_PAD;
   const durationSec = Math.max(0.001, model.trialDurationSec);
   const ticks = xTicks(durationSec);
+  const legend = resolveTimelineLegend(model, model.investigations);
 
-  const xForSec = (sec: number) => LEFT_PAD + (sec / durationSec) * plotWidth;
+  const xForSec = (sec: number) => PLOT_LEFT + (sec / durationSec) * plotWidth;
+  const censorX = xForSec(model.censorSec);
+  const postCensorWidth = Math.max(0, width - RIGHT_PAD - censorX);
 
-  const renderEscapeMarker = (marker: { kind: EscapeMarkerKind; sec: number; frameIndex: number; label: string }, i: number) => {
+  const renderEscapeMarker = (
+    marker: { kind: EscapeMarkerKind; sec: number; frameIndex: number; label: string },
+    i: number,
+  ) => {
+    if (marker.kind === 'censor_boundary') return null;
+
     const x = xForSec(marker.sec);
     const yTop = TOP_PAD;
     const yBottom = TOP_PAD + plotHeight;
-
-    if (marker.kind === 'censor_boundary') {
-      return (
-        <g key={`${marker.kind}-${i}`} data-testid="hole-timeline-censor_boundary">
-          <title>{`${marker.label} — ${marker.sec.toFixed(2)} s`}</title>
-        </g>
-      );
-    }
-
     const isCompletion = marker.kind === 'completion';
     const isCandidate = marker.kind === 'candidate_entry';
-    const stroke = isCompletion ? '#111111' : isCandidate ? '#7a4a00' : '#444444';
-    const dash = isCompletion ? undefined : '5 4';
+    const isEntryOnset = marker.kind === 'entry_onset';
+
+    const stroke = isCompletion ? '#111111' : isCandidate ? '#c45c00' : '#555555';
+    const dash = isCompletion ? undefined : isCandidate ? '6 4' : '4 3';
+    const widthPx = isCompletion ? 2.5 : isCandidate ? 2 : 1.5;
 
     return (
       <g
@@ -143,15 +170,29 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
           x2={x}
           y2={yBottom}
           stroke={stroke}
-          strokeWidth={isCompletion ? 2.5 : 2}
+          strokeWidth={widthPx}
           strokeDasharray={dash}
         />
         {isCompletion && (
           <polygon
-            points={`${x},${yTop - 2} ${x + 5},${yTop + 6} ${x - 5},${yTop + 6}`}
+            points={`${x},${yTop - 1} ${x + 6},${yTop + 7} ${x - 6},${yTop + 7}`}
             fill={stroke}
             data-testid="hole-timeline-completion-endpoint"
           />
+        )}
+        {isCandidate && (
+          <circle
+            cx={x}
+            cy={yTop + 2}
+            r={4}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={1.5}
+            data-testid="hole-timeline-candidate-endpoint"
+          />
+        )}
+        {isEntryOnset && (
+          <rect x={x - 3} y={yTop} width={6} height={5} fill={stroke} />
         )}
         <title>{`${marker.label} — ${marker.sec.toFixed(2)} s`}</title>
       </g>
@@ -162,9 +203,8 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
     <figure className={styles.vizFigure} data-testid="hole-visit-timeline">
       <figcaption>Hole-visit timeline</figcaption>
       <p className={styles.vizDescription} data-testid="hole-timeline-description">
-        Horizontal bars show hole investigation intervals (confirmed vs proposed status). Vertical markers
-        show hole entry onset, confirmed body-entry completion, or candidate entry evidence — not the
-        protocol target designation. Shaded regions mark pre-trial and post-censor boundaries.
+        Horizontal bars are investigation intervals. Vertical markers show entry onset, confirmed
+        body-entry completion, or candidate entry evidence — not the protocol target designation.
       </p>
       <svg
         width="100%"
@@ -174,6 +214,7 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
         role="img"
         aria-label="Hole visit timeline"
         className={styles.vizSvg}
+        data-testid="hole-timeline-svg"
       >
         <defs>
           <pattern id="timeline-proposed-hatch" width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -181,33 +222,62 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
           </pattern>
         </defs>
 
-        {model.preTrialEndSec > 0 && (
+        {model.preTrialEndSec > 0.001 && (
           <rect
-            x={LEFT_PAD}
+            x={PLOT_LEFT}
             y={TOP_PAD}
-            width={Math.max(0, xForSec(model.preTrialEndSec) - LEFT_PAD)}
+            width={Math.max(0, xForSec(model.preTrialEndSec) - PLOT_LEFT)}
             height={plotHeight}
             fill="rgba(120, 120, 120, 0.12)"
+            data-testid="hole-timeline-pretrial-region"
           />
         )}
-        <rect
-          x={xForSec(model.censorSec)}
-          y={TOP_PAD}
-          width={Math.max(0, width - RIGHT_PAD - xForSec(model.censorSec))}
-          height={plotHeight}
-          fill="rgba(120, 120, 120, 0.22)"
-          data-testid="hole-timeline-censor-region"
+
+        {postCensorWidth > 0.5 && (
+          <rect
+            x={censorX}
+            y={TOP_PAD}
+            width={postCensorWidth}
+            height={plotHeight}
+            fill="rgba(120, 120, 120, 0.22)"
+            data-testid="hole-timeline-censor-region"
+          />
+        )}
+
+        <line
+          x1={censorX}
+          y1={TOP_PAD}
+          x2={censorX}
+          y2={TOP_PAD + plotHeight}
+          stroke="#666"
+          strokeWidth={1.5}
+          strokeDasharray="4 3"
+          data-testid="hole-timeline-censor-line"
         />
+        <text
+          x={Math.min(censorX + 4, width - RIGHT_PAD - 80)}
+          y={TOP_PAD - 6}
+          className={styles.timelineRegionLabel}
+          data-testid="hole-timeline-censor-label"
+        >
+          Censor / trial end
+        </text>
 
         {model.holeDisplays.map((holeDisplay, row) => {
           const y = TOP_PAD + row * ROW_HEIGHT;
           return (
             <g key={holeDisplay}>
-              <text x={6} y={y + ROW_HEIGHT * 0.68} className={styles.timelineAxisTick}>
+              <text
+                x={TICK_LABEL_X}
+                y={y + ROW_HEIGHT * 0.68}
+                textAnchor="end"
+                className={styles.timelineAxisTick}
+                data-testid="hole-timeline-y-tick-label"
+              >
                 {holeDisplay}
               </text>
               <line
-                x1={LEFT_PAD}
+                x1={PLOT_LEFT}
                 y1={y + ROW_HEIGHT}
                 x2={width - RIGHT_PAD}
                 y2={y + ROW_HEIGHT}
@@ -266,7 +336,7 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
             />
             <text
               x={xForSec(t)}
-              y={height - 18}
+              y={height - 26}
               textAnchor="middle"
               className={styles.timelineAxisTick}
             >
@@ -276,8 +346,8 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
         ))}
 
         <text
-          x={LEFT_PAD + plotWidth / 2}
-          y={height - 4}
+          x={PLOT_LEFT + plotWidth / 2}
+          y={height - 6}
           textAnchor="middle"
           className={styles.timelineAxisTitle}
           data-testid="hole-timeline-x-axis-label"
@@ -285,10 +355,10 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
           Elapsed time from trial start (s)
         </text>
         <text
-          x={14}
+          x={Y_TITLE_X}
           y={TOP_PAD + plotHeight / 2}
           textAnchor="middle"
-          transform={`rotate(-90 14 ${TOP_PAD + plotHeight / 2})`}
+          transform={`rotate(-90 ${Y_TITLE_X} ${TOP_PAD + plotHeight / 2})`}
           className={styles.timelineAxisTitle}
           data-testid="hole-timeline-y-axis-label"
         >
@@ -297,13 +367,18 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
       </svg>
 
       <ul className={styles.vizLegend} data-testid="hole-timeline-legend">
-        <li><LegendSample kind="confirmed" /> Confirmed investigation (bar)</li>
-        <li><LegendSample kind="proposed" /> Proposed investigation (hatched bar)</li>
-        <li><LegendSample kind="manual" /> Manual provenance (outline)</li>
-        <li><LegendSample kind="completion" /> Confirmed body-entry completion</li>
-        <li><LegendSample kind="candidate" /> Candidate entry (dashed marker)</li>
-        <li><LegendSample kind="censor" /> Censor / post-trial region</li>
+        {legend.present.map((kind) => (
+          <li key={kind} data-testid={`hole-timeline-legend-${kind}`}>
+            <LegendSample kind={kind} /> {LEGEND_LABELS[kind]}
+          </li>
+        ))}
       </ul>
+      {legend.absent.length > 0 && (
+        <p className={styles.legendAbsentNote} data-testid="hole-timeline-legend-absent">
+          Not present in this trial:{' '}
+          {legend.absent.map((k) => LEGEND_LABELS[k].replace(/ \(.+\)$/, '')).join('; ')}
+        </p>
+      )}
     </figure>
   );
 }

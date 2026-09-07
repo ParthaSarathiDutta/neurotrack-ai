@@ -51,6 +51,75 @@ async function selectTrial(page, namePattern) {
   await page.getByRole('button', { name: namePattern }).click();
 }
 
+/** All matched elements must lie within the SVG viewport. */
+async function textsWithinSvg(page, textSelector, svgSelector) {
+  return page.evaluate(
+    ({ textSel, svgSel }) => {
+      const svg = document.querySelector(svgSel);
+      const texts = [...document.querySelectorAll(textSel)];
+      if (!svg || texts.length === 0) return { ok: false, reason: 'missing', count: texts.length };
+      const sr = svg.getBoundingClientRect();
+      for (const el of texts) {
+        const r = el.getBoundingClientRect();
+        if (
+          r.left < sr.left - 3 ||
+          r.right > sr.right + 3 ||
+          r.top < sr.top - 3 ||
+          r.bottom > sr.bottom + 3
+        ) {
+          return { ok: false, reason: `clipped:${el.textContent}`, count: texts.length };
+        }
+      }
+      return { ok: true, count: texts.length };
+    },
+    { textSel: textSelector, svgSel: svgSelector },
+  );
+}
+
+/** Y-axis title must not overlap any hole-number tick label. */
+async function yAxisClearOfTickLabels(page) {
+  return page.evaluate(() => {
+    const ylab = document.querySelector('[data-testid="hole-timeline-y-axis-label"]');
+    const ticks = [...document.querySelectorAll('[data-testid="hole-timeline-y-tick-label"]')];
+    if (!ylab || ticks.length === 0) return false;
+    const ry = ylab.getBoundingClientRect();
+    return ticks.every((t) => {
+      const rt = t.getBoundingClientRect();
+      const overlap =
+        ry.right > rt.left &&
+        ry.left < rt.right &&
+        ry.bottom > rt.top &&
+        ry.top < rt.bottom;
+      return !overlap;
+    });
+  });
+}
+
+async function assertVizLayout(page, trialTag) {
+  const yAxisOk = await yAxisClearOfTickLabels(page);
+  results[`V_${trialTag}_y_axis_clear`] = yAxisOk ? 'PASS' : 'FAIL';
+
+  const holeLabels = await textsWithinSvg(
+    page,
+    '[data-testid="occupancy-hole-label"]',
+    '[data-testid="occupancy-svg"]',
+  );
+  results[`V_${trialTag}_occupancy_labels_in_bounds`] =
+    holeLabels.ok && holeLabels.count === 20 ? 'PASS' : `FAIL:${JSON.stringify(holeLabels)}`;
+
+  const desc = await page.locator('[data-testid="occupancy-description"]').textContent();
+  results[`V_${trialTag}_occupancy_plain_language`] =
+    desc && desc.includes('Each square is shaded') && desc.includes('does not independently identify')
+      ? 'PASS'
+      : `FAIL:${desc?.trim()}`;
+
+  const legendAbsent = await page.locator('[data-testid="hole-timeline-legend-absent"]').textContent();
+  results[`V_${trialTag}_dynamic_legend_note`] = legendAbsent ? 'PASS' : 'FAIL:missing';
+
+  const censorLabel = await page.locator('[data-testid="hole-timeline-censor-label"]').count();
+  results[`V_${trialTag}_censor_label`] = censorLabel > 0 ? 'PASS' : 'FAIL';
+}
+
 async function main() {
   if (!process.env.SKIP_BUILD) execSync('npm run build', { cwd: ROOT, stdio: 'inherit' });
 
@@ -115,6 +184,26 @@ async function main() {
     const invCount = await page.locator('[data-testid="hole-timeline-investigation"]').count();
     results.V_test53_timeline_investigations = invCount > 0 ? 'PASS' : `FAIL:${invCount}`;
 
+    await assertVizLayout(page, 'test53');
+
+    const completionEndpoint = await page.locator('[data-testid="hole-timeline-completion-endpoint"]').count();
+    results.V_test53_completion_marker = completionEndpoint > 0 ? 'PASS' : 'FAIL';
+
+    const test53LegendProposed = await page.locator('[data-testid="hole-timeline-legend-proposed_investigation"]').count();
+    const test53LegendCompletion = await page.locator('[data-testid="hole-timeline-legend-confirmed_completion"]').count();
+    results.V_test53_legend_present_kinds =
+      test53LegendProposed > 0 && test53LegendCompletion > 0 ? 'PASS' : 'FAIL';
+
+    const test53Absent = await page.locator('[data-testid="hole-timeline-legend-absent"]').textContent();
+    results.V_test53_legend_absent_candidate =
+      test53Absent && test53Absent.includes('Candidate entry') ? 'PASS' : `FAIL:${test53Absent?.trim()}`;
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.waitForTimeout(100);
+    const narrowYAxis = await yAxisClearOfTickLabels(page);
+    results.V_narrow_viewport_y_axis = narrowYAxis ? 'PASS' : 'FAIL';
+    await page.setViewportSize({ width: 1280, height: 900 });
+
     const occCells = await page.locator('[data-testid="occupancy-cell"]').count();
     results.V_test53_occupancy_cells = occCells > 0 ? 'PASS' : `FAIL:${occCells}`;
 
@@ -127,6 +216,18 @@ async function main() {
     results.V_test51_timeline = 'PASS';
     results.V_test51_occupancy =
       (await page.locator('[data-testid="occupancy-heatmap"]').count()) > 0 ? 'PASS' : 'FAIL';
+    await assertVizLayout(page, 'test51');
+
+    const candidateMarker = await page.locator('[data-testid="hole-timeline-candidate_entry"]').count();
+    results.V_test51_candidate_marker = candidateMarker > 0 ? 'PASS' : 'FAIL';
+
+    const test51LegendCandidate = await page.locator('[data-testid="hole-timeline-legend-candidate_entry"]').count();
+    results.V_test51_legend_candidate = test51LegendCandidate > 0 ? 'PASS' : 'FAIL';
+
+    const test51Absent = await page.locator('[data-testid="hole-timeline-legend-absent"]').textContent();
+    results.V_test51_legend_absent_completion =
+      test51Absent && test51Absent.includes('Confirmed body-entry completion') ? 'PASS' : `FAIL:${test51Absent?.trim()}`;
+
     const test51Included = await page.locator('[data-testid="occupancy-included-sec"]').textContent();
     const test51OffPlatform = await page.locator('[data-testid="occupancy-excluded-off-platform"]').textContent();
     results.V_test51_occupancy_accounting =

@@ -449,3 +449,19 @@ Expected under definition: 33.17 s on-platform + 11.08 s off-platform = 44.24 s 
 ### Validated
 186 unit tests, lint, build, validate:ms6-viz, validate:ms2/ms4/ms5 — ALL PASS.
 
+## MS-6 Checkpoint 3 visualization readability fix (2026-09-07)
+
+### Mistake (prior pass)
+- Y-axis title overlapped hole-number ticks because the title sat near tick labels and the overlap test targeted the full `<g>` row (including grid lines), not tick text alone.
+- Legend listed all categories regardless of trial content, implying candidate entry on test53 where only confirmed completion exists.
+- Occupancy hole numbers clipped at platform edge; “platform up” annotation was ambiguous.
+
+### Fix (presentation only)
+- Timeline layout: `Y_TITLE_X=10`, end-anchored ticks at `x=64`, plot at `x=72`; dynamic legend via `resolveTimelineLegend()` — present categories only, absent listed in note (no fabricated samples).
+- Distinct markers: confirmed completion (solid + triangle), candidate entry (orange dashed + circle, explicitly not confirmed escape), entry onset (thin dashed + square), manual provenance as blue outline overlay on bars.
+- Occupancy: inward hole labels with white stroke; ColorBrewer Blues ramp; simplified description; removed platform-orientation hint; target ring only when protocol target confirmed.
+- Browser regression: bounding-box checks for axis/tick separation, 20 hole labels within SVG, narrow viewport (390px), dynamic legend per trial (test53 absent candidate; test51 present candidate, absent completion).
+
+### Validated
+189 unit tests, lint, build, validate:ms6-viz (36 checks), validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review.
+

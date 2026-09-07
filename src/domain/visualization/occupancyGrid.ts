@@ -173,13 +173,53 @@ export function occupancyCellFraction(weightUs: number, totalWeightUs: number): 
   return weightUs / totalWeightUs;
 }
 
-/** Color-blind-safe blue sequential ramp (light = low, dark = high seconds in bin). */
+/** ColorBrewer Blues-inspired ramp — distinguishable in grayscale and deuteranopia. */
 export function occupancyCellColor(intensity: number): string {
   const t = Math.max(0, Math.min(1, intensity));
-  const r = Math.round(222 - t * (222 - 8));
-  const g = Math.round(235 - t * (235 - 48));
-  const b = Math.round(247 - t * (247 - 107));
+  const stops = [
+    { t: 0, r: 247, g: 251, b: 255 },
+    { t: 0.35, r: 198, g: 219, b: 239 },
+    { t: 0.65, r: 107, g: 174, b: 214 },
+    { t: 1, r: 8, g: 48, b: 107 },
+  ];
+  let lower = stops[0]!;
+  let upper = stops[stops.length - 1]!;
+  for (let i = 0; i < stops.length - 1; i += 1) {
+    if (t >= stops[i]!.t && t <= stops[i + 1]!.t) {
+      lower = stops[i]!;
+      upper = stops[i + 1]!;
+      break;
+    }
+  }
+  const span = upper.t - lower.t || 1;
+  const u = (t - lower.t) / span;
+  const r = Math.round(lower.r + (upper.r - lower.r) * u);
+  const g = Math.round(lower.g + (upper.g - lower.g) * u);
+  const b = Math.round(lower.b + (upper.b - lower.b) * u);
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Place hole number label slightly inward from the hole toward platform center. */
+export function occupancyHoleLabelPosition(
+  holeX: number,
+  holeY: number,
+  center: { x: number; y: number },
+  radius: number,
+  svgSize: number,
+  insetPx = 16,
+): { cx: number; cy: number; lx: number; ly: number; anchor: 'start' | 'middle' | 'end' } {
+  const hole = videoToOccupancySvg(holeX, holeY, center, radius, svgSize);
+  const cx = svgSize / 2;
+  const cy = svgSize / 2;
+  const vx = hole.cx - cx;
+  const vy = hole.cy - cy;
+  const dist = Math.hypot(vx, vy) || 1;
+  const scale = Math.max(0.35, (dist - insetPx) / dist);
+  const lx = cx + vx * scale;
+  const ly = cy + vy * scale;
+  const anchor: 'start' | 'middle' | 'end' =
+    Math.abs(vx) < 4 ? 'middle' : vx > 0 ? 'start' : 'end';
+  return { cx: hole.cx, cy: hole.cy, lx, ly, anchor };
 }
 
 export function videoToOccupancySvg(
