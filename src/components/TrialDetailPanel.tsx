@@ -61,11 +61,12 @@ export function TrialDetailPanel({ trial }: TrialDetailPanelProps) {
       {trial.ingestStatus === 'needs_reselect' && (
         <div className={styles.warningBox} role="status">
           <p>
-            The video file is no longer stored in this browser. Re-select the same file to
-            continue — your trial label and analysis data are preserved.
+            The matching video file is not stored in this browser. Re-select the same MP4 to review
+            frames — calibration, tracking, events, and measures from the imported analysis are
+            preserved and matched by content fingerprint.
           </p>
-          <label htmlFor={reselectInputId} className={styles.button}>
-            Re-select video file
+          <label htmlFor={reselectInputId} className={styles.button} data-testid="reselect-video-btn">
+            Re-select matching video
           </label>
           <input
             ref={reselectRef}

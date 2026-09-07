@@ -415,6 +415,14 @@ describe('MS-6 U11 import collision confirmation', () => {
     if (!allowed.ok) return;
     expect(allowed.trials.find((t) => t.id === trial.id)?.measures?.totalLatency.value).toBe(24.4);
   });
+
+  it('returns collisions without applying', () => {
+    const trial = makeRoundTripTrial();
+    const bundle = buildNeuroTrackBundle([trial], analysisParams, trial.id);
+    const json = serializeNeuroTrackBundle(bundle);
+    const preview = previewBundleImport(JSON.parse(json), [trial], new Set());
+    expect('collisions' in preview && preview.collisions.length).toBeGreaterThan(0);
+  });
 });
 
 describe('MS-6 U12 fingerprint relink without cache', () => {
@@ -469,12 +477,22 @@ describe('MS-6 import_invalid_schema fixture', () => {
   });
 });
 
-describe('MS-6 previewBundleImport', () => {
-  it('returns collisions without applying', () => {
+describe('MS-6 empty session import apply', () => {
+  it('imports bundle into empty session without collision confirmation', () => {
     const trial = makeRoundTripTrial();
     const bundle = buildNeuroTrackBundle([trial], analysisParams, trial.id);
-    const json = serializeNeuroTrackBundle(bundle);
-    const preview = previewBundleImport(JSON.parse(json), [trial], new Set());
-    expect('collisions' in preview && preview.collisions.length).toBeGreaterThan(0);
+    const applied = applyBundleImport({
+      bundle,
+      existingTrials: [],
+      existingSelectedTrialId: null,
+      existingAnalysisParams: analysisParams,
+      replaceConfirmed: false,
+      cachedFingerprints: new Set(),
+    });
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    expect(applied.trials).toHaveLength(1);
+    expect(applied.selectedTrialId).toBe(trial.id);
+    expect(applied.trials[0]?.measures?.totalLatency.value).toBe(24.4);
   });
 });

@@ -1,6 +1,7 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import styles from '../styles/app.module.css';
 import { useSessionStore } from '../store/sessionStore';
+import { AnalysisBundleImport } from './AnalysisBundleImport';
 
 function collectVideoFiles(list: FileList | File[]): File[] {
   return [...list].filter((f) => f.type === 'video/mp4' || f.name.toLowerCase().endsWith('.mp4'));
@@ -27,7 +28,7 @@ export function VideoIngestPanel() {
   return (
     <section className={styles.panel} aria-labelledby="ingest-heading">
       <h2 id="ingest-heading">Load videos</h2>
-      <p>Drag and drop MP4 trial videos, choose files, or select a folder.</p>
+      <p>Drag and drop MP4 trial videos, choose files, select a folder, or load a saved analysis bundle.</p>
 
       <div
         className={`${styles.dropZone} ${dragActive ? styles.dropZoneActive : ''}`}
@@ -51,6 +52,10 @@ export function VideoIngestPanel() {
           <label htmlFor={folderInputId} className={styles.button}>
             Choose folder
           </label>
+          <AnalysisBundleImport
+            buttonTestId="import-bundle-ingest-btn"
+            inputTestId="import-bundle-ingest-input"
+          />
         </div>
       </div>
 

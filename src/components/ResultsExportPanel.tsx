@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import type { TrialRecord } from '../domain/types';
 import { useSessionStore } from '../store/sessionStore';
+import { AnalysisBundleImport } from './AnalysisBundleImport';
 import { buildSingleTrialExportData, buildSessionExportData } from '../domain/export/sessionExport';
 import { buildSessionCsvFiles, buildCombinedCsvReport } from '../domain/export/csvExport';
 import { buildSessionXlsxArrayBuffer } from '../domain/export/xlsxExport';
@@ -11,7 +12,6 @@ import {
   sessionExportFileBaseName,
 } from '../domain/export/download';
 import { buildNeuroTrackBundle, bundleFileName, serializeNeuroTrackBundle } from '../domain/export/bundleExport';
-import type { ImportCollision } from '../domain/export/bundleImport';
 import { formatMeasureForDisplay } from '../domain/export/measureEncoding';
 import { escapeEventFromList, escapeStateSummary } from '../domain/export/escapeSummary';
 import { confirmedTargetHoleId, effectiveTrialStartUs } from '../domain/events/holeProximity';
@@ -20,17 +20,17 @@ import styles from '../styles/app.module.css';
 interface ResultsExportPanelProps {
   trial: TrialRecord;
   allTrials: TrialRecord[];
+  showImportControls?: boolean;
 }
 
-export function ResultsExportPanel({ trial, allTrials }: ResultsExportPanelProps) {
+export function ResultsExportPanel({
+  trial,
+  allTrials,
+  showImportControls = true,
+}: ResultsExportPanelProps) {
   const analysisParams = useSessionStore((s) => s.analysisParams);
   const selectedTrialId = useSessionStore((s) => s.selectedTrialId);
-  const importAnalysisBundle = useSessionStore((s) => s.importAnalysisBundle);
   const recomputeMeasuresFromEvents = useSessionStore((s) => s.recomputeMeasuresFromEvents);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [pendingImport, setPendingImport] = useState<{ json: string; collisions: ImportCollision[] } | null>(null);
-  const [importBusy, setImportBusy] = useState(false);
   const exportableTrials = useMemo(
     () => allTrials.filter((t) => t.track?.status === 'done'),
     [allTrials],
@@ -86,50 +86,6 @@ export function ResultsExportPanel({ trial, allTrials }: ResultsExportPanelProps
       bundleFileName(bundle.exportedAt),
       'application/json;charset=utf-8',
     );
-  };
-
-  const handleImportFile = async (file: File) => {
-    setImportError(null);
-    setImportBusy(true);
-    try {
-      const json = await file.text();
-      const result = await importAnalysisBundle(json, false);
-      if (result.status === 'collision') {
-        setPendingImport({ json, collisions: result.collisions });
-        return;
-      }
-      if (result.status === 'error') {
-        setImportError(
-          result.errors?.map((e) => `${e.path}: ${e.message}`).join('; ') ?? result.message,
-        );
-        return;
-      }
-    } catch (err) {
-      setImportError(err instanceof Error ? err.message : 'Import failed.');
-    } finally {
-      setImportBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const confirmPendingImport = async () => {
-    if (!pendingImport) return;
-    setImportBusy(true);
-    setImportError(null);
-    try {
-      const result = await importAnalysisBundle(pendingImport.json, true);
-      if (result.status === 'error') {
-        setImportError(
-          result.errors?.map((e) => `${e.path}: ${e.message}`).join('; ') ?? result.message,
-        );
-        return;
-      }
-      setPendingImport(null);
-    } catch (err) {
-      setImportError(err instanceof Error ? err.message : 'Import failed.');
-    } finally {
-      setImportBusy(false);
-    }
   };
 
   const trackIncomplete = trial.track?.status !== 'done';
@@ -256,26 +212,7 @@ export function ResultsExportPanel({ trial, allTrials }: ResultsExportPanelProps
         >
           Download analysis bundle
         </button>
-        <button
-          type="button"
-          className={styles.button}
-          data-testid="import-bundle-btn"
-          disabled={importBusy}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          Load analysis bundle
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".neurotrack.json,.json,application/json"
-          hidden
-          data-testid="import-bundle-input"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void handleImportFile(file);
-          }}
-        />
+        {showImportControls && <AnalysisBundleImport />}
         {trial.events && (
           <button
             type="button"
@@ -287,52 +224,6 @@ export function ResultsExportPanel({ trial, allTrials }: ResultsExportPanelProps
           </button>
         )}
       </div>
-
-      {importError && (
-        <p className={styles.warning} role="alert" data-testid="import-bundle-error">
-          {importError}
-        </p>
-      )}
-
-      {pendingImport && (
-        <div className={styles.importConfirmBox} data-testid="import-collision-dialog">
-          <h4>Replace existing trials?</h4>
-          <p>
-            This bundle conflicts with {pendingImport.collisions.length} existing trial record(s).
-            Importing will replace the stored analysis for those trials. Reviewed events and measures
-            in the bundle will be preserved exactly — no re-tracking or re-detection.
-          </p>
-          <ul>
-            {pendingImport.collisions.map((c) => (
-              <li key={`${c.reason}-${c.existingTrialId}-${c.incomingTrialId}`}>
-                {c.reason === 'trial_id' ? 'Same trial ID' : 'Same video fingerprint'}: replace{' '}
-                <strong>{c.existingFileName}</strong> ({c.existingTrialId}) with{' '}
-                <strong>{c.incomingFileName}</strong>
-              </li>
-            ))}
-          </ul>
-          <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.buttonPrimary}
-              data-testid="import-collision-confirm-btn"
-              disabled={importBusy}
-              onClick={() => void confirmPendingImport()}
-            >
-              Replace and import
-            </button>
-            <button
-              type="button"
-              className={styles.button}
-              data-testid="import-collision-cancel-btn"
-              disabled={importBusy}
-              onClick={() => setPendingImport(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

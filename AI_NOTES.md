@@ -385,3 +385,17 @@ Full suite: lint, 147 unit tests, build, validate:calibration, validate:ms1–ms
 ### Merged
 Branch `ms-5-event-detection-behavioral-measures` → `main`. MS-6 not started.
 
+## MS-6 empty-session bundle import fix (2026-09-07)
+
+### Mistake
+Checkpoint 2 placed **Load analysis bundle** only inside `ResultsExportPanel`, which requires a selected trial with video review — inaccessible on a fresh/incognito session with zero trials.
+
+### Fix
+- Shared `AnalysisBundleImport` hook/component (file picker, schema validation, collision dialog) reused from empty-session panel, ingest panel, and results panel.
+- `ImportedAnalysisView` shows restored measures/report without MP4 bytes; **Re-select matching video** relinks by fingerprint.
+- Playwright `validate:import-empty`: empty IndexedDB → import three-trial fixture → verify test53 confirmed 24.40 s latency, no tracking/detect invocations, collision cancel preserves state.
+- Fixture generated from real smoke pipeline (`WRITE_IMPORT_FIXTURE=1`), not synthetic test53 confirmation.
+
+### Validated
+171 unit tests, lint, build, validate:import-empty, validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review; Checkpoint 3 not started.
+

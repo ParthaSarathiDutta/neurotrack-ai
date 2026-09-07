@@ -32,7 +32,7 @@ import { computePxPerCm } from '../domain/calibration/detectMaze';
 import { holesFromAnchor } from '../domain/calibration/ringFit';
 import { HOLE_COUNT } from '../domain/constants';
 import { migrateTrialRecord, migrateAnalysisParams } from '../domain/migration';
-import { defaultAnalysisParams } from '../db/database';
+import { defaultAnalysisParams, listCachedFingerprints, clearSessionForTests } from '../db/database';
 import {
   hydratePersistedSession,
   ingestFile,
@@ -46,7 +46,6 @@ import { proposeTrialWindow } from '../services/trialWindowService';
 import { cancelTracking as cancelTrackingJob, runTracking } from '../services/trackingService';
 import { clearFrameCache, ensureFrameDecoder } from '../services/frameService';
 import { evictAllFromCache } from '../db/videoCache';
-import { listCachedFingerprints } from '../db/database';
 import { buildNeuroTrackBundle, serializeNeuroTrackBundle } from '../domain/export/bundleExport';
 import { applyBundleImport, detectImportCollisions } from '../domain/export/bundleImport';
 import { parseNeuroTrackBundleJson } from '../domain/export/bundleSchema';
@@ -145,6 +144,13 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let calibrationOpSeq = 0;
 let windowOpSeq = 0;
 let trackingOpSeq = 0;
+let trackingInvokeCount = 0;
+let detectEventsInvokeCount = 0;
+
+export function resetSessionInvokeCountsForTest(): void {
+  trackingInvokeCount = 0;
+  detectEventsInvokeCount = 0;
+}
 
 type StoreSet = (
   partial: Partial<SessionState> | ((state: SessionState) => Partial<SessionState>),
@@ -757,6 +763,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   runTracking: async (trialId) => {
+    trackingInvokeCount += 1;
     const trial = get().trials.find((t) => t.id === trialId);
     if (!trial) return;
     const opSeq = ++trackingOpSeq;
@@ -1052,6 +1059,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   detectEvents: async (trialId) => {
+    detectEventsInvokeCount += 1;
     const trial = get().trials.find((t) => t.id === trialId);
     if (!trial?.track || trial.track.status !== 'done') return;
     set({ eventsBusy: true, statusMessage: 'Detecting events…' });
@@ -1330,6 +1338,10 @@ if (typeof window !== 'undefined') {
     __ntDetectImportCollisions?: (json: string) =>
       | { ok: false; errors: { path: string; message: string }[] }
       | { ok: true; collisions: import('../domain/export/bundleImport').ImportCollision[] };
+    __ntResetSession?: () => Promise<void>;
+    __ntGetTrackingInvokeCount?: () => number;
+    __ntGetDetectEventsInvokeCount?: () => number;
+    __ntResetInvokeCounts?: () => void;
   };
   const hooks = window as NeuroTrackTestHooks;
   hooks.__ntApplyBodyCorrection = (trialId, frameIndex, x, y) => {
@@ -1483,6 +1495,21 @@ if (typeof window !== 'undefined') {
       collisions: detectImportCollisions(parsed.bundle, state.trials),
     };
   };
+  hooks.__ntResetSession = async () => {
+    resetSessionInvokeCountsForTest();
+    await clearSessionForTests();
+    useSessionStore.setState({
+      trials: [],
+      selectedTrialId: null,
+      analysisParams: defaultAnalysisParams(),
+      statusMessage: null,
+      hydrated: true,
+      cleaningPreviewByTrialId: {},
+    });
+  };
+  hooks.__ntGetTrackingInvokeCount = () => trackingInvokeCount;
+  hooks.__ntGetDetectEventsInvokeCount = () => detectEventsInvokeCount;
+  hooks.__ntResetInvokeCounts = () => resetSessionInvokeCountsForTest();
 }
 
 export type { Hole };

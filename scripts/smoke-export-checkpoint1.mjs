@@ -4,7 +4,7 @@
  */
 import { chromium } from 'playwright';
 import { createServer } from 'http';
-import { readFile, mkdtemp, rm } from 'fs/promises';
+import { readFile, mkdtemp, rm, writeFile } from 'fs/promises';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -195,6 +195,14 @@ async function main() {
     results.V_csv_valueKind = csvText.includes('totalLatency_valueKind') ? 'PASS' : 'FAIL:missing';
     results.V_csv_sections =
       csvText.includes('# Summary') && csvText.includes('# Events') ? 'PASS' : 'FAIL:sections';
+
+    if (process.env.WRITE_IMPORT_FIXTURE === '1') {
+      const bundleJson = await page.evaluate(() => window.__ntBuildAnalysisBundleJson?.() ?? null);
+      if (!bundleJson) throw new Error('Bundle export hook unavailable');
+      const fixturePath = join(ROOT, 'tests', 'fixtures', 'ms6', 'three-trial-session.neurotrack.json');
+      await writeFile(fixturePath, bundleJson, 'utf8');
+      results.V_write_import_fixture = 'PASS';
+    }
   } finally {
     await browser.close();
     await new Promise((r) => server.close(r));

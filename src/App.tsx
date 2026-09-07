@@ -4,7 +4,10 @@ import { VideoIngestPanel } from './components/VideoIngestPanel';
 import { TrialList } from './components/TrialList';
 import { TrialDetailPanel } from './components/TrialDetailPanel';
 import { ReviewView } from './components/ReviewView';
+import { ImportedAnalysisView } from './components/ImportedAnalysisView';
+import { AnalysisBundleImport } from './components/AnalysisBundleImport';
 import { useSessionStore } from './store/sessionStore';
+import { canShowVideoReview, hasStoredAnalysis } from './domain/trialAnalysis';
 
 export default function App() {
   const hydrated = useSessionStore((s) => s.hydrated);
@@ -19,7 +22,8 @@ export default function App() {
   }, [hydrate]);
 
   const selected = trials.find((t) => t.id === selectedTrialId) ?? null;
-  const showReview = selected?.ingestStatus === 'ready' && selected.videoCached;
+  const showReview = selected != null && canShowVideoReview(selected);
+  const showImportedAnalysis = selected != null && hasStoredAnalysis(selected) && !showReview;
 
   if (!hydrated) {
     return (
@@ -44,10 +48,12 @@ export default function App() {
         <div>
           {showReview && selected ? (
             <ReviewView trial={selected} allTrials={trials} />
+          ) : showImportedAnalysis && selected ? (
+            <ImportedAnalysisView trial={selected} allTrials={trials} />
           ) : selected ? (
             <TrialDetailPanel trial={selected} />
           ) : (
-            <TrialDetailPanelPlaceholder />
+            <EmptySessionPanel />
           )}
         </div>
       </div>
@@ -69,11 +75,14 @@ export default function App() {
   );
 }
 
-function TrialDetailPanelPlaceholder() {
+function EmptySessionPanel() {
   return (
     <section className={styles.panel} aria-labelledby="detail-placeholder">
-      <h2 id="detail-placeholder">Trial details</h2>
-      <p>Select a trial to view its summary.</p>
+      <h2 id="detail-placeholder">Get started</h2>
+      <p>Load MP4 trial videos to run a new analysis, or restore a saved analysis bundle.</p>
+      <div className={styles.actions}>
+        <AnalysisBundleImport buttonTestId="import-bundle-empty-btn" inputTestId="import-bundle-empty-input" />
+      </div>
     </section>
   );
 }
