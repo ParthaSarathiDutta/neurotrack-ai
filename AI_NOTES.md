@@ -431,3 +431,21 @@ Implemented `speed_interval_validity.v1`: exclude speed intervals with Δt < 5% 
 ### Validated
 183 unit tests, lint, build, validate:ms6-viz, validate:ms5 — ALL PASS. Stopped for manual review.
 
+## MS-6 visualization quality pass (2026-09-07)
+
+### Timeline
+- Axis titles: elapsed time from trial start (s), hole number (1–20)
+- Legend uses actual bar/marker samples; status (confirmed/proposed) separate from manual provenance (outline)
+- Completion = solid vertical + triangle endpoint; candidate = dashed vertical; censor = shaded region
+
+### Occupancy
+- Blue sequential ramp with linear seconds-per-bin normalization; quantitative legend with max bin
+- Hole markers + confirmed target ring; platform orientation hint
+- Accounting panel: trial duration, included, excluded off-platform/gaps/zero-Δt
+
+### test51 occupancy audit (33.17 s vs 44.24 s trial)
+Expected under definition: 33.17 s on-platform + 11.08 s off-platform = 44.24 s observation span. Not a defect. Documented in `reference/occupancy-time-accounting.md`.
+
+### Validated
+186 unit tests, lint, build, validate:ms6-viz, validate:ms2/ms4/ms5 — ALL PASS.
+

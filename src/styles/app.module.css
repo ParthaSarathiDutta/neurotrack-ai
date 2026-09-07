@@ -820,6 +820,71 @@
   gap: 0.35rem;
 }
 
+.vizDescription {
+  margin: 0 0 var(--space-sm);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  max-width: 42rem;
+}
+
+.legendSampleSvg {
+  flex-shrink: 0;
+}
+
+.timelineAxisTick {
+  font-size: 10px;
+  fill: #333;
+}
+
+.timelineAxisTitle {
+  font-size: 11px;
+  font-weight: 600;
+  fill: #222;
+}
+
+.accountingGrid {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) 1fr;
+  gap: var(--space-xs) var(--space-md);
+  margin-top: var(--space-md);
+  font-size: 0.875rem;
+}
+
+.accountingGrid dt {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.occupancyLayout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  align-items: flex-start;
+}
+
+.occupancyLegendPanel {
+  min-width: 12rem;
+  max-width: 16rem;
+}
+
+.occupancyLegendTitle {
+  margin: 0 0 var(--space-xs);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.occupancyLegendTicks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+.occupancyHoleLabel {
+  pointer-events: none;
+}
+
 .timelineAxisLabel {
   font-size: 11px;
   fill: var(--color-text-muted);

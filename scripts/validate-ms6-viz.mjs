@@ -102,6 +102,16 @@ async function main() {
       exclusions && exclusions.includes('excluded_timestamp_compression') ? 'PASS' : `FAIL:${exclusions?.trim()}`;
 
     await page.waitForSelector('[data-testid="hole-visit-timeline"]', { timeout: 10_000 });
+    results.V_timeline_x_axis =
+      (await page.locator('[data-testid="hole-timeline-x-axis-label"]').textContent())?.includes('Elapsed time')
+        ? 'PASS'
+        : 'FAIL';
+    results.V_timeline_y_axis =
+      (await page.locator('[data-testid="hole-timeline-y-axis-label"]').textContent())?.includes('Hole number')
+        ? 'PASS'
+        : 'FAIL';
+    results.V_timeline_legend =
+      (await page.locator('[data-testid="hole-timeline-legend"]').count()) > 0 ? 'PASS' : 'FAIL';
     const invCount = await page.locator('[data-testid="hole-timeline-investigation"]').count();
     results.V_test53_timeline_investigations = invCount > 0 ? 'PASS' : `FAIL:${invCount}`;
 
@@ -117,6 +127,16 @@ async function main() {
     results.V_test51_timeline = 'PASS';
     results.V_test51_occupancy =
       (await page.locator('[data-testid="occupancy-heatmap"]').count()) > 0 ? 'PASS' : 'FAIL';
+    const test51Included = await page.locator('[data-testid="occupancy-included-sec"]').textContent();
+    const test51OffPlatform = await page.locator('[data-testid="occupancy-excluded-off-platform"]').textContent();
+    results.V_test51_occupancy_accounting =
+      test51Included && test51OffPlatform && /33\.\d+/.test(test51Included) && /11\.\d+/.test(test51OffPlatform)
+        ? 'PASS'
+        : `FAIL:${test51Included?.trim()} / ${test51OffPlatform?.trim()}`;
+    results.V_occupancy_legend =
+      (await page.locator('[data-testid="occupancy-color-legend"]').count()) > 0 ? 'PASS' : 'FAIL';
+    results.V_bundle_without_video =
+      (await page.locator('[data-testid="trial-visualizations-panel"]').count()) > 0 ? 'PASS' : 'FAIL';
 
     let hasVideo = false;
     try {
