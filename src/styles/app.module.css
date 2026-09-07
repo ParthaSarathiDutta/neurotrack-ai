@@ -383,6 +383,10 @@
   object-fit: contain;
 }
 
+.playerVideo[hidden] {
+  display: none;
+}
+
 .overlayCanvas {
   position: absolute;
   inset: 0;

@@ -227,7 +227,7 @@ export function VideoPlayer({
   return (
     <div className={styles.playerSection}>
       <div ref={containerRef} className={styles.playerContainer} data-testid="video-player">
-        {player.mode === 'video' && player.videoUrl && (
+        {player.videoUrl && (
           <video
             ref={player.videoRef}
             src={player.videoUrl}
@@ -236,6 +236,9 @@ export function VideoPlayer({
             height={videoHeight}
             muted
             playsInline
+            hidden={player.mode !== 'video'}
+            data-testid="player-video-element"
+            data-playing={player.playing ? 'true' : 'false'}
           />
         )}
         {player.mode === 'frame' && (

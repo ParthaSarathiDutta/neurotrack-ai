@@ -105,6 +105,57 @@ async function readCalibrationMetrics(page) {
   };
 }
 
+async function readCurrentFrameIndex(page) {
+  const text = await page.locator('[data-testid="current-frame-index"]').textContent();
+  const match = text?.match(/Frame (\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+/** Play must advance frames; Pause must stop advancement (test53 + test51). */
+async function assertPlaybackAdvancesAndPauses(page, clip) {
+  await selectTrial(page, clip);
+  await page.waitForSelector('[data-testid="player-video-element"]', {
+    state: 'attached',
+    timeout: 120_000,
+  });
+  const startFrame = await readCurrentFrameIndex(page);
+  if (startFrame == null) return { play: 'FAIL:no_frame_readout', pause: 'FAIL:no_frame_readout' };
+
+  await page.locator('[data-testid="play-pause-btn"]').click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="play-pause-btn"]')?.textContent === 'Pause',
+    undefined,
+    { timeout: 10_000 },
+  );
+  await page.waitForFunction(
+    (start) => {
+      const text = document.querySelector('[data-testid="current-frame-index"]')?.textContent ?? '';
+      const match = text.match(/Frame (\d+)/);
+      return match != null && parseInt(match[1], 10) > start;
+    },
+    startFrame,
+    { timeout: 15_000 },
+  );
+  const midFrame = await readCurrentFrameIndex(page);
+  const playOk = midFrame != null && midFrame > startFrame ? 'PASS' : `FAIL:start=${startFrame},mid=${midFrame}`;
+
+  await page.locator('[data-testid="play-pause-btn"]').click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="play-pause-btn"]')?.textContent === 'Play',
+    undefined,
+    { timeout: 10_000 },
+  );
+  const pausedFrame = await readCurrentFrameIndex(page);
+  await page.waitForTimeout(800);
+  const afterPause = await readCurrentFrameIndex(page);
+  const pauseOk =
+    pausedFrame != null && afterPause != null && afterPause <= pausedFrame + 1
+      ? 'PASS'
+      : `FAIL:paused=${pausedFrame},after=${afterPause}`;
+
+  return { play: playOk, pause: pauseOk };
+}
+
 async function main() {
   const failures = [];
   const port = 8778;
@@ -477,6 +528,18 @@ async function main() {
   const v14ok = (await Promise.all(controls.map((c) => page.locator(c).isVisible()))).every(Boolean);
   results.V14 = v14ok ? 'PASS' : 'FAIL';
   if (!v14ok) failures.push('V14: missing controls');
+
+  const test53Playback = await assertPlaybackAdvancesAndPauses(page, 'test53');
+  results.V16_test53_play_advances = test53Playback.play;
+  results.V16_test53_pause_stops = test53Playback.pause;
+  if (test53Playback.play !== 'PASS') failures.push(`V16 test53 play: ${test53Playback.play}`);
+  if (test53Playback.pause !== 'PASS') failures.push(`V16 test53 pause: ${test53Playback.pause}`);
+
+  const test51Playback = await assertPlaybackAdvancesAndPauses(page, 'test51');
+  results.V17_test51_play_advances = test51Playback.play;
+  results.V17_test51_pause_stops = test51Playback.pause;
+  if (test51Playback.play !== 'PASS') failures.push(`V17 test51 play: ${test51Playback.play}`);
+  if (test51Playback.pause !== 'PASS') failures.push(`V17 test51 pause: ${test51Playback.pause}`);
 
   await browser.close();
   server.close();

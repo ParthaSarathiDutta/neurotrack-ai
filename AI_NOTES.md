@@ -343,3 +343,16 @@ test51 no longer auto-completes at partial-entry frame 673. test53 Path A comple
 ### Validated
 lint/test/build PASS (147 tests); validate:ms4 + validate:ms5 PASS. **Not merged / MS-5 not marked complete** — stopped for manual review.
 
+## MS-5 playback fix — video mount chicken-and-egg (2026-09-07)
+
+### Problem
+Play button was a silent no-op: `togglePlay()` required `videoRef.current`, but `<video>` was only rendered when `mode === 'video'`. Default mode is `'frame'` (worker canvas), so Play never started continuous playback. Frame stepping and Go-to-frame still worked via the worker path.
+
+### Fix
+- Always mount `<video>` when blob URL is ready (hidden in frame mode).
+- Use `cancelVideoFrameCallback` instead of `cancelAnimationFrame` for rVFC cleanup.
+- Browser regression: `validate-ms2` V16 (test53) and V17 (test51) assert Play advances frames and Pause stops.
+
+### Validated
+lint/test/build PASS; validate:ms2 (incl. V16/V17 playback), validate:ms4, validate:ms5 PASS. **Stopped for user manual Play/Pause review before Phase 2 sign-off.**
+

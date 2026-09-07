@@ -116,13 +116,20 @@ export function useVideoPlayer({
     [seekToTimeUs],
   );
 
+  const cancelRvfc = useCallback((video: HTMLVideoElement) => {
+    if (rVfcId.current) {
+      video.cancelVideoFrameCallback(rVfcId.current);
+      rVfcId.current = 0;
+    }
+  }, []);
+
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
 
     if (playing) {
       video.pause();
-      cancelAnimationFrame(rVfcId.current);
+      cancelRvfc(video);
       setPlaying(false);
       setMode('frame');
       return;
@@ -134,7 +141,7 @@ export function useVideoPlayer({
       return null;
     });
     video.currentTime = currentEntry ? secondsFromTimeUs(currentEntry.timeUs) : 0;
-    void video.play();
+    cancelRvfc(video);
     setPlaying(true);
 
     const onFrame = (_now: number, metadata: VideoFrameCallbackMetadata) => {
@@ -149,17 +156,23 @@ export function useVideoPlayer({
       }
     };
     rVfcId.current = video.requestVideoFrameCallback(onFrame);
-  }, [playing, videoUrl, currentEntry, timestampIndex]);
+    void video.play().catch(() => {
+      cancelRvfc(video);
+      setPlaying(false);
+      setMode('frame');
+    });
+  }, [playing, videoUrl, currentEntry, timestampIndex, cancelRvfc]);
 
   useEffect(() => {
     return () => {
-      cancelAnimationFrame(rVfcId.current);
+      const video = videoRef.current;
+      if (video) cancelRvfc(video);
       setFrameBitmap((prev) => {
         prev?.close();
         return null;
       });
     };
-  }, []);
+  }, [cancelRvfc]);
 
   return {
     videoRef,
