@@ -1,4 +1,5 @@
 import {
+  CLEANING_MAX_GAP_DURATION_US_DEFAULT,
   CLEANING_MAX_GAP_FRAMES_DEFAULT,
   CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT,
   CLEANING_SMOOTHING_WINDOW_DEFAULT,
@@ -35,6 +36,7 @@ export function defaultTrackingParams(): TrackingParams {
 export function defaultCleaningParams(): CleaningParams {
   return {
     maxGapFrames: CLEANING_MAX_GAP_FRAMES_DEFAULT,
+    maxGapDurationUs: CLEANING_MAX_GAP_DURATION_US_DEFAULT,
     smoothingWindow: CLEANING_SMOOTHING_WINDOW_DEFAULT,
     outlierSpeedMultiplier: CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT,
     toolVersion: TOOL_VERSION,

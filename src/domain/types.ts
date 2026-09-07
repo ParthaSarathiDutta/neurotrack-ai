@@ -90,7 +90,10 @@ export type ObservationQualityFlag =
   | 'possible_occlusion'
   | 'speed_outlier'
   | 'ambiguous_head_tail'
-  | 'near_hole_disappearance';
+  | 'near_hole_disappearance'
+  | 'gap_interpolated'
+  | 'speed_outlier_replaced'
+  | 'duplicate_pts_spatial_estimate';
 
 export interface Observation {
   /** Container presentation time — may duplicate across distinct frameIndex values. */
@@ -126,6 +129,8 @@ export interface ManualCorrection {
 
 export interface CleaningParams {
   maxGapFrames: number;
+  /** Maximum container-time span (µs) between bracket frames for gap fill. */
+  maxGapDurationUs: number;
   smoothingWindow: number;
   outlierSpeedMultiplier: number;
   toolVersion: string;
@@ -135,6 +140,9 @@ export interface AppliedCleaning {
   observations: Observation[];
   params: CleaningParams;
   appliedAt: string;
+  /** When true, observations are retained for audit but must not be consumed downstream. */
+  stale?: boolean;
+  staleReason?: string | null;
 }
 
 export interface FlaggedFrame {

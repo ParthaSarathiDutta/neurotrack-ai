@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { Geometry, Observation, TimestampIndexEntry, TrialWindow } from '../domain/types';
+import { formatCleaningQualityFlags } from '../domain/trajectory/cleaningLabels';
+import { isEstimatedBodyPosition } from '../domain/trajectory/observationEstimate';
 import { secondsFromTimeUs } from '../domain/timing';
 import { computeLetterboxedContentRect } from '../domain/videoTransform';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
@@ -230,6 +232,14 @@ export function VideoPlayer({
         <span data-testid="observation-origin">{currentObservation?.origin ?? 'none'}</span>
         <span data-testid="observation-body-x">{currentObservation?.bodyXY?.x ?? ''}</span>
         <span data-testid="observation-body-y">{currentObservation?.bodyXY?.y ?? ''}</span>
+        <span data-testid="observation-quality-flags">
+          {currentObservation?.qualityFlags?.length
+            ? formatCleaningQualityFlags(currentObservation.qualityFlags)
+            : ''}
+        </span>
+        <span data-testid="observation-estimated">
+          {isEstimatedBodyPosition(currentObservation) ? 'true' : 'false'}
+        </span>
       </div>
 
       <div className={styles.playerControls}>

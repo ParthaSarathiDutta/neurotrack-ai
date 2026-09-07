@@ -1,5 +1,8 @@
 import type { TrialRecord } from '../domain/types';
+import { isAppliedCleaningConsumable } from '../domain/trajectory/cleaningStaleness';
+import { isEstimatedBodyPosition } from '../domain/trajectory/observationEstimate';
 import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
+import { formatCleaningQualityFlags } from '../domain/trajectory/cleaningLabels';
 import { useSessionStore, type CorrectionMode } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
 
@@ -27,7 +30,9 @@ export function CorrectionCleaningPanel({
   const hasTrack = track?.status === 'done' && (track.observations.length ?? 0) > 0;
   const manualCount = track?.manualCorrections.length ?? 0;
   const hasPreview = cleaningPreview != null;
-  const hasApplied = track?.appliedCleaning != null;
+  const appliedCleaning = track?.appliedCleaning ?? null;
+  const hasActiveApplied = isAppliedCleaningConsumable(appliedCleaning);
+  const appliedStale = Boolean(appliedCleaning?.stale);
 
   const effective = resolveEffectiveObservations(track, { cleaningPreview });
   const currentObs = effective.find((o) => o.frameIndex === currentFrameIndex) ?? null;
@@ -104,6 +109,12 @@ export function CorrectionCleaningPanel({
         {currentObs ? ` · current frame origin: ${currentObs.origin}` : ''}
       </p>
 
+      {currentObs?.qualityFlags?.length ? (
+        <p className={styles.hint} data-testid="observation-quality-flags">
+          Frame flags: {formatCleaningQualityFlags(currentObs.qualityFlags)}
+        </p>
+      ) : null}
+
       <ul className={styles.legendList} data-testid="provenance-legend">
         <li><span className={styles.legendAuto} aria-hidden="true" /> Automatic (circle)</li>
         <li><span className={styles.legendManual} aria-hidden="true" /> Manual (square)</li>
@@ -113,7 +124,13 @@ export function CorrectionCleaningPanel({
 
       <h3 className={styles.subheading}>Trajectory cleaning</h3>
       <p className={styles.hint}>
-        Preview changes before applying. Manual corrections are never overwritten.
+        Preview changes before applying. Manual corrections are never overwritten. Smoothing may
+        shorten path length and soften sharp turns; raw and manually corrected trajectories remain
+        available via reset.
+      </p>
+      <p className={styles.hint} data-testid="duplicate-pts-note">
+        When container timestamps duplicate across frames, spatial gap fill uses frame order only —
+        never elapsed time or speed. Such points are labeled as spatial estimates.
       </p>
 
       <div className={styles.labelField}>
@@ -126,6 +143,23 @@ export function CorrectionCleaningPanel({
           value={cleaningParams.maxGapFrames}
           onChange={(e) => updateCleaningParams({ maxGapFrames: Number(e.target.value) })}
           data-testid="clean-max-gap"
+        />
+      </div>
+      <div className={styles.labelField}>
+        <label htmlFor="clean-max-gap-us">Max gap bracket span (seconds)</label>
+        <input
+          id="clean-max-gap-us"
+          type="number"
+          min={0}
+          max={5}
+          step={0.05}
+          value={(cleaningParams.maxGapDurationUs / 1_000_000).toFixed(2)}
+          onChange={(e) =>
+            updateCleaningParams({
+              maxGapDurationUs: Math.round(Number(e.target.value) * 1_000_000),
+            })
+          }
+          data-testid="clean-max-gap-us"
         />
       </div>
       <div className={styles.labelField}>
@@ -169,7 +203,7 @@ export function CorrectionCleaningPanel({
         <button
           type="button"
           className={styles.buttonPrimary}
-          disabled={!hasPreview && !hasApplied}
+          disabled={!hasPreview && !hasActiveApplied}
           onClick={() => applyCleaning(trial.id)}
           data-testid="clean-apply-btn"
         >
@@ -197,9 +231,27 @@ export function CorrectionCleaningPanel({
         data-testid="cleaning-preview-state"
         data-active={hasPreview ? 'true' : 'false'}
       />
-      {hasApplied && !hasPreview && (
-        <p data-testid="clean-applied-marker">Cleaning applied at {track!.appliedCleaning!.appliedAt}</p>
+      {hasActiveApplied && !hasPreview && (
+        <p data-testid="clean-applied-marker">Cleaning applied at {appliedCleaning!.appliedAt}</p>
       )}
+      {appliedStale && (
+        <p className={styles.warningBox} role="alert" data-testid="clean-stale-marker">
+          {appliedCleaning!.staleReason ?? 'Applied cleaning is outdated.'} Preview and re-apply
+          before using cleaned trajectories in later analysis.
+        </p>
+      )}
+      <span
+        hidden
+        aria-hidden="true"
+        data-testid="clean-stale-state"
+        data-stale={appliedStale ? 'true' : 'false'}
+      />
+      <span
+        hidden
+        aria-hidden="true"
+        data-testid="observation-estimated"
+        data-value={isEstimatedBodyPosition(currentObs) ? 'true' : 'false'}
+      />
 
       <p className={styles.hint} data-testid="ms5-event-note">
         Manual event editing (hole investigations, escape) requires MS-5 event detection — not

@@ -101,5 +101,7 @@ export const TRACKING_NOSE_RIM_MARGIN_PX = 3;
 
 /** Trajectory cleaning (MS-4) — conservative defaults. */
 export const CLEANING_MAX_GAP_FRAMES_DEFAULT = 3;
+/** Default max bracket span for gap fill (~0.5 s at ~15 fps). */
+export const CLEANING_MAX_GAP_DURATION_US_DEFAULT = 500_000;
 export const CLEANING_SMOOTHING_WINDOW_DEFAULT = 3;
 export const CLEANING_OUTLIER_SPEED_MULTIPLIER_DEFAULT = 2.0;

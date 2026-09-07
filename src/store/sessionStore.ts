@@ -1,3 +1,12 @@
+import {
+  cleaningParamsMatch,
+  markAppliedCleaningStale,
+  STALE_REASON_CALIBRATION,
+  STALE_REASON_CLEANING_PARAMS,
+  STALE_REASON_GEOMETRY,
+  STALE_REASON_MANUAL_CORRECTION,
+  STALE_REASON_TRIAL_WINDOW,
+} from '../domain/trajectory/cleaningStaleness';
 import { create } from 'zustand';
 import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
 import type { AnalysisParams, CleaningParams, Geometry, Hole, ManualCorrection, Observation, TrialRecord, TrialWindow } from '../domain/types';
@@ -138,6 +147,15 @@ function patchTrial(
   });
 }
 
+function staleTrialTrack(trial: TrialRecord, reason: string): TrialRecord {
+  if (!trial.track) return trial;
+  return { ...trial, track: markAppliedCleaningStale(trial.track, reason) };
+}
+
+function staleTrialById(trials: TrialRecord[], trialId: string, reason: string): TrialRecord[] {
+  return patchTrial(trials, trialId, (t) => staleTrialTrack(t, reason));
+}
+
 export const useSessionStore = create<SessionState>((set, get) => ({
   hydrated: false,
   saving: false,
@@ -271,16 +289,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         }
 
         set((state) => ({
-          trials: patchTrial(state.trials, trialId, (t) => ({
-            ...t,
-            geometry: {
-              ...t.geometry,
-              ...result.geometry,
-              source: 'auto',
-              confirmedAt: null,
-              calibrationReviewAcknowledgedAt: null,
-            } as Geometry,
-          })),
+          trials: staleTrialById(
+            patchTrial(state.trials, trialId, (t) => ({
+              ...t,
+              geometry: {
+                ...t.geometry,
+                ...result.geometry,
+                source: 'auto',
+                confirmedAt: null,
+                calibrationReviewAcknowledgedAt: null,
+              } as Geometry,
+            })),
+            trialId,
+            STALE_REASON_CALIBRATION,
+          ),
           statusMessage,
         }));
       } else {
@@ -298,23 +320,31 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   acknowledgeCalibrationReview: (trialId) => {
     set((state) => ({
-      trials: patchTrial(state.trials, trialId, (t) => ({
-        ...t,
-        geometry: {
-          ...t.geometry,
-          calibrationReviewAcknowledgedAt: new Date().toISOString(),
-        },
-      })),
+      trials: staleTrialById(
+        patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          geometry: {
+            ...t.geometry,
+            calibrationReviewAcknowledgedAt: new Date().toISOString(),
+          },
+        })),
+        trialId,
+        STALE_REASON_CALIBRATION,
+      ),
     }));
     scheduleSave(get, set);
   },
 
   confirmGeometry: (trialId) => {
     set((state) => ({
-      trials: patchTrial(state.trials, trialId, (t) => ({
-        ...t,
-        geometry: { ...t.geometry, confirmedAt: new Date().toISOString() },
-      })),
+      trials: staleTrialById(
+        patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          geometry: { ...t.geometry, confirmedAt: new Date().toISOString() },
+        })),
+        trialId,
+        STALE_REASON_GEOMETRY,
+      ),
       statusMessage: 'Geometry confirmed.',
     }));
     scheduleSave(get, set);
@@ -378,32 +408,40 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   setDiameterCm: (trialId, diameterCm) => {
     set((state) => ({
-      trials: patchTrial(state.trials, trialId, (t) => {
-        const pxPerCm =
-          t.geometry.platformRadiusPx && diameterCm > 0
-            ? computePxPerCm(t.geometry.platformRadiusPx, diameterCm)
-            : null;
-        return {
-          ...t,
-          geometry: { ...t.geometry, diameterCm, pxPerCm },
-        };
-      }),
+      trials: staleTrialById(
+        patchTrial(state.trials, trialId, (t) => {
+          const pxPerCm =
+            t.geometry.platformRadiusPx && diameterCm > 0
+              ? computePxPerCm(t.geometry.platformRadiusPx, diameterCm)
+              : null;
+          return {
+            ...t,
+            geometry: { ...t.geometry, diameterCm, pxPerCm },
+          };
+        }),
+        trialId,
+        STALE_REASON_GEOMETRY,
+      ),
     }));
     scheduleSave(get, set);
   },
 
   nudgeHole: (trialId, holeId, x, y) => {
     set((state) => ({
-      trials: patchTrial(state.trials, trialId, (t) => ({
-        ...t,
-        geometry: {
-          ...t.geometry,
-          holes: t.geometry.holes.map((h) =>
-            h.id === holeId ? { ...h, x, y, source: 'manual' as const, confidence: null } : h,
-          ),
-          confirmedAt: null,
-        },
-      })),
+      trials: staleTrialById(
+        patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          geometry: {
+            ...t.geometry,
+            holes: t.geometry.holes.map((h) =>
+              h.id === holeId ? { ...h, x, y, source: 'manual' as const, confidence: null } : h,
+            ),
+            confirmedAt: null,
+          },
+        })),
+        trialId,
+        STALE_REASON_GEOMETRY,
+      ),
     }));
     scheduleSave(get, set);
   },
@@ -411,31 +449,35 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setManualGeometry: (trialId, center, radius, anchorHole) => {
     const ring = holesFromAnchor(center, radius, anchorHole);
     set((state) => ({
-      trials: patchTrial(state.trials, trialId, (t) => ({
-        ...t,
-        geometry: {
-          ...t.geometry,
-          platformCenter: ring.center,
-          platformRadiusPx: radius,
-          holes: ring.holes,
-          ringRotationDeg: ring.rotationDeg,
-          source: 'manual',
-          confirmedAt: null,
-          calibrationReviewAcknowledgedAt: null,
-          detection: {
-            holeCandidateCount: 0,
-            ringFitResidualPx: 0,
-            medianSlotResidualPx: 0,
-            rmsSlotResidualPx: 0,
-            circleFitResidualPx: 0,
-            detectedHoleCount: 0,
-            modeledHoleCount: HOLE_COUNT,
-            confidence: 'high',
-            confidenceReasons: null,
-            platformEdgeSampleCount: 0,
+      trials: staleTrialById(
+        patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          geometry: {
+            ...t.geometry,
+            platformCenter: ring.center,
+            platformRadiusPx: radius,
+            holes: ring.holes,
+            ringRotationDeg: ring.rotationDeg,
+            source: 'manual',
+            confirmedAt: null,
+            calibrationReviewAcknowledgedAt: null,
+            detection: {
+              holeCandidateCount: 0,
+              ringFitResidualPx: 0,
+              medianSlotResidualPx: 0,
+              rmsSlotResidualPx: 0,
+              circleFitResidualPx: 0,
+              detectedHoleCount: 0,
+              modeledHoleCount: HOLE_COUNT,
+              confidence: 'high',
+              confidenceReasons: null,
+              platformEdgeSampleCount: 0,
+            },
           },
-        },
-      })),
+        })),
+        trialId,
+        STALE_REASON_GEOMETRY,
+      ),
       statusMessage: 'Manual geometry set. Confirm when ready.',
     }));
     scheduleSave(get, set);
@@ -450,13 +492,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     try {
       const result = await applyTemplateGeometry(source, dest);
       set((state) => ({
-        trials: patchTrial(state.trials, destTrialId, (t) => ({
-          ...t,
-          geometry: {
-            ...result.geometry,
-            calibrationReviewAcknowledgedAt: null,
-          },
-        })),
+        trials: staleTrialById(
+          patchTrial(state.trials, destTrialId, (t) => ({
+            ...t,
+            geometry: {
+              ...result.geometry,
+              calibrationReviewAcknowledgedAt: null,
+            },
+          })),
+          destTrialId,
+          STALE_REASON_GEOMETRY,
+        ),
         templateWarning: result.discrepancyWarning,
         statusMessage: result.discrepancyWarning
           ? 'Template applied with discrepancy warning — review carefully.'
@@ -486,17 +532,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         return;
       }
       set((state) => ({
-        trials: patchTrial(state.trials, trialId, (t) => ({
-          ...t,
-          trialWindow: {
-            ...t.trialWindow,
-            ...proposal.trialWindow,
-            cutoffSeconds: t.trialWindow.cutoffSeconds ?? 180,
-            startTimeUs: proposal.success
-              ? (proposal.trialWindow.startTimeUs ?? t.trialWindow.startTimeUs)
-              : t.trialWindow.startTimeUs,
-          },
-        })),
+        trials: staleTrialById(
+          patchTrial(state.trials, trialId, (t) => ({
+            ...t,
+            trialWindow: {
+              ...t.trialWindow,
+              ...proposal.trialWindow,
+              cutoffSeconds: t.trialWindow.cutoffSeconds ?? 180,
+              startTimeUs: proposal.success
+                ? (proposal.trialWindow.startTimeUs ?? t.trialWindow.startTimeUs)
+                : t.trialWindow.startTimeUs,
+            },
+          })),
+          trialId,
+          STALE_REASON_TRIAL_WINDOW,
+        ),
         statusMessage: proposal.success
           ? `Proposed trial start at ${proposal.startSeconds!.toFixed(3)} s (confidence ${proposal.confidence!.toFixed(2)}).`
           : (proposal.failureReason ??
@@ -522,13 +572,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   confirmTrialWindow: (trialId) => {
     set((state) => ({
-      trials: patchTrial(state.trials, trialId, (t) => ({
-        ...t,
-        trialWindow: {
-          ...t.trialWindow,
-          confirmedAt: new Date().toISOString(),
-        },
-      })),
+      trials: staleTrialById(
+        patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          trialWindow: {
+            ...t.trialWindow,
+            confirmedAt: new Date().toISOString(),
+          },
+        })),
+        trialId,
+        STALE_REASON_TRIAL_WINDOW,
+      ),
       statusMessage: 'Trial window confirmed.',
     }));
     scheduleSave(get, set);
@@ -536,20 +590,28 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   updateTrialWindow: (trialId, patch) => {
     set((state) => ({
-      trials: patchTrial(state.trials, trialId, (t) => ({
-        ...t,
-        trialWindow: { ...t.trialWindow, ...patch, source: 'manual' as const },
-      })),
+      trials: staleTrialById(
+        patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          trialWindow: { ...t.trialWindow, ...patch, source: 'manual' as const },
+        })),
+        trialId,
+        STALE_REASON_TRIAL_WINDOW,
+      ),
     }));
     scheduleSave(get, set);
   },
 
   updateTrialGeometry: (trialId, patch) => {
     set((state) => ({
-      trials: patchTrial(state.trials, trialId, (t) => ({
-        ...t,
-        geometry: { ...t.geometry, ...patch },
-      })),
+      trials: staleTrialById(
+        patchTrial(state.trials, trialId, (t) => ({
+          ...t,
+          geometry: { ...t.geometry, ...patch },
+        })),
+        trialId,
+        STALE_REASON_GEOMETRY,
+      ),
     }));
     scheduleSave(get, set);
   },
@@ -634,10 +696,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         trials: patchTrial(state.trials, trialId, (t) => ({
           ...t,
           track: t.track
-            ? {
-                ...t.track,
-                manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
-              }
+            ? markAppliedCleaningStale(
+                {
+                  ...t.track,
+                  manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
+                },
+                STALE_REASON_MANUAL_CORRECTION,
+              )
             : t.track,
         })),
         statusMessage: `Manual body correction saved for frame ${frameIndex + 1}.`,
@@ -668,10 +733,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         trials: patchTrial(state.trials, trialId, (t) => ({
           ...t,
           track: t.track
-            ? {
-                ...t.track,
-                manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
-              }
+            ? markAppliedCleaningStale(
+                {
+                  ...t.track,
+                  manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
+                },
+                STALE_REASON_MANUAL_CORRECTION,
+              )
             : t.track,
         })),
         statusMessage: `Manual nose correction saved for frame ${frameIndex + 1}.`,
@@ -699,10 +767,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         trials: patchTrial(state.trials, trialId, (t) => ({
           ...t,
           track: t.track
-            ? {
-                ...t.track,
-                manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
-              }
+            ? markAppliedCleaningStale(
+                {
+                  ...t.track,
+                  manualCorrections: upsertManualCorrection(t.track.manualCorrections, correction),
+                },
+                STALE_REASON_MANUAL_CORRECTION,
+              )
             : t.track,
         })),
         statusMessage: `Nose removed for frame ${frameIndex + 1}.`,
@@ -717,10 +788,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       trials: patchTrial(state.trials, trialId, (t) => ({
         ...t,
         track: t.track
-          ? {
-              ...t.track,
-              manualCorrections: removeManualCorrection(t.track.manualCorrections, frameIndex),
-            }
+          ? markAppliedCleaningStale(
+              {
+                ...t.track,
+                manualCorrections: removeManualCorrection(t.track.manualCorrections, frameIndex),
+              },
+              STALE_REASON_MANUAL_CORRECTION,
+            )
           : t.track,
       })),
       statusMessage: `Frame ${frameIndex + 1} restored to automatic tracking.`,
@@ -729,13 +803,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   updateCleaningParams: (patch) => {
-    set((state) => ({
-      analysisParams: {
-        ...state.analysisParams,
-        cleaning: { ...state.analysisParams.cleaning, ...patch },
+    set((state) => {
+      const cleaning = {
+        ...state.analysisParams.cleaning,
+        ...patch,
         updatedAt: new Date().toISOString(),
-      },
-    }));
+      };
+      const trials = state.trials.map((t) => {
+        if (!t.track?.appliedCleaning || t.track.appliedCleaning.stale) return t;
+        if (cleaningParamsMatch(t.track.appliedCleaning.params, cleaning)) return t;
+        return staleTrialTrack(t, STALE_REASON_CLEANING_PARAMS);
+      });
+      return {
+        trials,
+        analysisParams: {
+          ...state.analysisParams,
+          cleaning,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
     scheduleSave(get, set);
   },
 
@@ -786,6 +873,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
                 observations: preview!,
                 params: { ...params },
                 appliedAt: new Date().toISOString(),
+                stale: false,
+                staleReason: null,
               },
             }
           : t.track,
@@ -815,7 +904,8 @@ if (typeof window !== 'undefined') {
     ) => { x: number; y: number } | null;
     __ntResetManualCorrection?: (trialId: string, frameIndex: number) => void;
     __ntGetEffectiveOriginAt?: (trialId: string, frameIndex: number) => string | null;
-    __ntUpdateCleaningParams?: (patch: { maxGapFrames?: number; smoothingWindow?: number }) => void;
+    __ntUpdateCleaningParams?: (patch: { maxGapFrames?: number; smoothingWindow?: number; maxGapDurationUs?: number }) => void;
+    __ntIsAppliedCleaningStale?: (trialId: string) => boolean;
   };
   const hooks = window as NeuroTrackTestHooks;
   hooks.__ntApplyBodyCorrection = (trialId, frameIndex, x, y) => {
@@ -828,7 +918,7 @@ if (typeof window !== 'undefined') {
   hooks.__ntApplyCleaning = (trialId) => {
     useSessionStore.getState().applyCleaning(trialId);
     const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
-    return trial?.track?.appliedCleaning != null;
+    return trial?.track?.appliedCleaning != null && !trial.track.appliedCleaning.stale;
   };
   hooks.__ntDiscardCleaningPreview = (trialId) => {
     useSessionStore.getState().discardCleaningPreview(trialId);
@@ -853,6 +943,10 @@ if (typeof window !== 'undefined') {
   };
   hooks.__ntUpdateCleaningParams = (patch) => {
     useSessionStore.getState().updateCleaningParams(patch);
+  };
+  hooks.__ntIsAppliedCleaningStale = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    return Boolean(trial?.track?.appliedCleaning?.stale);
   };
 }
 

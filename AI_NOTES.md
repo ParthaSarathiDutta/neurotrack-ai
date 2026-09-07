@@ -167,3 +167,22 @@ Corrections and applied cleaning used debounced `scheduleSave` (300 ms). Reload 
 ### Validated
 lint/test/build PASS (76 tests); `validate:ms4` PASS (~13 s); `validate:calibration`, `validate:ms1` PASS. Re-run tracking confirmation UI (`rerun-tracking-warning`) verified in validate:ms4 V10.
 
+## MS-4 scientific safeguards (2026-09-06)
+
+Post-review at `d0208b5`. Approved minimal changes — no MS-4 redesign.
+
+### Decisions
+- **Dual gap bounds:** `maxGapFrames` + `maxGapDurationUs` (500 ms default); both must pass.
+- **Interpolation eligibility:** only `observed === 'lost'` with null body; never absent frames; preserve `observed`/flags; `origin` + `gap_interpolated` identifies estimates.
+- **Smoothing:** unchanged SMA; skip manual anchors, absence boundaries, flagged transitions, unsupported spans; documented path-length caveat in panel.
+- **Outlier replacement:** merge existing flags + `speed_outlier_replaced`; skip zero-duration PTS pairs.
+- **Staleness:** `appliedCleaning.stale` on corrections, geometry/calibration/window, param drift; `consumableCleanedObservations()` gate for MS-5; re-apply clears stale.
+- **Duplicate PTS:** spatial blend only; `duplicate_pts_spatial_estimate`; no frameIndex-based timing.
+
+### Rejected
+- Broader timestamp redesign or inferring speed from frame index.
+- Complex outlier audit dashboard.
+- Silently overwriting applied cleaning on param change.
+
+### Validated
+lint/test/build PASS (83 tests); `validate:ms4` PASS (~16 s) including V_stale_initial/after_correction/banner/cleared_on_reapply; validate:calibration, validate:ms1, validate:ms2, validate:ms3 PASS. New unit tests: `tests/cleaningStaleness.test.ts`, expanded `tests/trajectory.test.ts`.

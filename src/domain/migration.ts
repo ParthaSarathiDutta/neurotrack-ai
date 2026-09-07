@@ -43,11 +43,25 @@ export function migrateTrialRecord(trial: TrialRecord): TrialRecord {
 
 function migrateTrack(track: Track | null | undefined): Track | null {
   if (!track) return null;
+  const appliedCleaning = track.appliedCleaning
+    ? {
+        ...track.appliedCleaning,
+        params: {
+          ...defaultCleaningParams(),
+          ...track.appliedCleaning.params,
+          maxGapDurationUs:
+            track.appliedCleaning.params.maxGapDurationUs ??
+            defaultCleaningParams().maxGapDurationUs,
+        },
+        stale: track.appliedCleaning.stale ?? false,
+        staleReason: track.appliedCleaning.staleReason ?? null,
+      }
+    : null;
   return {
     status: track.status ?? 'idle',
     observations: track.observations ?? [],
     manualCorrections: track.manualCorrections ?? [],
-    appliedCleaning: track.appliedCleaning ?? null,
+    appliedCleaning,
     quality: track.quality ?? null,
     params: { ...defaultTrackingParams(), ...track.params },
     computedAt: track.computedAt ?? null,
@@ -56,10 +70,14 @@ function migrateTrack(track: Track | null | undefined): Track | null {
 }
 
 export function migrateAnalysisParams(params: AnalysisParams): AnalysisParams {
+  const cleaning = { ...defaultCleaningParams(), ...params.cleaning };
+  if (params.cleaning?.maxGapDurationUs == null) {
+    cleaning.maxGapDurationUs = defaultCleaningParams().maxGapDurationUs;
+  }
   return {
     ...params,
     tracking: params.tracking ?? defaultTrackingParams(),
-    cleaning: params.cleaning ?? defaultCleaningParams(),
+    cleaning,
   };
 }
 

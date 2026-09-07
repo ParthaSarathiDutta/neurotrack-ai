@@ -1,5 +1,5 @@
-import type { CleaningParams, Observation } from '../types';
-import { isSpeedOutlier } from '../tracking/trackQuality';
+import type { CleaningParams, Observation, ObservationQualityFlag } from '../types';
+import { isSpeedOutlier, mergeQualityFlags } from '../tracking/trackQuality';
 
 function cloneObservation(obs: Observation): Observation {
   return {
@@ -10,13 +10,48 @@ function cloneObservation(obs: Observation): Observation {
   };
 }
 
+/** Only short `lost` gaps between tracked brackets may be filled. */
 function isEligibleForGapFill(obs: Observation): boolean {
-  return obs.observed !== 'absent_pre_trial' && obs.bodyXY == null;
+  return obs.observed === 'lost' && obs.bodyXY == null;
+}
+
+function isAbsenceBoundary(obs: Observation): boolean {
+  return obs.observed === 'absent_pre_trial' || obs.observed === 'absent_in_hole';
+}
+
+function hasBracketBody(obs: Observation | null): obs is Observation & { bodyXY: { x: number; y: number } } {
+  return Boolean(obs?.bodyXY && !isAbsenceBoundary(obs));
+}
+
+const SMOOTHING_BLOCK_FLAGS: ObservationQualityFlag[] = [
+  'near_hole_disappearance',
+  'possible_occlusion',
+  'speed_outlier',
+  'ambiguous_head_tail',
+];
+
+function isSmoothingBlocked(obs: Observation): boolean {
+  if (isAbsenceBoundary(obs)) return true;
+  if (!obs.bodyXY) return true;
+  return obs.qualityFlags?.some((f) => SMOOTHING_BLOCK_FLAGS.includes(f)) ?? false;
+}
+
+/** True if any frame strictly between a and b is an absence boundary or lacks a body. */
+function hasUnsupportedSpan(observations: Observation[], a: number, b: number): boolean {
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  for (let k = lo + 1; k < hi; k += 1) {
+    const o = observations[k];
+    if (isAbsenceBoundary(o)) return true;
+    if (!o.bodyXY) return true;
+  }
+  return false;
 }
 
 /**
  * Interpolation factor for a gap frame between bracket indices.
  * Uses container timeUs when delta > 0; otherwise frameIndex spacing (duplicate PTS pairs).
+ * Never used for speed or elapsed-time inference.
  */
 export function gapInterpolationFactor(
   prevIdx: number,
@@ -35,10 +70,17 @@ export function gapInterpolationFactor(
   return (gapFrameIndex - prevIdx) / deltaFrames;
 }
 
-/** Linear interpolate body position; nose stays null; origin becomes interpolated. */
+function gapDurationEligible(prevTimeUs: number, nextTimeUs: number, maxGapDurationUs: number): boolean {
+  const deltaUs = nextTimeUs - prevTimeUs;
+  if (deltaUs <= 0) return true;
+  return deltaUs <= maxGapDurationUs;
+}
+
+/** Linear interpolate body position; preserves observed/flags; origin identifies interpolation. */
 function interpolateBodies(
   observations: Observation[],
   maxGapFrames: number,
+  maxGapDurationUs: number,
 ): Observation[] {
   const result = observations.map(cloneObservation);
   let i = 0;
@@ -56,12 +98,14 @@ function interpolateBodies(
     const prev = prevIdx >= 0 ? result[prevIdx] : null;
     const next = nextIdx < result.length ? result[nextIdx] : null;
     if (
-      prev?.bodyXY &&
-      next?.bodyXY &&
+      hasBracketBody(prev) &&
+      hasBracketBody(next) &&
       gapLen > 0 &&
       gapLen <= maxGapFrames &&
-      nextIdx - prevIdx - 1 === gapLen
+      nextIdx - prevIdx - 1 === gapLen &&
+      gapDurationEligible(prev.timeUs, next.timeUs, maxGapDurationUs)
     ) {
+      const duplicatePtsSpan = next.timeUs - prev.timeUs <= 0;
       for (let g = gapStart; g <= gapEnd; g += 1) {
         const t = gapInterpolationFactor(
           prevIdx,
@@ -72,6 +116,8 @@ function interpolateBodies(
           result[g].timeUs,
         );
         if (!Number.isFinite(t)) continue;
+        const flags: ObservationQualityFlag[] = ['gap_interpolated'];
+        if (duplicatePtsSpan) flags.push('duplicate_pts_spatial_estimate');
         result[g] = {
           ...result[g],
           bodyXY: {
@@ -79,10 +125,10 @@ function interpolateBodies(
             y: prev.bodyXY.y + t * (next.bodyXY.y - prev.bodyXY.y),
           },
           noseXY: null,
-          observed: 'tracked',
+          observed: result[g].observed,
           origin: 'interpolated',
-          confidence: 0.5,
-          qualityFlags: null,
+          confidence: result[g].confidence,
+          qualityFlags: mergeQualityFlags(result[g].qualityFlags, flags),
         };
       }
     }
@@ -90,7 +136,7 @@ function interpolateBodies(
   return result;
 }
 
-/** Replace isolated speed outliers with linear interpolation when bracketed. */
+/** Replace isolated speed outliers when bracketed; raw layer remains unchanged elsewhere. */
 function handleOutliers(
   observations: Observation[],
   maxSpeedPxPerSec: number,
@@ -113,16 +159,17 @@ function handleOutliers(
           x: (prev2.bodyXY.x + next.bodyXY.x) / 2,
           y: (prev2.bodyXY.y + next.bodyXY.y) / 2,
         },
-        noseXY: null,
+        noseXY: curr.noseXY,
+        observed: curr.observed,
         origin: curr.origin === 'manual' ? 'manual' : 'interpolated',
-        observed: 'tracked',
+        qualityFlags: mergeQualityFlags(curr.qualityFlags, ['speed_outlier_replaced']),
       };
     }
   }
   return result;
 }
 
-/** Moving average on body XY; skips manual corrections; never fabricates nose. */
+/** Moving average on body XY; skips manual anchors and blocked spans. */
 function smoothBodies(observations: Observation[], windowSize: number): Observation[] {
   if (windowSize <= 1) return observations.map(cloneObservation);
   const half = Math.floor(windowSize / 2);
@@ -130,11 +177,14 @@ function smoothBodies(observations: Observation[], windowSize: number): Observat
 
   for (let i = 0; i < result.length; i += 1) {
     const currentBody = result[i].bodyXY;
-    if (result[i].origin === 'manual' || !currentBody) continue;
+    if (result[i].origin === 'manual' || !currentBody || isSmoothingBlocked(result[i])) continue;
+
     const neighbors: Array<{ x: number; y: number }> = [];
     for (let j = i - half; j <= i + half; j += 1) {
-      if (j < 0 || j >= result.length) continue;
-      if (j !== i && result[j].origin === 'manual') continue;
+      if (j < 0 || j >= result.length || j === i) continue;
+      if (result[j].origin === 'manual') continue;
+      if (isSmoothingBlocked(result[j])) continue;
+      if (hasUnsupportedSpan(result, j, i)) continue;
       const neighborBody = result[j].bodyXY;
       if (neighborBody) neighbors.push(neighborBody);
     }
@@ -148,6 +198,8 @@ function smoothBodies(observations: Observation[], windowSize: number): Observat
       bodyXY: { x: avgX, y: avgY },
       origin: 'smoothed',
       noseXY: result[i].noseXY,
+      observed: result[i].observed,
+      qualityFlags: result[i].qualityFlags,
     };
   }
   return result;
@@ -159,7 +211,11 @@ export function computeCleanedTrajectory(
   params: CleaningParams,
   trackingMaxSpeedPxPerSec: number,
 ): Observation[] {
-  let obs = interpolateBodies(baseObservations, params.maxGapFrames);
+  let obs = interpolateBodies(
+    baseObservations,
+    params.maxGapFrames,
+    params.maxGapDurationUs,
+  );
   obs = handleOutliers(obs, trackingMaxSpeedPxPerSec * params.outlierSpeedMultiplier);
   if (params.smoothingWindow > 1) {
     obs = smoothBodies(obs, params.smoothingWindow);
