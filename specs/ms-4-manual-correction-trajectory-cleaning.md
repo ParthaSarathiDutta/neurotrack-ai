@@ -3,7 +3,7 @@
 Branch: `ms-4-manual-correction-trajectory-cleaning`
 Base: `main` @ `8379a91` (MS-3 complete)
 Constitution reference: `specs/constitution.md` → MS-4
-Status: **✅ Complete** — validated September 6, 2026; merged to `main` @ `f147330` (branch `ms-4-manual-correction-trajectory-cleaning`).
+Status: **✅ Complete** — validated September 6, 2026; merged to `main` @ `8199450` (branch `ms-4-manual-correction-trajectory-cleaning`).
 
 ## Requirements
 
