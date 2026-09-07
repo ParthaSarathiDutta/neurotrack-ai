@@ -1,0 +1,200 @@
+{
+  "trial": {
+    "id": "fixture-unknown-target",
+    "fingerprint": "fp-fixture",
+    "fileName": "example.mp4",
+    "label": "example",
+    "ingestStatus": "ready",
+    "ingestError": null,
+    "videoCached": true,
+    "metadata": null,
+    "timestampIndex": [{ "timeUs": 5000000, "frameIndex": 0, "cts": 150000, "timescale": 30000 }],
+    "trialWindow": {
+      "startTimeUs": 5000000,
+      "endTimeUs": 30000000,
+      "cutoffSeconds": 180,
+      "source": "manual",
+      "proposedStartTimeUs": 5000000,
+      "proposedEndTimeUs": 30000000,
+      "confirmedAt": "2026-01-01T00:00:00.000Z",
+      "motionOnsetConfidence": 0.9,
+      "detectionFailureReason": null
+    },
+    "geometry": {
+      "platformCenter": { "x": 320, "y": 240 },
+      "platformRadiusPx": 200,
+      "holes": [],
+      "targetHoleId": null,
+      "proposedTargetHoleId": null,
+      "targetHoleConfirmedAt": null,
+      "pxPerCm": null,
+      "diameterCm": null,
+      "ringRotationDeg": 0,
+      "source": "auto",
+      "templateSourceTrialId": null,
+      "confirmedAt": "2026-01-01T00:00:00.000Z",
+      "calibrationReviewAcknowledgedAt": null,
+      "detection": null
+    },
+    "track": {
+      "status": "done",
+      "observations": [],
+      "manualCorrections": [],
+      "appliedCleaning": null,
+      "quality": {
+        "trackedFraction": 1,
+        "lostFraction": 0,
+        "absentInHoleFraction": 0,
+        "preTrialFraction": 0,
+        "flaggedFrames": [],
+        "reviewGroups": []
+      },
+      "params": { "backgroundSampleCount": 30, "minBlobAreaFraction": 0.0015, "maxBlobAreaFraction": 0.012, "maxPlausibleSpeedPxPerSec": 800, "lowConfidenceThreshold": 0.45, "toolVersion": "0.5.0-ms5" },
+      "computedAt": "2026-01-01T00:00:00.000Z",
+      "error": null
+    },
+    "events": null,
+    "measures": {
+      "basisUsed": "corrected",
+      "computedAt": "2026-01-01T00:00:00.000Z",
+      "primaryLatency": {
+        "value": null,
+        "unit": "s",
+        "censored": false,
+        "unavailable": true,
+        "unavailableReason": "Target hole not confirmed.",
+        "lowerBound": null,
+        "lowerBoundUnit": null,
+        "definitionId": "primary_latency.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Primary latency",
+        "definitionSummary": "first_target_investigation",
+        "assumptions": [],
+        "flags": []
+      },
+      "totalLatency": {
+        "value": null,
+        "unit": "s",
+        "censored": true,
+        "unavailable": false,
+        "unavailableReason": null,
+        "lowerBound": 25,
+        "lowerBoundUnit": "s",
+        "definitionId": "total_latency.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Total latency",
+        "definitionSummary": "Protocol completion time — not observed",
+        "assumptions": [],
+        "flags": ["escape_incomplete_censored"]
+      },
+      "primaryErrors": {
+        "value": null,
+        "unit": "count",
+        "censored": false,
+        "unavailable": true,
+        "unavailableReason": "Target hole not confirmed.",
+        "definitionId": "primary_errors.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Primary errors",
+        "definitionSummary": "Confirmed non-target investigations before first target visit",
+        "assumptions": [],
+        "flags": []
+      },
+      "totalErrors": {
+        "value": null,
+        "unit": "count",
+        "censored": false,
+        "unavailable": true,
+        "unavailableReason": "Target hole not confirmed.",
+        "definitionId": "total_errors.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Total errors",
+        "definitionSummary": "Confirmed non-target investigations before censor boundary",
+        "assumptions": [],
+        "flags": []
+      },
+      "errorCounts": {
+        "confirmed": { "total": 0, "distinctHoleCount": 0, "revisitCount": 0 },
+        "provisional": { "total": 0, "distinctHoleCount": 0, "revisitCount": 0 }
+      },
+      "totalErrorCounts": {
+        "confirmed": { "total": 0, "distinctHoleCount": 0, "revisitCount": 0 },
+        "provisional": { "total": 0, "distinctHoleCount": 0, "revisitCount": 0 }
+      },
+      "pathLength": {
+        "value": 1200,
+        "unit": "px",
+        "censored": false,
+        "unavailable": false,
+        "definitionId": "path_length.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Path length",
+        "definitionSummary": "Sum of body displacements (D12)",
+        "assumptions": ["scale_unavailable_px"],
+        "flags": []
+      },
+      "meanSpeed": {
+        "value": 45,
+        "unit": "px/s",
+        "censored": false,
+        "unavailable": false,
+        "definitionId": "mean_speed.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Mean speed",
+        "definitionSummary": "Time-weighted mean over valid intervals",
+        "assumptions": ["scale_unavailable_px"],
+        "flags": []
+      },
+      "maxSpeed": {
+        "value": 90,
+        "unit": "px/s",
+        "censored": false,
+        "unavailable": false,
+        "definitionId": "max_speed.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Max speed",
+        "definitionSummary": "Max instantaneous speed over valid intervals",
+        "assumptions": ["scale_unavailable_px"],
+        "flags": []
+      },
+      "targetQuadrantFraction": {
+        "value": null,
+        "unit": "fraction",
+        "censored": false,
+        "unavailable": true,
+        "unavailableReason": "Target hole not confirmed.",
+        "definitionId": "target_quadrant_fraction.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Target quadrant fraction",
+        "definitionSummary": "target_centered_90",
+        "assumptions": [],
+        "flags": []
+      },
+      "targetQuadrantTimeSec": {
+        "value": null,
+        "unit": "s",
+        "censored": false,
+        "unavailable": true,
+        "unavailableReason": "Target hole not confirmed.",
+        "definitionId": "target_quadrant_time.v1",
+        "definitionVersion": "1",
+        "definitionLabel": "Target quadrant time",
+        "definitionSummary": "target_centered_90",
+        "assumptions": [],
+        "flags": []
+      },
+      "searchStrategy": {
+        "classification": "unclassified",
+        "override": null,
+        "overrideReason": null,
+        "reasoning": {},
+        "classifierVersion": "heuristic_v1"
+      },
+      "assumptions": ["scale_unavailable_px"]
+    },
+    "measurementBasis": "corrected",
+    "progress": { "lastIngestAt": null, "decodeWallClockMs": null },
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  }
+}

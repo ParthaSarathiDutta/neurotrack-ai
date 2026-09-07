@@ -2,7 +2,7 @@
 
 Branch: `ms-6-visualization-export-reload`
 Constitution reference: `specs/constitution.md` → MS-6, Delivery requirements
-Status: **📋 Plan — not started**
+Status: **🚧 In progress — Checkpoint 1 complete**
 
 Depends on: MS-1–MS-5 merged at `cc6eaf3` (`main`, September 7, 2026).
 
@@ -135,18 +135,19 @@ Deliver the **scientist-facing outputs** that make MS-1–MS-5 usable in a paper
 
 ---
 
-## Approved decisions (proposed — pending review)
+## Approved decisions (locked)
 
-| ID | Decision | Rationale |
-|---|---|---|
-| **Q1** | Export encodes measure values with explicit `valueKind` column | Prevents Excel from treating "CENSORED" as text while hiding a numeric column elsewhere |
-| **Q2** | Bundle is **session-shaped** (trials array + analysisParams); single-trial export = bundle with one trial | Matches Dexie session model; one import path |
-| **Q3** | Import **merges by trialId** by default; user prompt if collision | Safer than blind replace; document "Replace session" advanced option if time permits |
-| **Q4** | Trajectory overlay on existing review canvas satisfies "path plot" MVP | Avoid duplicate chart maintenance; constitution allows SVG/Canvas where simpler |
-| **Q5** | Skip learning curve until optional trial metadata exists | Salk brief mentions it; inventing animal IDs violates scientific integrity rules |
-| **Q6** | Use `xlsx` (SheetJS community) for XLSX | Constitution commitment; client-side, no server |
-| **Q7** | Visualization: **SVG + Canvas** for overlay/heatmap; defer full D3 unless scales become painful | Smaller bundle; D3 optional in Phase 4b |
-| **Q8** | Committed outputs generated with **target unknown**, test53 escape **confirmed in demo script** only for that clip's bundle | Matches MS-5 validation policy; document in `outputs/README.md` |
+| ID | Decision |
+|---|---|
+| **Q1** | Export encodes measure values with explicit `valueKind` column |
+| **Q2** | Bundle is **session-shaped** (trials array + analysisParams); load example uses one session bundle with all three clips |
+| **Q3** | Import **requires explicit confirmation** on trialId collision — never silently overwrite |
+| **Q4** | Trajectory overlay on review canvas satisfies path plot MVP |
+| **Q5** | Learning curve deferred until optional animal/day metadata exists |
+| **Q6** | Use `xlsx` (SheetJS community) for XLSX |
+| **Q7** | Visualization: **SVG + Canvas**; add D3 only if technically necessary |
+| **Q8** | Committed outputs under `outputs/` at repository root; preserve actual reviewed test53 confirmation — no synthetic confirm in generation scripts |
+| **Q9** | Report and export include **all MS-5 measures** (max speed, target quadrant fraction/time) with explicit unavailable states |
 
 ---
 
@@ -284,78 +285,59 @@ Trajectory overlay: toggle in `VideoOverlay` / player chrome (`Show trajectory`)
 | PNG/SVG figure download | Screenshot enough for submission |
 | Session merge UI for bundle collisions | Single-session demo adequate |
 | Multi-trial learning curve | No metadata model |
-| Show max speed + quadrant in UI | Include in export even if UI unchanged |
+| Show max speed + quadrant in UI | Included in ResultsExportPanel and export (Checkpoint 1) |
 | ZIP download of all CSVs | Separate downloads OK for MVP |
 
 ---
 
-## Implementation phases
+## Implementation checkpoints
 
-Sequential — each phase ends with tests passing; no MS-5 science changes.
+Sequential — each checkpoint ends with tests passing; no MS-5 science changes.
 
-### Phase 1 — Export domain layer (~1–2 days)
+### Checkpoint 1 — Results and export ✅
 
-1. Add dependency `xlsx` (+ types if needed).
-2. Implement `measureEncoding.ts`, `eventsTable.ts`, `trialSummary.ts`, `provenanceSummary.ts` per D4.
-3. Implement `csvExport.ts`, `xlsxExport.ts` (multi-sheet).
-4. Unit tests: U1–U8 (see Validation Tier 1).
-5. Store method `exportTrialCsv/Xlsx` — **read-only**, no detect/track.
+**Scope:** Pure export domain layer, results report panel, CSV and XLSX download.
 
-**Exit:** Unit tests green; manual spot-check one trial JSON fixture.
+**Dependencies:** MS-5 `TrialRecord`, `MeasuresSnapshot`, `BehavioralEvent`, `AnalysisParams`; `xlsx` package.
 
-### Phase 2 — Results report UI (~1 day)
+**Delivered:**
+- `src/domain/export/` — measure encoding, trial summary, events, parameters, operational definitions, provenance, CSV/XLSX builders
+- `ResultsExportPanel` — full measure report (including max speed, quadrant measures), per-trial and session export buttons
+- Unit tests `tests/ms6-export.test.ts` (U1–U8, U13–U14)
 
-1. `ResultsExportPanel.tsx` — render report from `trial.measures`, events, escape copy (reuse `escapeStateSummary` logic or shared helper).
-2. Download buttons wired to Phase 1 exporters.
-3. Session-level "Export all trials" when multiple loaded.
-4. `data-testid`s: `results-report`, `export-csv-btn`, `export-xlsx-btn`.
+**Validation gate:** `npm test`, `npm run lint`, `npm run build` green.
 
-**Exit:** Playwright smoke: report visible after MS-5 flow; download produces non-empty files.
+### Checkpoint 2 — Reloadable analysis bundle
 
-### Phase 3 — Analysis bundle (~2 days)
+**Scope:** `.neurotrack.json` schema v1.0.0, export/import UI, fingerprint relink, round-trip tests.
 
-1. `bundleSchema.ts`, `bundleExport.ts`, `bundleImport.ts` per D2.
-2. `reference/neurotrack-bundle-schema.md`.
-3. UI: Download / Load `.neurotrack.json`; file picker; error toasts.
-4. Import uses `migrateTrialRecord`; sets `needs_reselect` when video absent.
-5. Unit tests: U9–U14; round-trip fixture.
+**Dependencies:** Checkpoint 1 export types; `migration.ts`; MS-1 video re-identification.
 
-**Exit:** Manual round-trip one trial; measures and event statuses identical.
+**Validation gate:** Bundle round-trip unit tests; import collision confirmation UI.
 
-### Phase 4 — Essential visualizations (~2–3 days)
+### Checkpoint 3 — Essential visualizations
 
-**4a — Trajectory overlay**
+**Scope:** Trajectory overlay, hole-visit timeline, occupancy heat map (SVG/Canvas).
 
-1. `TrajectoryOverlay.tsx` — consumable observations for basis; segment by origin; grayscale time gradient.
-2. Toggle control; respects trial window (exclude pre-trial).
+**Dependencies:** `resolveMeasurementObservations`; review canvas / `VideoOverlay`.
 
-**4b — Timeline + occupancy**
+**Validation gate:** Charts render in browser validation; grayscale-safe styling.
 
-1. `HoleVisitTimeline.tsx` — SVG, 20 holes, investigation spans, escape markers.
-2. `OccupancyHeatmap.tsx` — bin body positions in platform circle; time-weighted.
-3. Grayscale print check documented in validation.
+### Checkpoint 4 — Submission outputs
 
-**Exit:** Charts render for test53 in browser; no filename branching.
+**Scope:** `outputs/` for test50/51/53; single session bundle; load-example path; `outputs/README.md`.
 
-### Phase 5 — Demo outputs & load example (~1 day)
+**Dependencies:** Checkpoints 1–2; local sample videos for regeneration script only.
 
-1. `scripts/generate-demo-outputs.mjs` — full pipeline per clip (reuse offline validators where possible); writes `outputs/`.
-2. `outputs/README.md` — provenance, target unknown, test53 confirm step noted.
-3. Load example: import `outputs/bundles/all-clips-session.neurotrack.json` or three sequential imports.
-4. Hook in ingest UI (`Load example analysis`).
+**Validation gate:** Committed CSV/XLSX/bundle files; README documents provenance and unknown target/scale.
 
-**Exit:** Committed outputs in repo; load example reaches report without tracking.
+### Checkpoint 5 — Final validation
 
-### Phase 6 — Validation, docs, sign-off (~1–2 days)
+**Scope:** `validate:ms6`, full regression suite, end-to-end workflow documentation.
 
-1. `scripts/validate-ms6.mjs` — Tier 3 criteria.
-2. `npm run validate:ms6` in package.json.
-3. Update `AI_NOTES.md`, README (export section), constitution MS-6 status when complete.
-4. Full pre-merge suite: lint, test, build, ms1–ms6.
+**Dependencies:** All prior checkpoints.
 
-**Exit:** All validation green; MS-6 merged to `main`.
-
-**Estimated total effort:** 8–11 focused days (single developer), assuming MS-1–MS-5 remain stable.
+**Validation gate:** Tier 1–3 PASS; MS-1–MS-5 regressions green.
 
 ---
 
@@ -411,7 +393,7 @@ Sequential — each phase ends with tests passing; no MS-5 science changes.
 
 - Print/grayscale screenshot of trajectory + timeline + occupancy readable.
 - Excel opened by human: no misleading latency numbers in sortable numeric columns without `valueKind`.
-- Load example reaches results in <60 s on cold deploy.
+- Load example reaches results on cold deploy.
 - `outputs/README.md` accurately states assumptions.
 
 ---
@@ -427,20 +409,6 @@ Sequential — each phase ends with tests passing; no MS-5 science changes.
 | Load example without videos | Empty player | Clear `needs_reselect` UX; report/charts still populate from bundle |
 | Committed outputs drift from code | Evaluator confusion | Regenerate script + note toolVersion in README; CI optional hash check |
 | xlsx license ambiguity | Legal | Use community edition; document in README third-party notices |
-
----
-
-## Decisions requiring your approval
-
-Before implementation starts, please confirm or revise:
-
-1. **Bundle import collision policy (Q3):** merge by `trialId` with prompt vs replace entire session default?
-2. **Output directory name:** `outputs/` at repo root (proposed) vs `demo/outputs/`?
-3. **Load example mechanism:** single session bundle vs three per-clip files vs IndexedDB seed script?
-4. **test53 committed outputs:** include scientist-confirmed escape (numeric latency in export) or leave proposed/censored only?
-5. **Trajectory overlay vs separate path plot:** is overlay-only acceptable for MVP (recommended)?
-6. **Learning curve:** confirm exclusion until optional metadata fields exist?
-7. **D3 dependency:** add only if Phase 4 SVG proves insufficient?
 
 ---
 

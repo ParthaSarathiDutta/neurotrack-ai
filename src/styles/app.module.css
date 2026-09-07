@@ -729,6 +729,16 @@
   margin: var(--space-sm) 0;
 }
 
+.resultsReport {
+  margin-top: var(--space-md);
+}
+
+.resultsReport h4,
+.resultsReport h5 {
+  margin: var(--space-md) 0 var(--space-sm);
+  font-size: 1rem;
+}
+
 .measureGrid {
   display: grid;
   grid-template-columns: minmax(8rem, 12rem) 1fr;
