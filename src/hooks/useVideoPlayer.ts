@@ -11,6 +11,9 @@ import { getCachedVideo } from '../db/videoCache';
 
 export type PlayerMode = 'video' | 'frame';
 
+export const PLAYBACK_SPEED_OPTIONS = [0.25, 0.5, 1, 2] as const;
+export type PlaybackSpeed = (typeof PLAYBACK_SPEED_OPTIONS)[number];
+
 export interface UseVideoPlayerOptions {
   fingerprint: string;
   timestampIndex: TimestampIndexEntry[];
@@ -31,6 +34,7 @@ export function useVideoPlayer({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [mode, setMode] = useState<PlayerMode>('frame');
   const [playing, setPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeedState] = useState<PlaybackSpeed>(1);
   const [currentFrameIndex, setCurrentFrameIndex] = useState(0);
   const [frameBitmap, setFrameBitmap] = useState<ImageBitmap | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,6 +71,13 @@ export function useVideoPlayer({
     };
   }, [fingerprint]);
 
+  const cancelRvfc = useCallback((video: HTMLVideoElement) => {
+    if (rVfcId.current) {
+      video.cancelVideoFrameCallback(rVfcId.current);
+      rVfcId.current = 0;
+    }
+  }, []);
+
   const loadFrame = useCallback(
     async (frameIndex: number) => {
       const gen = ++loadGenRef.current;
@@ -75,7 +86,10 @@ export function useVideoPlayer({
       currentFrameIndexRef.current = clamped;
       setMode('frame');
       setPlaying(false);
-      if (videoRef.current) videoRef.current.pause();
+      if (videoRef.current) {
+        videoRef.current.pause();
+        cancelRvfc(videoRef.current);
+      }
 
       const bitmap = await getFrameBitmap(clamped, videoWidth, videoHeight, fingerprint);
       if (gen !== loadGenRef.current) {
@@ -87,12 +101,47 @@ export function useVideoPlayer({
         return bitmap;
       });
     },
-    [maxFrameIndex, videoWidth, videoHeight, fingerprint],
+    [maxFrameIndex, videoWidth, videoHeight, fingerprint, cancelRvfc],
   );
 
   useEffect(() => {
     if (!loading) void loadFrame(0);
   }, [loading, fingerprint]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pauseToFrame = useCallback(
+    (frameIndex: number) => {
+      const video = videoRef.current;
+      if (video) {
+        video.pause();
+        cancelRvfc(video);
+      }
+      setPlaying(false);
+      setMode('frame');
+      void loadFrame(frameIndex);
+    },
+    [loadFrame, cancelRvfc],
+  );
+
+  const handlePlaybackEnded = useCallback(() => {
+    const video = videoRef.current;
+    if (video) cancelRvfc(video);
+    setPlaying(false);
+    void loadFrame(0);
+  }, [loadFrame, cancelRvfc]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoUrl) return;
+    video.loop = false;
+    video.playbackRate = playbackSpeed;
+    video.addEventListener('ended', handlePlaybackEnded);
+    return () => video.removeEventListener('ended', handlePlaybackEnded);
+  }, [videoUrl, playbackSpeed, handlePlaybackEnded]);
+
+  const setPlaybackSpeed = useCallback((speed: PlaybackSpeed) => {
+    setPlaybackSpeedState(speed);
+    if (videoRef.current) videoRef.current.playbackRate = speed;
+  }, []);
 
   const stepFrame = useCallback(
     (delta: number) => {
@@ -116,30 +165,17 @@ export function useVideoPlayer({
     [seekToTimeUs],
   );
 
-  const cancelRvfc = useCallback((video: HTMLVideoElement) => {
-    if (rVfcId.current) {
-      video.cancelVideoFrameCallback(rVfcId.current);
-      rVfcId.current = 0;
-    }
-  }, []);
-
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return;
 
     if (playing) {
-      video.pause();
-      cancelRvfc(video);
-      setPlaying(false);
-      setMode('frame');
+      pauseToFrame(currentFrameIndexRef.current);
       return;
     }
 
     setMode('video');
-    setFrameBitmap((prev) => {
-      prev?.close();
-      return null;
-    });
+    video.playbackRate = playbackSpeed;
     video.currentTime = currentEntry ? secondsFromTimeUs(currentEntry.timeUs) : 0;
     cancelRvfc(video);
     setPlaying(true);
@@ -151,7 +187,7 @@ export function useVideoPlayer({
         { preferredFrameIndex: currentFrameIndexRef.current },
       );
       if (entry) setCurrentFrameIndex(entry.frameIndex);
-      if (!video.paused) {
+      if (!video.paused && !video.ended) {
         rVfcId.current = video.requestVideoFrameCallback(onFrame);
       }
     };
@@ -159,9 +195,9 @@ export function useVideoPlayer({
     void video.play().catch(() => {
       cancelRvfc(video);
       setPlaying(false);
-      setMode('frame');
+      void loadFrame(currentFrameIndexRef.current);
     });
-  }, [playing, videoUrl, currentEntry, timestampIndex, cancelRvfc]);
+  }, [playing, videoUrl, currentEntry, timestampIndex, cancelRvfc, pauseToFrame, playbackSpeed, loadFrame]);
 
   useEffect(() => {
     return () => {
@@ -179,6 +215,7 @@ export function useVideoPlayer({
     videoUrl,
     mode,
     playing,
+    playbackSpeed,
     loading,
     currentFrameIndex,
     currentEntry,
@@ -189,5 +226,6 @@ export function useVideoPlayer({
     seekToSeconds,
     togglePlay,
     loadFrame,
+    setPlaybackSpeed,
   };
 }

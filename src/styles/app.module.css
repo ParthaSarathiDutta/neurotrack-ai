@@ -387,6 +387,21 @@
   display: none;
 }
 
+.playerFrameCanvas[hidden] {
+  display: none;
+}
+
+.playbackSpeedLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.playbackSpeedSelect {
+  min-width: 4.5rem;
+}
+
 .overlayCanvas {
   position: absolute;
   inset: 0;

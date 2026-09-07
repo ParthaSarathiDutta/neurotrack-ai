@@ -117,7 +117,7 @@ export function VideoPlayer({
 
   useEffect(() => {
     const canvas = frameCanvasRef.current;
-    if (!canvas || !player.frameBitmap || player.mode !== 'frame') return;
+    if (!canvas || !player.frameBitmap) return;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = displayBox.displayWidth * dpr;
     canvas.height = displayBox.displayHeight * dpr;
@@ -139,7 +139,7 @@ export function VideoPlayer({
       content.contentWidth,
       content.contentHeight,
     );
-  }, [player.frameBitmap, player.mode, displayBox]);
+  }, [player.frameBitmap, displayBox]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -241,14 +241,13 @@ export function VideoPlayer({
             data-playing={player.playing ? 'true' : 'false'}
           />
         )}
-        {player.mode === 'frame' && (
-          <canvas
-            ref={frameCanvasRef}
-            className={styles.playerFrameCanvas}
-            aria-hidden="true"
-            data-testid="player-frame-canvas"
-          />
-        )}
+        <canvas
+          ref={frameCanvasRef}
+          className={styles.playerFrameCanvas}
+          aria-hidden={player.mode !== 'frame'}
+          hidden={player.mode !== 'frame'}
+          data-testid="player-frame-canvas"
+        />
         <VideoOverlay
           geometry={geometry}
           displayBox={displayBox}
@@ -308,6 +307,21 @@ export function VideoPlayer({
         >
           Frame ▶
         </button>
+        <label className={styles.playbackSpeedLabel} htmlFor="playback-speed">
+          Speed
+          <select
+            id="playback-speed"
+            className={styles.playbackSpeedSelect}
+            value={player.playbackSpeed}
+            onChange={(e) => player.setPlaybackSpeed(Number(e.target.value) as 0.25 | 0.5 | 1 | 2)}
+            data-testid="playback-speed"
+          >
+            <option value={0.25}>0.25×</option>
+            <option value={0.5}>0.5×</option>
+            <option value={1}>1×</option>
+            <option value={2}>2×</option>
+          </select>
+        </label>
         <span className={styles.timestamp} data-testid="current-timestamp">
           {secondsFromTimeUs(currentTimeUs).toFixed(6)} s
         </span>

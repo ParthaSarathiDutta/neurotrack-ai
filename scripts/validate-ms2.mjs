@@ -111,15 +111,75 @@ async function readCurrentFrameIndex(page) {
   return match ? parseInt(match[1], 10) : null;
 }
 
-/** Play must advance frames; Pause must stop advancement (test53 + test51). */
-async function assertPlaybackAdvancesAndPauses(page, clip) {
+async function readMaxFrame(page) {
+  const text = await page.locator('[data-testid="current-frame-index"]').textContent();
+  const match = text?.match(/Frame \d+\/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+async function readVideoPlaybackRate(page) {
+  return page.evaluate(
+    () => document.querySelector('[data-testid="player-video-element"]')?.playbackRate ?? null,
+  );
+}
+
+async function canvasHasVisibleContent(page) {
+  return page.locator('[data-testid="player-frame-canvas"]').evaluate((canvas) => {
+    if (canvas.hidden) return false;
+    const ctx = canvas.getContext('2d');
+    if (!ctx || canvas.width === 0 || canvas.height === 0) return false;
+    const x = Math.floor(canvas.width / 2);
+    const y = Math.floor(canvas.height / 2);
+    const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
+    return r + g + b > 12;
+  });
+}
+
+async function gotoDisplayFrame(page, displayFrame) {
+  await page.locator('[data-testid="goto-frame-input"]').fill(String(displayFrame));
+  await page.locator('[data-testid="goto-frame-btn"]').click();
+  await page.waitForFunction(
+    (expected) => {
+      const text = document.querySelector('[data-testid="current-frame-index"]')?.textContent ?? '';
+      const match = text.match(/Frame (\d+)/);
+      return match != null && parseInt(match[1], 10) === expected;
+    },
+    displayFrame,
+    { timeout: 30_000 },
+  );
+}
+
+/** Playback UX: speed, play/pause continuity, natural-end rewind, seek/replay. */
+async function assertPlayerUxRegression(page, clip) {
   await selectTrial(page, clip);
   await page.waitForSelector('[data-testid="player-video-element"]', {
     state: 'attached',
     timeout: 120_000,
   });
+
+  const out = {};
+
+  await page.locator('[data-testid="playback-speed"]').selectOption('2');
+  out.speed2x = (await readVideoPlaybackRate(page)) === 2 ? 'PASS' : `FAIL:rate=${await readVideoPlaybackRate(page)}`;
+  await page.locator('[data-testid="playback-speed"]').selectOption('0.5');
+  out.speedHalf = (await readVideoPlaybackRate(page)) === 0.5 ? 'PASS' : `FAIL:rate=${await readVideoPlaybackRate(page)}`;
+  await page.locator('[data-testid="playback-speed"]').selectOption('1');
+
+  const tsText = await page.locator('[data-testid="current-timestamp"]').textContent();
+  out.timestampFormat = tsText && /\d+\.\d+/.test(tsText) ? 'PASS' : `FAIL:${tsText}`;
+
   const startFrame = await readCurrentFrameIndex(page);
-  if (startFrame == null) return { play: 'FAIL:no_frame_readout', pause: 'FAIL:no_frame_readout' };
+  if (startFrame == null) {
+    return {
+      ...out,
+      playAdvances: 'FAIL:no_frame_readout',
+      pauseCanvasVisible: 'FAIL:no_frame_readout',
+      pauseStops: 'FAIL:no_frame_readout',
+      naturalEndRewind: 'FAIL:no_frame_readout',
+      seekFinalAfterEnd: 'FAIL:no_frame_readout',
+      replayAfterEnd: 'FAIL:no_frame_readout',
+    };
+  }
 
   await page.locator('[data-testid="play-pause-btn"]').click();
   await page.waitForFunction(
@@ -136,8 +196,7 @@ async function assertPlaybackAdvancesAndPauses(page, clip) {
     startFrame,
     { timeout: 15_000 },
   );
-  const midFrame = await readCurrentFrameIndex(page);
-  const playOk = midFrame != null && midFrame > startFrame ? 'PASS' : `FAIL:start=${startFrame},mid=${midFrame}`;
+  out.playAdvances = 'PASS';
 
   await page.locator('[data-testid="play-pause-btn"]').click();
   await page.waitForFunction(
@@ -146,14 +205,62 @@ async function assertPlaybackAdvancesAndPauses(page, clip) {
     { timeout: 10_000 },
   );
   const pausedFrame = await readCurrentFrameIndex(page);
+  out.pauseCanvasVisible = (await canvasHasVisibleContent(page)) ? 'PASS' : 'FAIL:blank_or_hidden';
   await page.waitForTimeout(800);
   const afterPause = await readCurrentFrameIndex(page);
-  const pauseOk =
+  out.pauseStops =
     pausedFrame != null && afterPause != null && afterPause <= pausedFrame + 1
       ? 'PASS'
       : `FAIL:paused=${pausedFrame},after=${afterPause}`;
+  out.manualPauseRetainsPosition =
+    pausedFrame != null && pausedFrame > startFrame ? 'PASS' : `FAIL:paused=${pausedFrame},start=${startFrame}`;
 
-  return { play: playOk, pause: pauseOk };
+  const maxFrame = await readMaxFrame(page);
+  if (maxFrame == null) {
+    out.naturalEndRewind = 'FAIL:no_max_frame';
+    out.seekFinalAfterEnd = 'FAIL:no_max_frame';
+    out.replayAfterEnd = 'FAIL:no_max_frame';
+    return out;
+  }
+
+  await gotoDisplayFrame(page, maxFrame);
+  await page.locator('[data-testid="playback-speed"]').selectOption('2');
+  await page.locator('[data-testid="play-pause-btn"]').click();
+  await page.waitForFunction(
+    () => {
+      const playBtn = document.querySelector('[data-testid="play-pause-btn"]')?.textContent === 'Play';
+      const text = document.querySelector('[data-testid="current-frame-index"]')?.textContent ?? '';
+      const match = text.match(/Frame (\d+)/);
+      return playBtn && match != null && parseInt(match[1], 10) === 1;
+    },
+    undefined,
+    { timeout: 120_000 },
+  );
+  out.naturalEndRewind = (await readCurrentFrameIndex(page)) === 1 ? 'PASS' : `FAIL:frame=${await readCurrentFrameIndex(page)}`;
+
+  await gotoDisplayFrame(page, maxFrame);
+  out.seekFinalAfterEnd =
+    (await readCurrentFrameIndex(page)) === maxFrame ? 'PASS' : `FAIL:frame=${await readCurrentFrameIndex(page)}`;
+
+  await page.locator('[data-testid="playback-speed"]').selectOption('2');
+  await page.locator('[data-testid="play-pause-btn"]').click();
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="play-pause-btn"]')?.textContent === 'Pause',
+    undefined,
+    { timeout: 10_000 },
+  );
+  await page.waitForFunction(
+    (max) => {
+      const text = document.querySelector('[data-testid="current-frame-index"]')?.textContent ?? '';
+      const match = text.match(/Frame (\d+)/);
+      return match != null && parseInt(match[1], 10) >= max - 1;
+    },
+    maxFrame,
+    { timeout: 120_000 },
+  );
+  out.replayAfterEnd = 'PASS';
+
+  return out;
 }
 
 async function main() {
@@ -522,6 +629,7 @@ async function main() {
   const controls = [
     '[data-testid="play-pause-btn"]',
     '[data-testid="step-forward-btn"]',
+    '[data-testid="playback-speed"]',
     '[data-testid="auto-detect-btn"]',
     '[data-testid="timeline-slider"]',
   ];
@@ -529,17 +637,17 @@ async function main() {
   results.V14 = v14ok ? 'PASS' : 'FAIL';
   if (!v14ok) failures.push('V14: missing controls');
 
-  const test53Playback = await assertPlaybackAdvancesAndPauses(page, 'test53');
-  results.V16_test53_play_advances = test53Playback.play;
-  results.V16_test53_pause_stops = test53Playback.pause;
-  if (test53Playback.play !== 'PASS') failures.push(`V16 test53 play: ${test53Playback.play}`);
-  if (test53Playback.pause !== 'PASS') failures.push(`V16 test53 pause: ${test53Playback.pause}`);
+  const test53Player = await assertPlayerUxRegression(page, 'test53');
+  for (const [key, value] of Object.entries(test53Player)) {
+    results[`V_playback_test53_${key}`] = value;
+    if (value !== 'PASS') failures.push(`V_playback test53 ${key}: ${value}`);
+  }
 
-  const test51Playback = await assertPlaybackAdvancesAndPauses(page, 'test51');
-  results.V17_test51_play_advances = test51Playback.play;
-  results.V17_test51_pause_stops = test51Playback.pause;
-  if (test51Playback.play !== 'PASS') failures.push(`V17 test51 play: ${test51Playback.play}`);
-  if (test51Playback.pause !== 'PASS') failures.push(`V17 test51 pause: ${test51Playback.pause}`);
+  const test51Player = await assertPlayerUxRegression(page, 'test51');
+  for (const [key, value] of Object.entries(test51Player)) {
+    results[`V_playback_test51_${key}`] = value;
+    if (value !== 'PASS') failures.push(`V_playback test51 ${key}: ${value}`);
+  }
 
   await browser.close();
   server.close();

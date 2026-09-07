@@ -356,3 +356,19 @@ Play button was a silent no-op: `togglePlay()` required `videoRef.current`, but 
 ### Validated
 lint/test/build PASS; validate:ms2 (incl. V16/V17 playback), validate:ms4, validate:ms5 PASS. **Stopped for user manual Play/Pause review before Phase 2 sign-off.**
 
+## MS-5 player UX fixes — speed, pause canvas, natural-end rewind (2026-09-07)
+
+### Problems
+1. No playback speed control.
+2. Pause showed black screen — mode switched to frame canvas but `frameBitmap` was cleared on play and never reloaded on manual pause.
+3. Natural playback end left user at last frame with no rewind.
+
+### Fix
+- Speed selector (0.25×–2×) via native `playbackRate`; frame index/timestamp still from rVFC `mediaTime`.
+- Manual pause calls `pauseToFrame(current)` to reload worker bitmap; canvas always mounted (hidden during video mode).
+- `ended` handler rewinds to frame 1 paused; manual pause retains position; `loop=false`.
+- Browser regression: `validate-ms2` `V_playback_test53_*` and `V_playback_test51_*` (speed, pause canvas, natural-end rewind, seek final, replay).
+
+### Validated
+lint/test/build PASS (147 tests); validate:ms2/ms4/ms5 PASS. **Stopped for user manual playback review — no merge yet.**
+
