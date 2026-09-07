@@ -26,7 +26,7 @@ export interface PixelEvidenceResult {
   analyzedFrameIndices?: number[];
   /** Presentation-order frame indices requested but not decoded. */
   failedFrameIndices?: number[];
-  /** Frame-specific body-entry completion (neurotrack_body_entry v1). */
+  /** Frame-specific body-entry completion (neurotrack_body_entry v2). */
   bodyEntry?: BodyEntryCompletionResult | null;
   errorMessage?: string | null;
 }
@@ -240,6 +240,7 @@ export function detectEscapeOutcome(
       bodyEntryCompletionFrameIndex: ctx.pixelEvidence.bodyEntry?.completionFrameIndex ?? null,
       bodyEntryCompletionTimeUs: ctx.pixelEvidence.bodyEntry?.completionTimeUs ?? null,
       bodyEntryTemporalSupportFrames: ctx.pixelEvidence.bodyEntry?.temporalSupportFrames ?? null,
+      bodyEntryCompletionPath: ctx.pixelEvidence.bodyEntry?.completionPath ?? null,
       bodyEntryFailureReason: ctx.pixelEvidence.bodyEntry?.failureReason ?? null,
       areaDecaySupporting:
         ctx.pixelEvidence.areaDecayScore != null &&

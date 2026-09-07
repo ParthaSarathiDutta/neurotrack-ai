@@ -67,10 +67,10 @@ function makeInput(
   };
 }
 
-describe('neurotrack_body_entry v1', () => {
+describe('neurotrack_body_entry v2', () => {
   it('documents versioned definition id', () => {
     expect(BODY_ENTRY_DEFINITION_ID).toBe('neurotrack_body_entry');
-    expect(BODY_ENTRY_DEFINITION_VERSION).toBe('1');
+    expect(BODY_ENTRY_DEFINITION_VERSION).toBe('2');
   });
 
   it('accepts body entry with visible tail (reduced platform area, not zero)', () => {
@@ -86,7 +86,26 @@ describe('neurotrack_body_entry v1', () => {
     );
     expect(result.established).toBe(true);
     expect(result.completionFrameIndex).toBe(11);
+    expect(result.completionPath).toBe('centroid_pixel');
     expect(result.frameMetrics[2]!.platformBlobArea).toBeGreaterThan(0);
+  });
+
+  it('accepts occlusion-path entry when centroid lags outside strict torso gate', () => {
+    // Strict torso max = 12 px; approach max = 24 px. Body at 507 is 13 px from hole at 520.
+    const laggingCentroid = { x: 507, y: 240 };
+    const result = detectBodyEntryCompletion(
+      makeInput(
+        [40, 41, 42],
+        [5000, 2900, 2700],
+        [0.14, 0.18, 0.22],
+        [laggingCentroid, laggingCentroid, laggingCentroid],
+        42,
+      ),
+    );
+    expect(result.established).toBe(true);
+    expect(result.completionPath).toBe('occlusion_pixel');
+    expect(result.frameMetrics.every((m) => !m.meetsTorsoProximity)).toBe(true);
+    expect(result.frameMetrics.every((m) => m.meetsApproachProximity)).toBe(true);
   });
 
   it('rejects incomplete torso entry (rim proximity without pixel entry)', () => {
@@ -104,7 +123,21 @@ describe('neurotrack_body_entry v1', () => {
     expect(result.failureReason).toBe('no_temporally_supported_body_entry');
   });
 
-  it('detects genuine completion with temporal support', () => {
+  it('rejects false rim entry with darkening but no platform area reduction', () => {
+    const rim = { x: 500, y: 240 };
+    const result = detectBodyEntryCompletion(
+      makeInput(
+        [25, 26, 27],
+        [4800, 4700, 4600],
+        [0.2, 0.22, 0.24],
+        [rim, rim, rim],
+        27,
+      ),
+    );
+    expect(result.established).toBe(false);
+  });
+
+  it('detects genuine completion with temporal support via centroid path', () => {
     const deep = { x: 519, y: 240 };
     const result = detectBodyEntryCompletion(
       makeInput(
@@ -116,16 +149,32 @@ describe('neurotrack_body_entry v1', () => {
       ),
     );
     expect(result.established).toBe(true);
+    expect(result.completionPath).toBe('centroid_pixel');
     expect(result.temporalSupportFrames).toBeGreaterThanOrEqual(2);
     expect(result.completionFrameIndex).toBe(31);
   });
 
-  it('rejects nose poke without torso proximity', () => {
+  it('rejects nose poke without approach proximity or area reduction', () => {
     const metrics = buildBodyEntryFrameMetrics(
       makeInput([5], [5000], [0.2], [{ x: 480, y: 240 }], 5),
     );
     expect(metrics[0]!.meetsTorsoProximity).toBe(false);
+    expect(metrics[0]!.meetsApproachProximity).toBe(false);
     expect(metrics[0]!.meetsBodyEntry).toBe(false);
+  });
+
+  it('rejects nose poke with darkening only (no platform shrinkage)', () => {
+    const nearNose = { x: 510, y: 240 };
+    const result = detectBodyEntryCompletion(
+      makeInput(
+        [8, 9],
+        [5200, 5100],
+        [0.25, 0.28],
+        [nearNose, nearNose],
+        9,
+      ),
+    );
+    expect(result.established).toBe(false);
   });
 
   it('allows completion at recording boundary when temporally supported', () => {
@@ -141,6 +190,7 @@ describe('neurotrack_body_entry v1', () => {
     );
     expect(result.established).toBe(true);
     expect(result.completionFrameIndex).toBe(98);
+    expect(result.completionFrameIndex).not.toBe(100);
   });
 
   it('rejects recording-end fallback when only final frame qualifies', () => {
@@ -156,6 +206,20 @@ describe('neurotrack_body_entry v1', () => {
     );
     expect(result.established).toBe(false);
     expect(result.failureReason).toBe('no_temporally_supported_body_entry');
+  });
+
+  it('rejects occlusion path without temporal progression between frames', () => {
+    const lagging = { x: 507, y: 240 };
+    const result = detectBodyEntryCompletion(
+      makeInput(
+        [50, 51],
+        [2800, 2800],
+        [0.2, 0.2],
+        [lagging, lagging],
+        51,
+      ),
+    );
+    expect(result.established).toBe(false);
   });
 
   it('does not classify escape_completed from aggregate decay alone', () => {
@@ -195,6 +259,7 @@ describe('neurotrack_body_entry v1', () => {
             temporalSupportFrames: 0,
             definitionId: BODY_ENTRY_DEFINITION_ID,
             definitionVersion: BODY_ENTRY_DEFINITION_VERSION,
+            completionPath: null,
             areaDecayScore: 0.9,
             failureReason: 'no_temporally_supported_body_entry',
             frameMetrics: [],
@@ -243,6 +308,7 @@ describe('neurotrack_body_entry v1', () => {
             temporalSupportFrames: 3,
             definitionId: BODY_ENTRY_DEFINITION_ID,
             definitionVersion: BODY_ENTRY_DEFINITION_VERSION,
+            completionPath: 'centroid_pixel',
             areaDecayScore: 0.5,
             failureReason: null,
             frameMetrics: [],

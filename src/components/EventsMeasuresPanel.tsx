@@ -56,7 +56,7 @@ export function EventsMeasuresPanel({ trial, onSeekToFrame, currentFrameIndex = 
       <h3>Events &amp; measures</h3>
       <p className={styles.hint}>
         Operational definitions are versioned recommendations — adjust thresholds to match your protocol.
-        Body-entry completion (NeuroTrack default v1): head and torso in hole; tail may remain visible — not a universal laboratory standard.
+        Body-entry completion (NeuroTrack default v2): head and torso in hole; tail may remain visible — not a universal laboratory standard.
       </p>
       {!targetConfirmed && (
         <p className={styles.diagnosticNote} data-testid="target-unknown-note">

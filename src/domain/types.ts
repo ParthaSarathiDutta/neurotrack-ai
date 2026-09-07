@@ -214,11 +214,13 @@ export interface EventDetectionParams {
   escapeCensorThreshold: number;
   escapeCompletionAreaRatio: number;
   pixelEvidenceBudgetFrames: number;
-  /** neurotrack_body_entry v1 — torso in hole; tail may remain visible. */
+  /** neurotrack_body_entry — torso in hole; tail may remain visible. */
   bodyEntryTorsoProximityFraction: number;
   bodyEntryHoleDarkeningMin: number;
   bodyEntryPlatformAreaMaxFraction: number;
   bodyEntryTemporalMinFrames: number;
+  bodyEntryDarkeningProgressEps: number;
+  bodyEntryAreaProgressPx: number;
   strategyDiThreshold: number;
   strategyMaxDistinctHolesBeforeTarget: number;
   strategyMinSerialHoles: number;

@@ -292,3 +292,26 @@ lint/test/build PASS (138 tests); validate:ms4 + validate:ms5 PASS. **Not merged
 - Pixel evidence budget (120 frames) may miss very late entry if not in sampled window.
 - Target hole remains unknown unless scientist confirms; primary latency unavailable.
 
+## MS-5 body-entry v2 — occlusion-aware torso path (2026-09-06)
+
+### Problem
+test51 manual review: progressive descent into Hole 18 (display 725/741) with tail visible. v1 rejected completion because tracked body centroid stayed ~1 px outside the 6% strict gate despite strong pixel entry (darkening + platform area reduction).
+
+### Fix
+- `neurotrack_body_entry` **v2** documented in `reference/neurotrack-body-entry-v2.md`.
+- **Path A (centroid-confirmed):** strict 6% torso proximity + pixel torso entry (unchanged).
+- **Path B (occlusion-aware):** Phase-A approach zone (12% radius) + pixel torso entry + adjacent-frame temporal progression (darkening non-decreasing or area non-increasing). Centroid strict gate is supporting, not an absolute veto.
+- Aggregate area decay remains supporting only; recording end never used as fallback.
+
+### Validation outcome (target unknown, no cutoff)
+| Clip | Escape | Completion frame | Path | Total latency |
+|---|---|---|---|---|
+| test53 | escape_completed | 822 | established | 22.47 s |
+| test51 | escape_completed | 673 | established (occlusion) | 39.77 s |
+| test50 | escape_incomplete_censored | — | not established | Censored ≥ 180.03 s |
+
+test50 not forced to complete (hole darkening high but no sustained pixel torso entry + progression). test51 completes at first temporally supported occlusion-path frame (673), not recording end.
+
+### Validated
+lint/test/build PASS (142 tests); validate:ms4 + validate:ms5 PASS. **Not merged / MS-5 not marked complete** — stopped for final review.
+
