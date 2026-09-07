@@ -4,11 +4,14 @@ import { getCachedVideo } from '../db/videoCache';
 let worker: Worker | null = null;
 let currentFingerprint: string | null = null;
 let cachedDimensions: { width: number; height: number } | null = null;
-/** Serializes worker init so concurrent callers cannot cross-contaminate videos. */
-let initChain: Promise<void> = Promise.resolve();
+/** Bumped on clearFrameCache — stale in-flight inits must not commit state. */
+let initGeneration = 0;
+/** Serializes all worker I/O (init + decode) so messages cannot interleave. */
+let workerOpChain: Promise<void> = Promise.resolve();
 
 const frameCache = new Map<number, Uint8ClampedArray>();
-const MAX_CACHED_FRAMES = 300;
+const MAX_CACHED_FRAMES = 512;
+const FRAME_FETCH_MAX_RETRIES = 2;
 
 function getFrameWorker(): Worker {
   if (!worker) {
@@ -26,6 +29,15 @@ function evictCacheIfNeeded() {
     const k = keys.shift();
     if (k !== undefined) frameCache.delete(k);
   }
+}
+
+function enqueueWorkerOp<T>(fn: () => Promise<T>): Promise<T> {
+  const result = workerOpChain.then(fn);
+  workerOpChain = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }
 
 function postToWorker(message: FrameWorkerRequest): Promise<FrameWorkerResponse> {
@@ -51,22 +63,28 @@ function postToWorker(message: FrameWorkerRequest): Promise<FrameWorkerResponse>
   });
 }
 
-export async function initFrameDecoder(fingerprint: string): Promise<{ width: number; height: number }> {
-  if (currentFingerprint === fingerprint && cachedDimensions) {
-    return cachedDimensions;
+function assertFingerprint(expectedFingerprint?: string): void {
+  if (expectedFingerprint && currentFingerprint !== expectedFingerprint) {
+    throw new Error(
+      `Frame decoder fingerprint mismatch (expected ${expectedFingerprint}, active ${currentFingerprint ?? 'none'})`,
+    );
   }
+}
 
-  const runInit = async () => {
+export async function initFrameDecoder(fingerprint: string): Promise<{ width: number; height: number }> {
+  const gen = initGeneration;
+  return enqueueWorkerOp(async () => {
+    if (gen !== initGeneration) {
+      throw new Error('Frame decoder init superseded');
+    }
     if (currentFingerprint === fingerprint && cachedDimensions) {
-      return cachedDimensions!;
+      return cachedDimensions;
     }
 
     const cached = await getCachedVideo(fingerprint);
     if (!cached) throw new Error('Video not in cache');
 
     frameCache.clear();
-    currentFingerprint = fingerprint;
-
     const buffer = await cached.blob.arrayBuffer();
     const resp = await postToWorker({
       type: 'init',
@@ -75,22 +93,41 @@ export async function initFrameDecoder(fingerprint: string): Promise<{ width: nu
       fileName: cached.fileName,
     });
 
+    if (gen !== initGeneration) {
+      throw new Error('Frame decoder init superseded');
+    }
     if (resp.type !== 'ready' || !resp.width || !resp.height) {
-      currentFingerprint = null;
-      cachedDimensions = null;
       throw new Error('Frame decoder init failed');
     }
 
+    currentFingerprint = fingerprint;
     cachedDimensions = { width: resp.width, height: resp.height };
     return cachedDimensions;
-  };
+  });
+}
 
-  const resultPromise = initChain.then(runInit);
-  initChain = resultPromise.then(
-    () => undefined,
-    () => undefined,
-  );
-  return resultPromise;
+/** Ensure decoder is ready; bounded retries for cold-start races after trial switch. */
+export async function ensureFrameDecoder(
+  fingerprint: string,
+  maxAttempts = 3,
+): Promise<{ width: number; height: number }> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await initFrameDecoder(fingerprint);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (lastError.message.includes('superseded') && attempt + 1 < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 50 * (attempt + 1)));
+        continue;
+      }
+      if (attempt + 1 < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 50 * (attempt + 1)));
+        continue;
+      }
+    }
+  }
+  throw lastError ?? new Error('Frame decoder init failed');
 }
 
 export function getActiveDecoderFingerprint(): string | null {
@@ -101,67 +138,94 @@ export async function getFramePixels(
   frameIndex: number,
   expectedFingerprint?: string,
 ): Promise<{ data: Uint8ClampedArray; width: number; height: number }> {
-  if (expectedFingerprint && currentFingerprint !== expectedFingerprint) {
-    throw new Error(
-      `Frame decoder fingerprint mismatch (expected ${expectedFingerprint}, active ${currentFingerprint ?? 'none'})`,
-    );
-  }
+  return enqueueWorkerOp(async () => {
+    assertFingerprint(expectedFingerprint);
 
-  const cached = frameCache.get(frameIndex);
-  const dims = cachedDimensions ?? { width: 640, height: 480 };
-  if (cached) {
-    return { data: cached, width: dims.width, height: dims.height };
-  }
+    const cached = frameCache.get(frameIndex);
+    const dims = cachedDimensions ?? { width: 640, height: 480 };
+    if (cached) {
+      return { data: cached, width: dims.width, height: dims.height };
+    }
 
-  const resp = await postToWorker({
-    type: 'getFrame',
-    id: '',
-    frameIndex,
+    const resp = await postToWorker({
+      type: 'getFrame',
+      id: '',
+      frameIndex,
+    });
+
+    if (resp.type !== 'frame' || !resp.frame) {
+      throw new Error(`Failed to get frame ${frameIndex}`);
+    }
+
+    const data = new Uint8ClampedArray(resp.frame.data);
+    frameCache.set(frameIndex, data);
+    evictCacheIfNeeded();
+
+    return { data, width: resp.frame.width, height: resp.frame.height };
   });
+}
 
-  if (resp.type !== 'frame' || !resp.frame) {
-    throw new Error('Failed to get frame');
+async function fetchFramesBatchOnce(
+  frameIndices: number[],
+): Promise<Map<number, Uint8ClampedArray>> {
+  const missing = frameIndices.filter((i) => !frameCache.has(i));
+  if (missing.length > 0) {
+    const resp = await postToWorker({
+      type: 'getFrames',
+      id: '',
+      frameIndices: missing,
+    });
+    if (resp.type !== 'frames' || !resp.frames) {
+      throw new Error(`Batch frame fetch failed for ${missing.length} frame(s)`);
+    }
+    for (const frame of resp.frames) {
+      frameCache.set(frame.frameIndex, new Uint8ClampedArray(frame.data));
+    }
+    evictCacheIfNeeded();
   }
 
-  const data = new Uint8ClampedArray(resp.frame.data);
-  frameCache.set(frameIndex, data);
-  evictCacheIfNeeded();
-
-  return { data, width: resp.frame.width, height: resp.frame.height };
+  const out = new Map<number, Uint8ClampedArray>();
+  for (const idx of frameIndices) {
+    const data = frameCache.get(idx);
+    if (!data) throw new Error(`Frame ${idx} not available after fetch`);
+    out.set(idx, data);
+  }
+  return out;
 }
 
 export async function getMultipleFramePixels(
   frameIndices: number[],
   expectedFingerprint?: string,
 ): Promise<Array<{ frameIndex: number; data: Uint8ClampedArray; width: number; height: number }>> {
-  if (expectedFingerprint && currentFingerprint !== expectedFingerprint) {
-    throw new Error(
-      `Frame decoder fingerprint mismatch (expected ${expectedFingerprint}, active ${currentFingerprint ?? 'none'})`,
-    );
-  }
+  if (frameIndices.length === 0) return [];
 
-  const missing = frameIndices.filter((i) => !frameCache.has(i));
-  for (const idx of missing) {
-    const resp = await postToWorker({
-      type: 'getFrame',
-      id: '',
-      frameIndex: idx,
-    });
-    if (resp.type === 'frame' && resp.frame) {
-      frameCache.set(resp.frame.frameIndex, new Uint8ClampedArray(resp.frame.data));
-      evictCacheIfNeeded();
+  return enqueueWorkerOp(async () => {
+    assertFingerprint(expectedFingerprint);
+
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= FRAME_FETCH_MAX_RETRIES; attempt += 1) {
+      try {
+        const map = await fetchFramesBatchOnce(frameIndices);
+        const dims = cachedDimensions ?? { width: 640, height: 480 };
+        return frameIndices.map((idx) => ({
+          frameIndex: idx,
+          data: map.get(idx)!,
+          width: dims.width,
+          height: dims.height,
+        }));
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (attempt < FRAME_FETCH_MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 40 * (attempt + 1)));
+        }
+      }
     }
-  }
-
-  const dims = cachedDimensions ?? { width: 640, height: 480 };
-  return frameIndices.map((idx) => {
-    const data = frameCache.get(idx);
-    if (!data) throw new Error(`Frame ${idx} not available`);
-    return { frameIndex: idx, data, width: dims.width, height: dims.height };
+    throw lastError ?? new Error('Frame batch fetch failed');
   });
 }
 
 export function clearFrameCache() {
+  initGeneration += 1;
   frameCache.clear();
   currentFingerprint = null;
   cachedDimensions = null;
@@ -178,4 +242,13 @@ export async function getFrameBitmap(
   const copy = new Uint8ClampedArray(data);
   const imageData = new ImageData(copy, width, height);
   return createImageBitmap(imageData);
+}
+
+/** Test-only: reset worker queue state between isolated runs. */
+export function resetFrameServiceForTest(): void {
+  initGeneration += 1;
+  frameCache.clear();
+  currentFingerprint = null;
+  cachedDimensions = null;
+  workerOpChain = Promise.resolve();
 }

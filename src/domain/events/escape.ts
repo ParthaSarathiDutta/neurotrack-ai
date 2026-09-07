@@ -17,9 +17,14 @@ export interface PixelEvidenceResult {
   framesAnalyzed: number;
   framesRequested: number;
   complete: boolean;
-  unavailableReason?: 'budget_exceeded' | 'frame_worker_error' | 'missing_video_cache';
+  unavailableReason?: 'budget_exceeded' | 'frame_worker_error' | 'missing_video_cache' | 'init_superseded';
   areaDecayScore: number | null;
   holeDarkeningScore: number | null;
+  /** Presentation-order frame indices successfully analyzed. */
+  analyzedFrameIndices?: number[];
+  /** Presentation-order frame indices requested but not decoded. */
+  failedFrameIndices?: number[];
+  errorMessage?: string | null;
 }
 
 export interface EscapeDetectionContext {
@@ -215,6 +220,9 @@ export function detectEscapeOutcome(
       pixelEvidenceComplete: ctx.pixelEvidence.complete,
       areaDecayScore: ctx.pixelEvidence.areaDecayScore,
       holeDarkeningScore: ctx.pixelEvidence.holeDarkeningScore,
+      pixelAnalyzedFrameIndices: ctx.pixelEvidence.analyzedFrameIndices?.join(',') ?? null,
+      pixelFailedFrameIndices: ctx.pixelEvidence.failedFrameIndices?.join(',') ?? null,
+      pixelErrorMessage: ctx.pixelEvidence.errorMessage ?? null,
     };
     if (ctx.pixelEvidence.areaDecayScore != null) {
       score += ctx.pixelEvidence.areaDecayScore * 0.2;

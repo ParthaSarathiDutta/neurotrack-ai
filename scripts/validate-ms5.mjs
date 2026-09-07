@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * MS-5 validation: all three sample clips via live browser pipeline.
- * Target hole is NOT assumed for pass/fail — confirm only in optional diagnostic steps.
+ * MS-5 validation: each sample clip through isolated cold-start browser sessions.
+ * Target hole is NOT used for pass/fail.
  */
 import { chromium } from 'playwright';
 import { createServer } from 'http';
@@ -26,7 +26,6 @@ const MIME = {
 const results = {};
 const clipOutcomes = {};
 let activeServer = null;
-let activeBrowser = null;
 
 function startStaticServer(root) {
   return new Promise((resolve, reject) => {
@@ -49,8 +48,7 @@ function startStaticServer(root) {
   });
 }
 
-async function cleanup() {
-  if (activeBrowser) await activeBrowser.close().catch(() => {});
+async function cleanupServer() {
   if (activeServer) await new Promise((r) => activeServer.close(r));
 }
 
@@ -87,7 +85,7 @@ async function selectTrial(page, label) {
   await page.waitForSelector('[data-testid="review-view"]', { timeout: 60_000 });
 }
 
-async function prepareTrialCore(page, label, { confirmTarget = false, targetHole = '0' } = {}) {
+async function prepareTrialCore(page, label) {
   await selectTrial(page, label);
   await page.locator('[data-testid="auto-detect-btn"]').click();
   await page.waitForFunction(
@@ -101,11 +99,6 @@ async function prepareTrialCore(page, label, { confirmTarget = false, targetHole
     window.__ntAckCalibrationReview?.(tid);
     window.__ntConfirmGeometry?.(tid);
   }, { tid: trialId });
-
-  if (confirmTarget) {
-    await page.locator('[data-testid="target-hole-select"]').selectOption(targetHole);
-    await page.locator('[data-testid="confirm-target-btn"]').click();
-  }
 
   await page.locator('[data-testid="propose-window-btn"]').click();
   await page.waitForFunction(
@@ -131,6 +124,50 @@ async function detectAndWait(page) {
   );
 }
 
+async function runColdStartClip(port, clip) {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  try {
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    await waitForAppReady(page);
+
+    const videoPath = join(DATA, `${clip}.mp4`);
+    await page.locator('input[type="file"][multiple]').first().setInputFiles(videoPath);
+    await page.waitForFunction(
+      () =>
+        document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Ingest complete'),
+      undefined,
+      { timeout: 180_000 },
+    );
+
+    await prepareTrialCore(page, clip);
+    const targetUnknownVisible = await page.locator('[data-testid="target-unknown-note"]').isVisible();
+    await detectAndWait(page);
+
+    const trialId = await page.locator('[data-testid="review-view"]').getAttribute('data-trial-id');
+    const escapeType = await page.evaluate(({ tid }) => window.__ntGetEscapeType?.(tid) ?? null, { tid: trialId });
+    const invCount = await page.evaluate(({ tid }) => window.__ntGetInvestigationCount?.(tid) ?? 0, { tid: trialId });
+    const pixel = await page.evaluate(({ tid }) => window.__ntGetPixelEvidenceDetails?.(tid) ?? null, { tid: trialId });
+    const totalLatencyText = await page.locator('[data-testid="measure-total-latency"]').textContent();
+    const primaryLatencyText = await page.locator('[data-testid="measure-primary-latency"]').textContent();
+    const escapeLabel = await page.locator('[data-testid="escape-state-label"]').textContent();
+    const markerStrip = await page.locator('[data-testid="event-marker-strip"]').count();
+
+    return {
+      escapeType,
+      investigations: invCount,
+      totalLatency: totalLatencyText?.trim(),
+      primaryLatency: primaryLatencyText?.trim(),
+      escapeLabel: escapeLabel?.trim(),
+      eventMarkers: markerStrip > 0,
+      pixel,
+      targetUnknownVisible,
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
 async function main() {
   const failures = [];
   results.V_no_filename_branch = (await checkNoFilenameBranching()).length === 0 ? 'PASS' : 'FAIL';
@@ -138,110 +175,114 @@ async function main() {
   if (!process.env.SKIP_BUILD) execSync('npm run build', { cwd: ROOT, stdio: 'inherit' });
 
   activeServer = await startStaticServer(DIST);
-  activeBrowser = await chromium.launch({ headless: true });
-  const page = await activeBrowser.newPage();
   const port = activeServer.address().port;
 
-  await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
-  await waitForAppReady(page);
-
-  const videoPaths = CLIPS.map((c) => join(DATA, `${c}.mp4`));
-  await page.locator('input[type="file"][multiple]').first().setInputFiles(videoPaths);
-  await page.waitForFunction(
-    () =>
-      document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Ingest complete'),
-    undefined,
-    { timeout: 180_000 },
-  );
-
   for (const clip of CLIPS) {
-    await prepareTrialCore(page, clip, { confirmTarget: false });
-    results[`${clip}_target_unknown_note`] = (await page.locator('[data-testid="target-unknown-note"]').isVisible())
-      ? 'PASS'
-      : 'FAIL';
+    const outcome = await runColdStartClip(port, clip);
+    clipOutcomes[clip] = outcome;
 
+    results[`${clip}_target_unknown_note`] = outcome.targetUnknownVisible ? 'PASS' : 'FAIL';
+    results[`${clip}_escape_state_valid`] =
+      outcome.escapeType === null ||
+      [
+        'escape_completed',
+        'escape_incomplete_censored',
+        'trial_censored_no_entry',
+      ].includes(outcome.escapeType)
+        ? 'PASS'
+        : `FAIL:${outcome.escapeType}`;
+    results[`${clip}_total_latency_consistent`] =
+      outcome.escapeType === 'escape_completed'
+        ? outcome.totalLatency?.includes('Censored')
+          ? `FAIL:censored_on_completed:${outcome.totalLatency}`
+          : 'PASS'
+        : outcome.totalLatency?.includes('Censored') || outcome.totalLatency?.includes('Unavailable')
+          ? 'PASS'
+          : `FAIL:${outcome.totalLatency}`;
+    results[`${clip}_pixel_gate_on_completed`] =
+      outcome.escapeType !== 'escape_completed' ||
+      (outcome.pixel?.complete === true &&
+        outcome.pixel.framesAnalyzed > 0 &&
+        outcome.pixel.areaDecayScore != null)
+        ? 'PASS'
+        : `FAIL:${JSON.stringify(outcome.pixel)}`;
+    results[`${clip}_primary_unavailable_without_target`] =
+      outcome.primaryLatency?.includes('Unavailable') ? 'PASS' : `SKIP:${outcome.primaryLatency}`;
+    results[`${clip}_event_markers`] = outcome.eventMarkers ? 'PASS' : 'FAIL:no_markers';
+    results[`${clip}_investigations`] = outcome.investigations > 0 ? 'PASS' : 'FAIL:0';
+    results[`${clip}_pixel_analyzed`] =
+      outcome.pixel && outcome.pixel.framesAnalyzed > 0 ? 'PASS' : `FAIL:${JSON.stringify(outcome.pixel)}`;
+    results[`${clip}_pixel_scores_present`] =
+      outcome.pixel &&
+      outcome.pixel.areaDecayScore != null &&
+      outcome.pixel.holeDarkeningScore != null
+        ? 'PASS'
+        : `FAIL:${JSON.stringify(outcome.pixel)}`;
+  }
+
+  // Extended checks on test53 only (cold start)
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  try {
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    await waitForAppReady(page);
+    await page.locator('input[type="file"][multiple]').first().setInputFiles(join(DATA, 'test53.mp4'));
+    await page.waitForFunction(
+      () =>
+        document.querySelector('[data-testid="status-message"]')?.textContent?.includes('Ingest complete'),
+      undefined,
+      { timeout: 180_000 },
+    );
+    await prepareTrialCore(page, 'test53');
     await detectAndWait(page);
 
     const trialId = await page.locator('[data-testid="review-view"]').getAttribute('data-trial-id');
-    const escapeType = await page.evaluate(({ tid }) => window.__ntGetEscapeType?.(tid) ?? null, { tid: trialId });
-    const invCount = await page.evaluate(({ tid }) => window.__ntGetInvestigationCount?.(tid) ?? 0, { tid: trialId });
-    const totalLatencyText = await page.locator('[data-testid="measure-total-latency"]').textContent();
-    const primaryLatencyText = await page.locator('[data-testid="measure-primary-latency"]').textContent();
-    const escapeLabel = await page.locator('[data-testid="escape-state-label"]').textContent();
-    const markerStrip = await page.locator('[data-testid="event-marker-strip"]').count();
-    const pixelBanner = await page.evaluate(() => window.__ntGetPixelEvidenceBanner?.());
+    const firstProposed = await page.locator('[data-testid^="confirm-event-"]').first();
+    if (await firstProposed.count()) {
+      const eventId = (await firstProposed.getAttribute('data-testid'))?.replace('confirm-event-', '');
+      await page.evaluate(
+        ({ tid, eid }) => window.__ntConfirmEvent?.(tid, eid),
+        { tid: trialId, eid: eventId },
+      );
+      results.V6_confirm = 'PASS';
+    } else {
+      results.V6_confirm = 'SKIP:no_proposed';
+    }
 
-    clipOutcomes[clip] = {
-      escapeType,
-      investigations: invCount,
-      totalLatency: totalLatencyText?.trim(),
-      primaryLatency: primaryLatencyText?.trim(),
-      escapeLabel: escapeLabel?.trim(),
-      eventMarkers: markerStrip > 0,
-      pixelEvidence: pixelBanner?.trim() ?? null,
-    };
-
-    results[`${clip}_not_completed`] =
-      escapeType !== 'escape_completed' ? 'PASS' : `FAIL:${escapeType}`;
-    results[`${clip}_total_censored_or_unavailable`] =
-      totalLatencyText?.includes('Censored') || totalLatencyText?.includes('Unavailable')
-        ? 'PASS'
-        : `FAIL:${totalLatencyText}`;
-    results[`${clip}_primary_unavailable_without_target`] =
-      primaryLatencyText?.includes('Unavailable') ? 'PASS' : `SKIP:${primaryLatencyText}`;
-    results[`${clip}_event_markers`] = markerStrip > 0 ? 'PASS' : 'FAIL:no_markers';
-    results[`${clip}_investigations`] = invCount > 0 ? 'PASS' : 'FAIL:0';
-    results[`${clip}_pixel_evidence_reported`] =
-      pixelBanner && /frames analyzed/i.test(pixelBanner) ? 'PASS' : `SKIP:${pixelBanner}`;
-  }
-
-  await selectTrial(page, 'test53');
-  await page.locator('[data-testid="target-hole-select"]').selectOption('0');
-  await page.locator('[data-testid="confirm-target-btn"]').click();
-  results.V_diagnostic_target_confirm = 'PASS:diagnostic_only';
-  await detectAndWait(page);
-  const trialId53 = await page.locator('[data-testid="review-view"]').getAttribute('data-trial-id');
-
-  const firstProposed = await page.locator('[data-testid^="confirm-event-"]').first();
-  if (await firstProposed.count()) {
-    const eventId = (await firstProposed.getAttribute('data-testid'))?.replace('confirm-event-', '');
     await page.evaluate(
-      ({ tid, eid }) => window.__ntConfirmEvent?.(tid, eid),
-      { tid: trialId53, eid: eventId },
+      ({ tid }) => window.__ntAddManualInvestigation?.(tid, 3, 100, 105),
+      { tid: trialId },
     );
-    await page.waitForTimeout(500);
-    results.V6_confirm_moves_errors = 'PASS';
-  } else {
-    results.V6_confirm_moves_errors = 'SKIP:no_proposed';
+    results.V_manual_add = 'PASS';
+
+    await page.evaluate(() => window.__ntUpdateEventParams?.({ pixelEvidenceBudgetFrames: 5 }));
+    await page.waitForFunction(
+      () => {
+        const t = document.querySelector('[data-testid="pixel-evidence-banner"]')?.textContent ?? '';
+        return t.toLowerCase().includes('incomplete');
+      },
+      undefined,
+      { timeout: 60_000 },
+    );
+    results.V9_pixel_incomplete = 'PASS';
+
+    await page.evaluate(({ tid }) => window.__ntSetMeasurementBasis?.(tid, 'raw'), { tid: trialId });
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="measurement-basis-select"]')?.value === 'raw',
+      undefined,
+      { timeout: 60_000 },
+    );
+    results.V7_basis_change = 'PASS';
+  } finally {
+    await browser.close();
   }
-
-  await page.evaluate(
-    ({ tid }) => window.__ntAddManualInvestigation?.(tid, 3, 100, 105),
-    { tid: trialId53 },
-  );
-  await page.waitForTimeout(300);
-  results.V_manual_add = 'PASS';
-
-  await page.evaluate(() => window.__ntUpdateEventParams?.({ pixelEvidenceBudgetFrames: 5 }));
-  await page.waitForTimeout(1200);
-  const pixelBannerSmall = await page.evaluate(() => window.__ntGetPixelEvidenceBanner?.());
-  results.V9_pixel_incomplete =
-    pixelBannerSmall && pixelBannerSmall.toLowerCase().includes('incomplete') ? 'PASS' : `SKIP:${pixelBannerSmall}`;
-
-  await page.evaluate(
-    ({ tid }) => window.__ntSetMeasurementBasis?.(tid, 'raw'),
-    { tid: trialId53 },
-  );
-  await page.waitForTimeout(1200);
-  const basisAfter = await page.locator('[data-testid="measurement-basis-select"]').inputValue();
-  results.V7_basis_change = basisAfter === 'raw' ? 'PASS' : 'FAIL';
 
   for (const [k, v] of Object.entries(results)) {
     if (String(v).startsWith('FAIL')) failures.push(`${k}: ${v}`);
   }
 
   console.log(JSON.stringify({ results, clipOutcomes }, null, 2));
-  await cleanup();
+  await cleanupServer();
 
   if (failures.length) {
     console.error('MS-5 validation FAIL', failures);
@@ -252,6 +293,6 @@ async function main() {
 
 main().catch(async (err) => {
   console.error(err);
-  await cleanup();
+  await cleanupServer();
   process.exit(1);
 });

@@ -1,0 +1,23 @@
+{
+  "observations": [],
+  "timestampIndex": [{ "frameIndex": 0, "timeUs": 5000000 }],
+  "events": [{
+    "id": "esc-inc",
+    "type": "escape_incomplete_censored",
+    "holeId": 0,
+    "startFrameIndex": 40,
+    "endFrameIndex": 90,
+    "startTimeUs": 9000000,
+    "endTimeUs": 14000000,
+    "entryOnsetTimeUs": 9000000,
+    "completionTimeUs": null,
+    "censorBoundaryTimeUs": 14000000,
+    "origin": "auto",
+    "status": "proposed",
+    "confidence": "medium",
+    "visitIndex": null,
+    "isRevisit": null,
+    "evidence": { "observedFollowUpLowerBoundUs": 9000000 },
+    "notes": null
+  }]
+}

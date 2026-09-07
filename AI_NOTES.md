@@ -225,6 +225,35 @@ Pre-merge validation: lint/test/build PASS (95 tests); validate:calibration, val
 
 **Documented limitations:** no full trajectory path overlay; sub-0.5 px smoothing shifts intentionally unchanged; offline ffmpeg vs live WebCodecs frame index offset for demo frames; no MS-5 events/measures/export; re-run tracking clears corrections and cleaning (with confirmation UI).
 
-## MS-5 implementation checkpoint (2026-09-06)
+## MS-5 final stabilization — pixel evidence (2026-09-06)
 
-Implemented on `ms-5-event-detection-behavioral-measures` (not merged). Phase B pixel evidence via frame-worker (trailing-first budget), manual event add/edit/escape, timeline markers, expanded validate:ms5 on all three clips without target-assumption pass/fail. test50 ~59–60 investigations reflects distinct visits across all 20 holes during 180 s random search (median dwell ~1.3 s) — not threshold-tuned. Browser pixel pass may report 0 analyzed on first clip until decoder init (documented).
+### Root cause (evidence-based, not decoder warm-up)
+Cold-start `validate:ms5` (isolated browser per clip) showed **WebCodecs decode failures on specific presentation-order frames**, not init ordering:
+
+| Clip | Before fix | Error |
+|---|---|---|
+| test53 | 0/120 analyzed | batch chunk aborted on frame 825 |
+| test51 | 40/120 partial | frame 720 decode fail |
+| test50 | 121/121 | OK |
+
+Two distinct decode bugs in `frame-worker.ts`:
+
+1. **GOP truncation:** decode loop stopped at `targetIdx`; B-frames may emit only after later decode-order samples in the same GOP → `"target timestamp … not among decoder outputs"`.
+2. **Duplicate adjacent CTS:** e.g. test53 frames 824–825 share `timeUs=27600000`; WebCodecs emits one output for both; rank-1 matching never captured → same error.
+
+**Fixes:** extend decode through end of GOP; collect all timestamp matches and pick `min(sameTimestampRank, count-1)`; pixel service uses per-frame trailing-first backfill (skip failed, continue) instead of all-or-nothing batch chunks.
+
+**Rejected:** arbitrary sleeps, weakening `framesAnalyzed > 0` gate, filename-specific frame skips.
+
+### Validation outcome (target unknown, actual pipeline — not forced)
+| Clip | Investigations | Escape | Total latency | Pixel (req/analyzed) | areaDecay | holeDarkening | complete |
+|---|---|---|---|---|---|---|---|
+| test53 | 4 | escape_completed | 25.20 s | 120/120 | 0.568 | 0.295 | yes |
+| test51 | 9 | escape_completed | 44.24 s | 120/120 | 0.368 | 0.351 | yes |
+| test50 | 59 | escape_incomplete_censored | Censored ≥ 180.00 s | 121/121 | 0.026 | 0.529 | yes |
+
+test53/test51 reach `escape_completed` only when Phase B pixel pass is **complete** (scientific gate); test50 shows strong hole darkening but low area decay → remains censored. `validate:ms5` reports outcomes without requiring censored states on all clips.
+
+### Validated
+lint/test/build PASS (120 tests); validate:calibration, validate:ms1–ms4, validate:tracking, validate:ms5 PASS. **Not merged / MS-5 not marked complete** — stopped for manual review.
+

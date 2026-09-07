@@ -44,7 +44,7 @@ import { runAutoCalibration } from '../services/calibrationService';
 import { applyTemplateGeometry } from '../services/templateService';
 import { proposeTrialWindow } from '../services/trialWindowService';
 import { cancelTracking as cancelTrackingJob, runTracking } from '../services/trackingService';
-import { clearFrameCache, initFrameDecoder } from '../services/frameService';
+import { clearFrameCache, ensureFrameDecoder } from '../services/frameService';
 import { evictAllFromCache } from '../db/videoCache';
 
 export type CorrectionMode = 'off' | 'body' | 'nose' | 'remove-nose';
@@ -224,7 +224,7 @@ async function redetectTrialEventsById(
   try {
     if (trial.videoCached) {
       try {
-        await initFrameDecoder(trial.fingerprint);
+        await ensureFrameDecoder(trial.fingerprint);
       } catch {
         /* Pixel pass reports incomplete when decoder unavailable. */
       }
@@ -1039,7 +1039,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     try {
       if (trial.videoCached) {
         try {
-          await initFrameDecoder(trial.fingerprint);
+          await ensureFrameDecoder(trial.fingerprint);
         } catch {
           /* Pixel pass reports incomplete when decoder unavailable. */
         }
@@ -1222,6 +1222,14 @@ if (typeof window !== 'undefined') {
     __ntConfirmEvent?: (trialId: string, eventId: string) => void;
     __ntAddManualInvestigation?: (trialId: string, holeId: number, startFrame: number, endFrame: number) => void;
     __ntGetEscapeType?: (trialId: string) => string | null;
+    __ntGetPixelEvidenceDetails?: (trialId: string) => {
+      framesAnalyzed: number;
+      framesRequested: number;
+      complete: boolean;
+      areaDecayScore: number | null;
+      holeDarkeningScore: number | null;
+      errorMessage: string | null;
+    } | null;
     __ntGetPixelEvidenceBanner?: () => string | null;
     __ntGetInvestigationCount?: (trialId: string) => number;
     __ntGetProvisionalErrors?: (trialId: string) => number | null;
@@ -1304,6 +1312,21 @@ if (typeof window !== 'undefined') {
   };
   hooks.__ntGetPixelEvidenceBanner = () =>
     document.querySelector('[data-testid="pixel-evidence-banner"]')?.textContent ?? null;
+  hooks.__ntGetPixelEvidenceDetails = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    const esc = trial?.events?.events.find((e) => e.type !== 'investigation');
+    if (!esc) return null;
+    return {
+      framesAnalyzed: Number(esc.evidence.pixelFramesAnalyzed ?? 0),
+      framesRequested: Number(esc.evidence.pixelFramesRequested ?? 0),
+      complete: esc.evidence.pixelEvidenceComplete === true,
+      areaDecayScore:
+        esc.evidence.areaDecayScore != null ? Number(esc.evidence.areaDecayScore) : null,
+      holeDarkeningScore:
+        esc.evidence.holeDarkeningScore != null ? Number(esc.evidence.holeDarkeningScore) : null,
+      errorMessage: esc.evidence.pixelErrorMessage != null ? String(esc.evidence.pixelErrorMessage) : null,
+    };
+  };
   hooks.__ntGetInvestigationCount = (trialId) => {
     const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
     return trial?.events?.events.filter((e) => e.type === 'investigation').length ?? 0;

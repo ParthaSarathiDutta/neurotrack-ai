@@ -131,23 +131,15 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
   const support = await VideoDecoder.isConfigSupported(config);
   if (!support.supported) throw new Error('VideoDecoder config not supported');
 
-  let capturedFrame: VideoFrame | null = null;
+  const matchingFrames: VideoFrame[] = [];
   let decodeError: string | null = null;
-  let timestampMatchCount = 0;
 
   const decoder = new VideoDecoder({
     output: (frame) => {
-      // The decode-order range [startIdx..targetIdx] always includes every reference
-      // frame the target depends on, but for B-frame content it can also include
-      // forward-referenced frames presented AFTER the target — the decoder emits all
-      // of these in presentation order, so we must match by timestamp, not by count.
+      // Match by container CTS in µs. Collect all outputs at the target timestamp;
+      // duplicate adjacent CTS may share one decoder output (see sameTimestampRank).
       if (frame.timestamp === targetTimestampUs) {
-        if (timestampMatchCount === sameTimestampRank) {
-          capturedFrame = frame;
-        } else {
-          timestampMatchCount += 1;
-          frame.close();
-        }
+        matchingFrames.push(frame);
       } else {
         frame.close();
       }
@@ -159,7 +151,14 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
 
   decoder.configure(config);
 
-  for (let i = startIdx; i <= targetIdx; i += 1) {
+  // WebCodecs may hold B-frames until later decode-order samples in the same GOP
+  // are fed; stopping at targetIdx can omit the target timestamp from outputs.
+  let endIdx = targetIdx;
+  while (endIdx + 1 < samples.length && !samples[endIdx + 1].isSync) {
+    endIdx += 1;
+  }
+
+  for (let i = startIdx; i <= endIdx; i += 1) {
     const s = samples[i];
     const chunk = new EncodedVideoChunk({
       type: s.isSync ? 'key' : 'delta',
@@ -174,10 +173,16 @@ async function decodeFrameAtIndex(frameIndex: number): Promise<{
   decoder.close();
 
   if (decodeError) throw new Error(`Frame ${frameIndex}: ${decodeError}`);
-  if (!capturedFrame) {
+  if (matchingFrames.length === 0) {
     throw new Error(
       `Failed to decode frame ${frameIndex} (target timestamp ${targetTimestampUs}us not among decoder outputs)`,
     );
+  }
+
+  const pickIndex = Math.min(sameTimestampRank, matchingFrames.length - 1);
+  const capturedFrame = matchingFrames[pickIndex]!;
+  for (let i = 0; i < matchingFrames.length; i += 1) {
+    if (i !== pickIndex) matchingFrames[i]!.close();
   }
 
   const canvas = new OffscreenCanvas(frameWidth, frameHeight);

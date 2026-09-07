@@ -1,0 +1,39 @@
+{
+  "events": [{
+    "id": "p1",
+    "type": "investigation",
+    "holeId": 2,
+    "startFrameIndex": 5,
+    "endFrameIndex": 8,
+    "startTimeUs": 5500000,
+    "endTimeUs": 5900000,
+    "entryOnsetTimeUs": null,
+    "completionTimeUs": null,
+    "censorBoundaryTimeUs": null,
+    "origin": "auto",
+    "status": "proposed",
+    "confidence": "low",
+    "visitIndex": 1,
+    "isRevisit": false,
+    "evidence": {},
+    "notes": null
+  }, {
+    "id": "p2",
+    "type": "investigation",
+    "holeId": 3,
+    "startFrameIndex": 10,
+    "endFrameIndex": 12,
+    "startTimeUs": 6000000,
+    "endTimeUs": 6400000,
+    "entryOnsetTimeUs": null,
+    "completionTimeUs": null,
+    "censorBoundaryTimeUs": null,
+    "origin": "auto",
+    "status": "proposed",
+    "confidence": "low",
+    "visitIndex": 1,
+    "isRevisit": false,
+    "evidence": {},
+    "notes": null
+  }]
+}
