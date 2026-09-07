@@ -7,7 +7,11 @@ import {
   formatCleaningPreviewCompareLine,
   formatCleaningAppliedCompareLine,
 } from '../domain/trajectory/cleaningPreviewCompare';
-import { applyManualCorrections } from '../domain/trajectory/manualCorrection';
+import {
+  applyManualCorrections,
+  canRemoveNoseEstimate,
+  getManualCorrection,
+} from '../domain/trajectory/manualCorrection';
 import { formatCleaningQualityFlags } from '../domain/trajectory/cleaningLabels';
 import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
 import { useSessionStore, type CorrectionMode } from '../store/sessionStore';
@@ -67,6 +71,9 @@ export function CorrectionCleaningPanel({
       : null;
   const currentObs = effective.find((o) => o.frameIndex === currentFrameIndex) ?? null;
   const hasManualOnFrame = track?.manualCorrections.some((c) => c.frameIndex === currentFrameIndex);
+  const rawObs = track?.observations.find((o) => o.frameIndex === currentFrameIndex);
+  const manualOnFrame = getManualCorrection(track?.manualCorrections ?? [], currentFrameIndex);
+  const canRemoveNose = canRemoveNoseEstimate(rawObs, manualOnFrame ?? undefined);
 
   const setMode = (mode: CorrectionMode) => {
     setCorrectionMode(correctionMode === mode ? 'off' : mode);
@@ -105,13 +112,20 @@ export function CorrectionCleaningPanel({
         <button
           type="button"
           className={styles.button}
+          disabled={!canRemoveNose}
+          title={
+            canRemoveNose
+              ? 'Mark the nose position unavailable on this frame (body unchanged)'
+              : 'No nose estimate to mark unavailable on this frame'
+          }
           onClick={() => {
             removeManualNoseCorrection(trial.id, currentFrameIndex);
             setCorrectionMode('off');
           }}
           data-testid="correction-remove-nose"
+          data-removable={canRemoveNose ? 'true' : 'false'}
         >
-          Remove nose
+          Mark nose unavailable
         </button>
         <button
           type="button"
@@ -126,6 +140,14 @@ export function CorrectionCleaningPanel({
           Reset frame to auto
         </button>
       </div>
+
+      <p className={styles.hint} data-testid="correction-nose-removal-hint">
+        {canRemoveNose
+          ? 'Mark nose unavailable hides the nose on this frame without moving the body or deleting the frame. Use Reset frame to auto to restore the automatic nose estimate.'
+          : manualOnFrame?.noseXY === null
+            ? 'Nose already marked unavailable on this frame. Reset frame to auto restores the automatic estimate.'
+            : 'No nose estimate on this frame to mark unavailable.'}
+      </p>
 
       {correctionMode !== 'off' && (
         <p className={styles.hint} data-testid="correction-mode-hint">

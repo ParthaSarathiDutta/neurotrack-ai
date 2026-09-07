@@ -26,6 +26,7 @@ import { computeCleanedTrajectory } from '../domain/trajectory/cleaning';
 import {
   applyManualCorrections,
   removeManualCorrection,
+  resolveNoseRemoval,
   upsertManualCorrection,
 } from '../domain/trajectory/manualCorrection';
 import { computePxPerCm } from '../domain/calibration/detectMaze';
@@ -905,19 +906,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   removeManualNoseCorrection: (trialId, frameIndex) => {
+    let shouldRedetect = false;
     set((state) => {
       const trial = state.trials.find((t) => t.id === trialId);
       if (!trial?.track) return state;
-      const existing = trial.track.manualCorrections.find((c) => c.frameIndex === frameIndex);
       const entry = trial.timestampIndex[frameIndex];
-      if (!existing?.bodyXY || !entry) {
-        return { ...state, statusMessage: 'No manual nose to remove on this frame.' };
+      if (!entry) return { ...state, statusMessage: 'Invalid frame.' };
+      const raw = trial.track.observations.find((o) => o.frameIndex === frameIndex);
+      const existing = trial.track.manualCorrections.find((c) => c.frameIndex === frameIndex);
+      const outcome = resolveNoseRemoval(
+        frameIndex,
+        entry.timeUs,
+        raw,
+        existing,
+        new Date().toISOString(),
+      );
+      if (outcome.kind !== 'ok') {
+        return { ...state, statusMessage: outcome.message };
       }
-      const correction: ManualCorrection = {
-        ...existing,
-        noseXY: null,
-        correctedAt: new Date().toISOString(),
-      };
+      shouldRedetect = true;
+      const correction = outcome.correction;
       return {
         cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
         trials: patchTrial(state.trials, trialId, (t) => ({
@@ -932,9 +940,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
               )
             : t.track,
         })),
-        statusMessage: `Nose removed for frame ${frameIndex + 1}.`,
+        statusMessage: `Nose marked unavailable for frame ${frameIndex + 1}. Use Reset frame to auto to restore the automatic estimate.`,
       };
     });
+    if (shouldRedetect) {
+      scheduleAsyncRedetect(get, set, trialId);
+    }
     void flushSave(get, set);
   },
 
