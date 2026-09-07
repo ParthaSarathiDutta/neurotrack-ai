@@ -216,3 +216,11 @@ At test50 frame 3795 (Δ ≈ 6.22 px), ghost marker existed but was invisible �
 When consumable applied cleaning is active (not stale, no preview), panel shows per-frame:
 `Corrected body → Applied · Δ px · origin · cleaning reason`, plus unchanged note when applicable.
 Uses stored `appliedCleaning.observations`, not recomputed preview.
+
+## MS-4 completion (2026-09-06)
+
+Manual review passed: body/nose correction and reset; persistence across reload; Preview/Discard/Apply; applied-cleaning persistence; raw-vs-cleaned compare and provenance; staleness after manual edits and successful re-apply; re-track warning with Cancel preserving edits.
+
+Pre-merge validation: lint/test/build PASS (95 tests); validate:calibration, validate:ms1, validate:ms2, validate:ms3, validate:tracking, validate:ms4, validate:ms4-ghost ALL PASS. Merged to `main`. MS-5 not started.
+
+**Documented limitations:** no full trajectory path overlay; sub-0.5 px smoothing shifts intentionally unchanged; offline ffmpeg vs live WebCodecs frame index offset for demo frames; no MS-5 events/measures/export; re-run tracking clears corrections and cleaning (with confirmation UI).

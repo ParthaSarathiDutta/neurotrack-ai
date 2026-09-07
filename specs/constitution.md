@@ -165,13 +165,19 @@ Quality assessment is a first-class output: per-video fractions tracked / lost /
 
 **Validate:** trajectories on all three clips; start cylinder never tracked as the animal; nose regression and rim-frame spot checks pass; live UI and offline `validate:tracking` metrics reconciled; duplicate container presentation timestamps handled (`frameIndex` identity, `timeUs` timing); all three clips **high** quality at 100% in-trial tracked for the validated setup. Exercised by `npm run validate:ms3` (V1–V9+) and `npm run validate:tracking`.
 
-### MS-4 — Manual Correction & Trajectory Cleaning
+### MS-4 — Manual Correction & Trajectory Cleaning — ✅ Complete
 
-Manual correction is mandatory and non-negotiable: the user scrubs to a frame, sees the overlay, fixes the body or nose point or adds/removes an event, and every downstream result — cleaning, events, measures, visualizations, exports — recomputes from it. Corrections persist across reload and are visibly labeled as human-touched, distinguishable from automatic and interpolated output at every point downstream.
+Validated September 6, 2026 on branch `ms-4-manual-correction-trajectory-cleaning`, merged to `main`.
 
-Trajectory cleaning — gap filling, smoothing, and outlier rejection — exposes every parameter to the user, defaults to conservative values, and previews its effect live before it is applied; nothing is ever applied invisibly. Each point in the cleaned trajectory carries its own production method (`auto`, `interpolated`, `smoothed`, or `manual`), so provenance survives every later transformation.
+Three-layer trajectory model: immutable raw `track.observations`, `track.manualCorrections[]` keyed by `frameIndex`, optional `track.appliedCleaning` with preview-only session state until Apply. Every displayed point carries `origin` (`auto`, `manual`, `interpolated`, `smoothed`); cleaning adds typed quality flags without overwriting raw `observed` status.
 
-**Validate:** a correction survives reload, changes the affected measure, and remains visually distinguishable from automatic output; interpolated spans are visually distinct from tracked and manual points; changing a cleaning parameter visibly changes the previewed trajectory before the user commits to it; parameters appear in the export.
+Conservative cleaning: dual gap bounds (`maxGapFrames` + `maxGapDurationUs`), moving-average smoothing (manual anchors preserved), speed-outlier replacement with explicit flags. Applied cleaning goes **stale** when corrections, geometry, trial window, calibration, or cleaning params change — never silently consumed downstream (`consumableCleanedObservations()`). Duplicate container PTS pairs use spatial blending only; never infer timing from `frameIndex`.
+
+Preview UX: per-frame compare line (raw/corrected → preview/applied, Δ px, origin, reason), orange raw ghost marker with connector during preview, param change clears stale preview.
+
+**Validate:** manual body/nose correction and reset; persistence across immediate reload; Preview/Discard/Apply; applied cleaning persists; staleness + re-apply; duplicate-PTS independent corrections; re-track confirmation preserves edits on Cancel. Exercised by `npm run validate:ms4` (V1–V11, V_stale_*, V_preview_*, V_applied_compare), `npm run validate:ms4-ghost` (test50 frame 3795), and unit tests (`tests/trajectory.test.ts`, `tests/cleaningPreviewCompare.test.ts`, `tests/cleaningStaleness.test.ts`, `tests/previewRawMarker.test.ts`). MS-1–MS-3 + `validate:tracking` regressions green at merge.
+
+**Known limitations:** no full trajectory path overlay; sub-0.5 px smoothing shifts are intentionally unchanged; no MS-5 events/measures/export yet.
 
 ### MS-5 — Event Detection & Behavioral Measures
 

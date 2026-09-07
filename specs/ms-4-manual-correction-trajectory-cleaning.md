@@ -3,7 +3,7 @@
 Branch: `ms-4-manual-correction-trajectory-cleaning`
 Base: `main` @ `8379a91` (MS-3 complete)
 Constitution reference: `specs/constitution.md` → MS-4
-Status: **Implemented — pending manual review** (not merged)
+Status: **✅ Complete** — validated September 6, 2026; merged to `main` @ `f147330` (branch `ms-4-manual-correction-trajectory-cleaning`).
 
 ## Requirements
 
@@ -137,20 +137,55 @@ Manual hole-investigation or escape **events** require MS-5's event model. MS-4 
 | V10 | Manual correction after apply marks cleaning stale; re-apply clears stale. |
 | V11 | MS-1/MS-2/MS-3 regression scripts remain green. |
 
-### Tier 2 — Manual review (scientist)
+### Tier 2 — Manual review (scientist) — ✅ Passed September 6, 2026
 
-- Place body correction on a flagged frame; confirm square manual marker vs circle auto.
-- Set and remove nose; confirm triangle vs no fabricated nose.
-- Preview cleaning with high smoothing; confirm path changes; Discard; confirm revert.
-- Apply cleaning; reload; confirm persisted cleaned markers (dashed/smoothed style).
-- Edit a manual correction after apply; confirm stale banner and refresh message.
-- Inspect technical details for `gap_interpolated` / `speed_outlier_replaced` flags on cleaned frames.
+- Place body correction on a flagged frame; confirm square manual marker vs circle auto. **PASS**
+- Set and remove nose; confirm triangle vs no fabricated nose. **PASS**
+- Preview cleaning with high smoothing; confirm path changes; Discard; confirm revert. **PASS**
+- Apply cleaning; reload; confirm persisted cleaned markers (dashed/smoothed style). **PASS**
+- Edit a manual correction after apply; confirm stale banner and refresh message. **PASS**
+- Inspect technical details for `gap_interpolated` / `speed_outlier_replaced` flags on cleaned frames. **PASS**
+- Raw-vs-cleaned preview compare line and orange ghost marker (test50 frame 3795). **PASS**
+- Applied-cleaning per-frame compare after reload. **PASS**
+- Re-track warning; Cancel preserves edits. **PASS**
 
 ---
 
 ## Completion
 
-**Status: Pending manual review** — scientific safeguards implemented; not merged.
+**Status: ✅ Complete** — merged to `main` September 6, 2026.
+
+### Final validation (pre-merge)
+
+| Check | Result |
+|---|---|
+| `npm run lint` | PASS |
+| `npm test` | **95/95** PASS |
+| `npm run build` | PASS |
+| `validate:calibration` | PASS |
+| `validate:ms1` | PASS |
+| `validate:ms2` | V1–V20 PASS |
+| `validate:ms3` | PASS |
+| `validate:tracking` | PASS (all three clips 100% in-trial tracked) |
+| `validate:ms4` | PASS (V1–V11, V_stale_*, V_preview_*, V_applied_compare) |
+| `validate:ms4-ghost` | PASS (test50 frame 3795, Δ = 6.22 px) |
+
+### MS-4 branch commits (main merge)
+
+- `f844b53` — Implement MS-4 manual correction and trajectory cleaning
+- `d0208b5` — Stabilize MS-4 persistence, cleaning, and validate:ms4 reliability
+- `c2c56ad` — Add MS-4 scientific safeguards for cleaning provenance and staleness
+- `31bfdb8` — Improve cleaning preview observability with compare line and raw ghost marker
+- `c2586c7` — Make preview raw ghost marker visible with connector and label
+- `f147330` — Show per-frame applied cleaning comparison in the correction panel
+
+### Documented limitations (not defects)
+
+- **No trajectory path overlay** — cleaning preview/applied effect is per-frame marker + numeric compare lines, not a full path polyline.
+- **Smoothing visibility is frame-local** — shifts &lt; 0.5 px are correctly skipped; scientist must step frames or read compare line.
+- **Offline ffmpeg tracking ≠ live WebCodecs frame indices** for demo frame recommendations (e.g. test50 smoothing demo at display **3795**, not 3805).
+- **No MS-5 events/measures/export** — hole investigation and escape remain MS-5; MS-4 corrects trajectory points only.
+- **Re-run tracking discards** manual corrections and applied cleaning (by design, with confirmation UI).
 
 ## MS-4 scientific safeguards (2026-09-06)
 
