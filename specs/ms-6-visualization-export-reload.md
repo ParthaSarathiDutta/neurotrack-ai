@@ -2,7 +2,7 @@
 
 Branch: `ms-6-visualization-export-reload`
 Constitution reference: `specs/constitution.md` → MS-6, Delivery requirements
-Status: **🚧 In progress — Checkpoint 1 complete**
+Status: **🚧 In progress — Checkpoint 2 complete**
 
 Depends on: MS-1–MS-5 merged at `cc6eaf3` (`main`, September 7, 2026).
 
@@ -307,13 +307,20 @@ Sequential — each checkpoint ends with tests passing; no MS-5 science changes.
 
 **Validation gate:** `npm test`, `npm run lint`, `npm run build` green.
 
-### Checkpoint 2 — Reloadable analysis bundle
+### Checkpoint 2 — Reloadable analysis bundle ✅
 
-**Scope:** `.neurotrack.json` schema v1.0.0, export/import UI, fingerprint relink, round-trip tests.
+**Scope:** `.neurotrack.json` schema v1.0.0, export/import UI, fingerprint relink, collision confirmation, round-trip tests.
 
-**Dependencies:** Checkpoint 1 export types; `migration.ts`; MS-1 video re-identification.
+**Dependencies:** Checkpoint 1; `migration.ts`; `listCachedFingerprints()`; MS-1 video re-identification.
 
-**Validation gate:** Bundle round-trip unit tests; import collision confirmation UI.
+**Delivered:**
+- `bundleSchema.ts`, `bundleExport.ts`, `bundleImport.ts`
+- `reference/neurotrack-bundle-schema.md`
+- Store `importAnalysisBundle`, `recomputeMeasuresFromEvents`
+- UI: Download analysis bundle, Load analysis bundle, collision dialog, explicit recompute button
+- Unit tests `tests/ms6-bundle.test.ts` (U9–U12)
+
+**Validation gate:** Bundle round-trip unit tests; import requires confirmation on collision; no re-track/re-detect on import.
 
 ### Checkpoint 3 — Essential visualizations
 

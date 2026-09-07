@@ -46,6 +46,10 @@ import { proposeTrialWindow } from '../services/trialWindowService';
 import { cancelTracking as cancelTrackingJob, runTracking } from '../services/trackingService';
 import { clearFrameCache, ensureFrameDecoder } from '../services/frameService';
 import { evictAllFromCache } from '../db/videoCache';
+import { listCachedFingerprints } from '../db/database';
+import { buildNeuroTrackBundle, serializeNeuroTrackBundle } from '../domain/export/bundleExport';
+import { applyBundleImport, detectImportCollisions } from '../domain/export/bundleImport';
+import { parseNeuroTrackBundleJson } from '../domain/export/bundleSchema';
 
 export type CorrectionMode = 'off' | 'body' | 'nose' | 'remove-nose';
 
@@ -124,6 +128,15 @@ interface SessionState {
   ) => void;
   updateEventParams: (patch: Partial<EventDetectionParams>) => void;
   updateOperationalDefinitions: (patch: Partial<OperationalDefinitionSelections>) => void;
+  recomputeMeasuresFromEvents: (trialId: string) => void;
+  importAnalysisBundle: (
+    json: string,
+    replaceConfirmed: boolean,
+  ) => Promise<
+    | { status: 'success'; trialsNeedingVideoReselect: string[]; replacedTrialIds: string[] }
+    | { status: 'collision'; collisions: import('../domain/export/bundleImport').ImportCollision[] }
+    | { status: 'error'; message: string; errors?: { path: string; message: string }[] }
+  >;
   /** Await completion of any pending session write (used after corrections / apply cleaning). */
   flushPersist: () => Promise<void>;
 }
@@ -1206,6 +1219,66 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     });
     scheduleSave(get, set);
   },
+
+  recomputeMeasuresFromEvents: (trialId) => {
+    set((state) => ({
+      trials: patchTrial(state.trials, trialId, (t) =>
+        t.events ? recomputeMeasuresForTrial(t, state.analysisParams) : t,
+      ),
+      statusMessage: 'Measures recomputed from stored events (no re-detection).',
+    }));
+    scheduleSave(get, set);
+  },
+
+  importAnalysisBundle: async (json, replaceConfirmed) => {
+    const parsed = parseNeuroTrackBundleJson(json);
+    if (!parsed.ok) {
+      return {
+        status: 'error',
+        message: 'Invalid analysis bundle.',
+        errors: parsed.errors,
+      };
+    }
+
+    const state = get();
+    const cachedFingerprints = await listCachedFingerprints();
+    const result = applyBundleImport({
+      bundle: parsed.bundle,
+      existingTrials: state.trials,
+      existingSelectedTrialId: state.selectedTrialId,
+      existingAnalysisParams: state.analysisParams,
+      replaceConfirmed,
+      cachedFingerprints,
+    });
+
+    if (!result.ok) {
+      if (result.reason === 'collision') {
+        return { status: 'collision', collisions: result.collisions };
+      }
+      return {
+        status: 'error',
+        message: 'Bundle validation failed.',
+        errors: result.errors,
+      };
+    }
+
+    set({
+      trials: result.trials,
+      analysisParams: result.analysisParams,
+      selectedTrialId: result.selectedTrialId,
+      statusMessage:
+        result.trialsNeedingVideoReselect.length > 0
+          ? `Analysis imported. Reselect matching MP4 for ${result.trialsNeedingVideoReselect.length} trial(s) — analysis data preserved.`
+          : 'Analysis bundle imported.',
+    });
+    await flushSave(get, set);
+
+    return {
+      status: 'success',
+      trialsNeedingVideoReselect: result.trialsNeedingVideoReselect,
+      replacedTrialIds: result.replacedTrialIds,
+    };
+  },
 }));
 
 if (typeof window !== 'undefined') {
@@ -1249,6 +1322,14 @@ if (typeof window !== 'undefined') {
       status: string;
       completionTimeUs: number | null;
     } | null;
+    __ntBuildAnalysisBundleJson?: () => string;
+    __ntImportAnalysisBundle?: (
+      json: string,
+      replaceConfirmed: boolean,
+    ) => ReturnType<SessionState['importAnalysisBundle']>;
+    __ntDetectImportCollisions?: (json: string) =>
+      | { ok: false; errors: { path: string; message: string }[] }
+      | { ok: true; collisions: import('../domain/export/bundleImport').ImportCollision[] };
   };
   const hooks = window as NeuroTrackTestHooks;
   hooks.__ntApplyBodyCorrection = (trialId, frameIndex, x, y) => {
@@ -1383,6 +1464,23 @@ if (typeof window !== 'undefined') {
       type: esc.type,
       status: esc.status,
       completionTimeUs: esc.completionTimeUs ?? null,
+    };
+  };
+  hooks.__ntBuildAnalysisBundleJson = () => {
+    const state = useSessionStore.getState();
+    return serializeNeuroTrackBundle(
+      buildNeuroTrackBundle(state.trials, state.analysisParams, state.selectedTrialId),
+    );
+  };
+  hooks.__ntImportAnalysisBundle = (json, replaceConfirmed) =>
+    useSessionStore.getState().importAnalysisBundle(json, replaceConfirmed);
+  hooks.__ntDetectImportCollisions = (json) => {
+    const parsed = parseNeuroTrackBundleJson(json);
+    if (!parsed.ok) return { ok: false, errors: parsed.errors };
+    const state = useSessionStore.getState();
+    return {
+      ok: true,
+      collisions: detectImportCollisions(parsed.bundle, state.trials),
     };
   };
 }

@@ -65,12 +65,16 @@ export async function clearSessionForTests(): Promise<void> {
 
 /** Rehydrate trials and mark cache availability from blob store. */
 export async function attachCacheFlags(trials: TrialRecord[]): Promise<TrialRecord[]> {
-  const fingerprints = await db.videoBlobs.orderBy('fingerprint').keys();
-  const cached = new Set(fingerprints as string[]);
+  const cached = await listCachedFingerprints();
   return trials.map((trial) => ({
     ...trial,
     videoCached: cached.has(trial.fingerprint),
     ingestStatus:
       trial.metadata && !cached.has(trial.fingerprint) ? 'needs_reselect' : trial.ingestStatus,
   }));
+}
+
+export async function listCachedFingerprints(): Promise<Set<string>> {
+  const fingerprints = await db.videoBlobs.orderBy('fingerprint').keys();
+  return new Set(fingerprints as string[]);
 }
