@@ -2,7 +2,7 @@
 
 Branch: `ms-6-visualization-export-reload`
 Constitution reference: `specs/constitution.md` → MS-6, Delivery requirements
-Status: **🚧 In progress — Checkpoint 2 complete**
+Status: **🚧 In progress — Checkpoint 3 complete (pending manual review)**
 
 Depends on: MS-1–MS-5 merged at `cc6eaf3` (`main`, September 7, 2026).
 
@@ -322,13 +322,21 @@ Sequential — each checkpoint ends with tests passing; no MS-5 science changes.
 
 **Validation gate:** Bundle round-trip unit tests; import requires confirmation on collision; no re-track/re-detect on import.
 
-### Checkpoint 3 — Essential visualizations
+### Checkpoint 3 — Essential visualizations ✅
 
 **Scope:** Trajectory overlay, hole-visit timeline, occupancy heat map (SVG/Canvas).
 
 **Dependencies:** `resolveMeasurementObservations`; review canvas / `VideoOverlay`.
 
-**Validation gate:** Charts render in browser validation; grayscale-safe styling.
+**Delivered:**
+- `src/domain/visualization/` — trajectory segments, hole timeline model, occupancy grid
+- `src/domain/measures/maxSpeedAudit.ts` — read-only max-speed interval audit (no measure mutation)
+- Trajectory overlay on review player (basis-aware, provenance styling, toggle)
+- `HoleVisitTimeline` SVG + `OccupancyHeatmap` in `TrialVisualizationsPanel`
+- Empty-session import UI cleanup (central panel only when no trials)
+- Unit tests `tests/ms6-visualization.test.ts`; Playwright `validate:ms6-viz`
+
+**Validation gate:** Charts render in browser validation; grayscale-safe styling; MS-2/MS-4/MS-5 regressions green.
 
 ### Checkpoint 4 — Submission outputs
 

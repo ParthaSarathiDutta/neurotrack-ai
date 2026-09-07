@@ -14,7 +14,9 @@ import {
 import { buildNeuroTrackBundle, bundleFileName, serializeNeuroTrackBundle } from '../domain/export/bundleExport';
 import { formatMeasureForDisplay } from '../domain/export/measureEncoding';
 import { escapeEventFromList, escapeStateSummary } from '../domain/export/escapeSummary';
-import { confirmedTargetHoleId, effectiveTrialStartUs } from '../domain/events/holeProximity';
+import { resolveMeasurementObservations } from '../domain/trajectory/measurementObservations';
+import { censorBoundaryTimeUs, confirmedTargetHoleId, effectiveTrialStartUs } from '../domain/events/holeProximity';
+import { auditMaxSpeedInterval } from '../domain/measures/maxSpeedAudit';
 import styles from '../styles/app.module.css';
 
 interface ResultsExportPanelProps {
@@ -49,7 +51,15 @@ export function ResultsExportPanel({
   const events = trial.events;
   const targetConfirmed = confirmedTargetHoleId(trial.geometry) != null;
   const trialStart = effectiveTrialStartUs(trial.trialWindow);
+  const censorUs = censorBoundaryTimeUs(trial.trialWindow, trial.timestampIndex);
   const escapeEv = escapeEventFromList(events?.events ?? []);
+
+  const maxSpeedAudit = useMemo(() => {
+    if (trialStart == null || censorUs == null || !measures?.maxSpeed.value) return null;
+    const resolved = resolveMeasurementObservations(trial.track, trial.measurementBasis ?? 'corrected');
+    if (resolved.unavailable) return null;
+    return auditMaxSpeedInterval(resolved.observations, trialStart, censorUs);
+  }, [trial.track, trial.measurementBasis, trialStart, censorUs, measures?.maxSpeed.value]);
 
   const handleExportTrialCsv = () => {
     const csv = buildCombinedCsvReport(buildSessionCsvFiles(trialExport));
@@ -144,6 +154,16 @@ export function ResultsExportPanel({
               <ReportMeasureRow label="Path length" testId="report-path-length" measure={measures.pathLength} />
               <ReportMeasureRow label="Mean speed" testId="report-mean-speed" measure={measures.meanSpeed} />
               <ReportMeasureRow label="Max speed" testId="report-max-speed" measure={measures.maxSpeed} />
+              {maxSpeedAudit?.artifactNote && (
+                <>
+                  <dt>Max speed audit</dt>
+                  <dd data-testid="report-max-speed-audit" className={styles.diagnosticNote}>
+                    Frames {maxSpeedAudit.prevFrameIndex}→{maxSpeedAudit.currFrameIndex} (
+                    {maxSpeedAudit.deltaTimeUs} µs Δt, {maxSpeedAudit.distancePx.toFixed(2)} px):{' '}
+                    {maxSpeedAudit.artifactNote}
+                  </dd>
+                </>
+              )}
               <ReportMeasureRow label="Target quadrant fraction" testId="report-quadrant-fraction" measure={measures.targetQuadrantFraction} />
               <ReportMeasureRow label="Target quadrant time" testId="report-quadrant-time" measure={measures.targetQuadrantTimeSec} />
               <dt>Search strategy</dt>

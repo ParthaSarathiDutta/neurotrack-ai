@@ -10,6 +10,8 @@ function collectVideoFiles(list: FileList | File[]): File[] {
 export function VideoIngestPanel() {
   const addFiles = useSessionStore((s) => s.addFiles);
   const ingestBusy = useSessionStore((s) => s.ingestBusy);
+  const trials = useSessionStore((s) => s.trials);
+  const showBundleImport = trials.length > 0;
   const [dragActive, setDragActive] = useState(false);
   const fileInputId = useId();
   const folderInputId = useId();
@@ -28,7 +30,11 @@ export function VideoIngestPanel() {
   return (
     <section className={styles.panel} aria-labelledby="ingest-heading">
       <h2 id="ingest-heading">Load videos</h2>
-      <p>Drag and drop MP4 trial videos, choose files, select a folder, or load a saved analysis bundle.</p>
+      <p>
+        {showBundleImport
+          ? 'Drag and drop MP4 trial videos, choose files, select a folder, or load a saved analysis bundle.'
+          : 'Drag and drop MP4 trial videos, choose files, or select a folder.'}
+      </p>
 
       <div
         className={`${styles.dropZone} ${dragActive ? styles.dropZoneActive : ''}`}
@@ -52,10 +58,12 @@ export function VideoIngestPanel() {
           <label htmlFor={folderInputId} className={styles.button}>
             Choose folder
           </label>
-          <AnalysisBundleImport
-            buttonTestId="import-bundle-ingest-btn"
-            inputTestId="import-bundle-ingest-input"
-          />
+          {showBundleImport && (
+            <AnalysisBundleImport
+              buttonTestId="import-bundle-ingest-btn"
+              inputTestId="import-bundle-ingest-input"
+            />
+          )}
         </div>
       </div>
 

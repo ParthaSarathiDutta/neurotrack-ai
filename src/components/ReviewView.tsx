@@ -5,6 +5,8 @@ import {
   compareCleaningPreviewFrame,
 } from '../domain/trajectory/cleaningPreviewCompare';
 import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
+import { resolveMeasurementObservations } from '../domain/trajectory/measurementObservations';
+import { effectiveTrialStartUs, censorBoundaryTimeUs } from '../domain/events/holeProximity';
 import { getTrialReviewStatus, reviewStatusLabel } from '../domain/migration';
 import { VideoPlayer } from './VideoPlayer';
 import { CalibrationPanel } from './CalibrationPanel';
@@ -13,6 +15,7 @@ import { TrackQualityPanel } from './TrackQualityPanel';
 import { CorrectionCleaningPanel } from './CorrectionCleaningPanel';
 import { EventsMeasuresPanel } from './EventsMeasuresPanel';
 import { ResultsExportPanel } from './ResultsExportPanel';
+import { TrialVisualizationsPanel } from './TrialVisualizationsPanel';
 import { useSessionStore } from '../store/sessionStore';
 import styles from '../styles/app.module.css';
 
@@ -84,6 +87,13 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
       ? previewFrameCompare.rawBody
       : null;
 
+  const measurementResolved = useMemo(
+    () => resolveMeasurementObservations(trial.track, trial.measurementBasis ?? 'corrected'),
+    [trial.track, trial.measurementBasis],
+  );
+  const trialStartUs = effectiveTrialStartUs(trial.trialWindow);
+  const censorUs = censorBoundaryTimeUs(trial.trialWindow, trial.timestampIndex);
+
   if (!trial.metadata || !trial.videoCached) {
     return (
       <section className={styles.panel} data-testid="review-view">
@@ -128,6 +138,9 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
         geometry={trial.geometry}
         trialWindow={trial.trialWindow}
         observations={effectiveObservations}
+        trajectoryObservations={measurementResolved.observations}
+        trajectoryTrialStartUs={trialStartUs}
+        trajectoryCensorUs={censorUs}
         behavioralEvents={trial.events?.events ?? []}
         previewRawBodyXY={previewRawBodyXY}
         selectedHoleId={selectedHoleId}
@@ -155,6 +168,12 @@ export function ReviewView({ trial, allTrials }: ReviewViewProps) {
       <EventsMeasuresPanel trial={trial} onSeekToFrame={handleSeekToFrame} currentFrameIndex={currentFrameIndex} />
 
       <ResultsExportPanel trial={trial} allTrials={allTrials} />
+
+      <TrialVisualizationsPanel
+        trial={trial}
+        onSeekToFrame={handleSeekToFrame}
+        showTrajectoryHint
+      />
 
       <div hidden aria-hidden="true" data-testid="trial-metadata-compat">
         <span data-testid="meta-frame-rate">{meta.containerFrameRateLabel}</span>

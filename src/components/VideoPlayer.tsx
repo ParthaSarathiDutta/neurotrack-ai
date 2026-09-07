@@ -6,6 +6,7 @@ import { secondsFromTimeUs } from '../domain/timing';
 import { computeLetterboxedContentRect } from '../domain/videoTransform';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 import { VideoOverlay } from './VideoOverlay';
+import { TrajectoryOverlay } from './visualization/TrajectoryOverlay';
 import styles from '../styles/app.module.css';
 
 interface VideoPlayerProps {
@@ -17,6 +18,9 @@ interface VideoPlayerProps {
   geometry: Geometry;
   trialWindow: TrialWindow;
   observations?: Observation[];
+  trajectoryObservations?: Observation[];
+  trajectoryTrialStartUs?: number | null;
+  trajectoryCensorUs?: number | null;
   behavioralEvents?: BehavioralEvent[];
   previewRawBodyXY?: { x: number; y: number } | null;
   selectedHoleId: number | null;
@@ -39,6 +43,9 @@ export function VideoPlayer({
   geometry,
   trialWindow,
   observations = [],
+  trajectoryObservations = [],
+  trajectoryTrialStartUs = null,
+  trajectoryCensorUs = null,
   behavioralEvents = [],
   previewRawBodyXY = null,
   selectedHoleId,
@@ -59,6 +66,7 @@ export function VideoPlayer({
 
   const player = useVideoPlayer({ fingerprint, timestampIndex, videoWidth, videoHeight });
   const [gotoFrameInput, setGotoFrameInput] = useState('');
+  const [showTrajectory, setShowTrajectory] = useState(true);
 
   // Keep the "go to frame" field showing the current frame when it isn't being edited,
   // so it doubles as a live readout that stays synchronized with stepping/slider/seek.
@@ -248,6 +256,19 @@ export function VideoPlayer({
           hidden={player.mode !== 'frame'}
           data-testid="player-frame-canvas"
         />
+        <TrajectoryOverlay
+          observations={trajectoryObservations}
+          displayBox={displayBox}
+          trialStartUs={trajectoryTrialStartUs ?? 0}
+          censorUs={trajectoryCensorUs ?? 0}
+          visible={
+            showTrajectory &&
+            trajectoryTrialStartUs != null &&
+            trajectoryCensorUs != null &&
+            trajectoryObservations.length > 0
+          }
+          currentFrameIndex={player.currentFrameIndex}
+        />
         <VideoOverlay
           geometry={geometry}
           displayBox={displayBox}
@@ -306,6 +327,15 @@ export function VideoPlayer({
           data-testid="step-forward-btn"
         >
           Frame ▶
+        </button>
+        <button
+          type="button"
+          className={styles.button}
+          aria-pressed={showTrajectory}
+          data-testid="trajectory-toggle-btn"
+          onClick={() => setShowTrajectory((v) => !v)}
+        >
+          {showTrajectory ? 'Hide trajectory' : 'Show trajectory'}
         </button>
         <label className={styles.playbackSpeedLabel} htmlFor="playback-speed">
           Speed

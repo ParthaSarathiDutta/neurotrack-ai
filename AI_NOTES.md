@@ -399,3 +399,18 @@ Checkpoint 2 placed **Load analysis bundle** only inside `ResultsExportPanel`, w
 ### Validated
 171 unit tests, lint, build, validate:import-empty, validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review; Checkpoint 3 not started.
 
+## MS-6 Checkpoint 3 essential visualizations (2026-09-07)
+
+### Delivered
+- Trajectory overlay on review player (basis-aware, time-colored, provenance dash styles, toggle)
+- Hole-visit timeline SVG (holes 1–20, investigation spans, escape/censor markers, seek on click)
+- Occupancy heatmap (time-weighted, platform circle, honest px units when scale unknown)
+- Empty-session import UI: bundle load only in central Get started panel when no trials
+- Read-only max-speed audit in results report (test53: frames 811→812, 65 µs Δt, speed_outlier flag)
+
+### Max speed audit (test53 ~44 162 px/s)
+Per MS-5 D12, speed uses intervals with Δt > 0 only; duplicate PTS (Δt = 0) excluded. test53 max pair is frames 811→812 with **65 µs** container Δt vs ~33 333 µs median — displacement ~2.87 px is plausible at normal spacing but inflates instantaneous speed. Frame 812 carries `speed_outlier` tracking flag. **No measure recomputation** — stored values preserved; audit is display-only. Excluding sub-millisecond compression intervals would be a scientific-definition change (needs approval).
+
+### Validated
+178 unit tests, lint, build, validate:import-empty, validate:ms6-viz, validate:ms2, validate:ms4, validate:ms5 — ALL PASS. Stopped for manual review; Checkpoint 4 not started.
+

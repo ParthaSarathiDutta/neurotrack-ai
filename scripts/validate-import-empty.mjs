@@ -72,6 +72,8 @@ async function main() {
     await waitForAppReady(page);
 
     results.V_empty_session = (await page.locator('[data-testid="import-bundle-empty-btn"]').count()) > 0 ? 'PASS' : 'FAIL';
+    results.V_empty_ingest_import_hidden =
+      (await page.locator('[data-testid="import-bundle-ingest-btn"]').count()) === 0 ? 'PASS' : 'FAIL';
     results.V_no_trials_initial = (await page.getByText('No trials loaded yet.').count()) > 0 ? 'PASS' : 'FAIL';
 
     await page.locator('[data-testid="import-bundle-empty-input"]').setInputFiles(FIXTURE);

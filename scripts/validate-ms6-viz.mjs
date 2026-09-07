@@ -1,0 +1,162 @@
+#!/usr/bin/env node
+/**
+ * MS-6 Checkpoint 3 visualization + empty-session import UI regression.
+ */
+import { chromium } from 'playwright';
+import { createServer } from 'http';
+import { readFile } from 'fs/promises';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, '..');
+const DIST = join(ROOT, 'dist');
+const FIXTURE = join(ROOT, 'tests', 'fixtures', 'ms6', 'three-trial-session.neurotrack.json');
+const TEST53_MP4 = join(ROOT, 'data', 'barnes-maze', 'test53.mp4');
+
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+const results = {};
+
+function startStaticServer(root) {
+  return new Promise((resolve, reject) => {
+    const server = createServer(async (req, res) => {
+      try {
+        let path = req.url?.split('?')[0] ?? '/';
+        if (path === '/') path = '/index.html';
+        const filePath = join(root, path);
+        const data = await readFile(filePath);
+        const ext = path.slice(path.lastIndexOf('.'));
+        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+        res.end(data);
+      } catch {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => resolve(server));
+  });
+}
+
+async function waitForAppReady(page) {
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="trials-heading"]') != null,
+    undefined,
+    { timeout: 60_000 },
+  );
+}
+
+async function selectTrial(page, namePattern) {
+  await page.getByRole('button', { name: namePattern }).click();
+}
+
+async function main() {
+  if (!process.env.SKIP_BUILD) execSync('npm run build', { cwd: ROOT, stdio: 'inherit' });
+
+  const server = await startStaticServer(DIST);
+  const port = server.address().port;
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+
+  try {
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
+    await waitForAppReady(page);
+    await page.evaluate(async () => {
+      await window.__ntResetSession?.();
+    });
+    await page.reload();
+    await waitForAppReady(page);
+
+    results.V_empty_central_import =
+      (await page.locator('[data-testid="import-bundle-empty-btn"]').count()) > 0 ? 'PASS' : 'FAIL';
+    results.V_empty_ingest_import_hidden =
+      (await page.locator('[data-testid="import-bundle-ingest-btn"]').count()) === 0 ? 'PASS' : 'FAIL';
+
+    await page.locator('[data-testid="import-bundle-empty-input"]').setInputFiles(FIXTURE);
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="trials-heading"]')?.textContent?.includes('(3)'),
+      undefined,
+      { timeout: 30_000 },
+    );
+    results.V_ingest_import_after_load =
+      (await page.locator('[data-testid="import-bundle-ingest-btn"]').count()) > 0 ? 'PASS' : 'FAIL';
+
+    await selectTrial(page, /test53/i);
+    await page.waitForSelector('[data-testid="trial-visualizations-panel"]', { timeout: 15_000 });
+    results.V_test53_viz_panel = 'PASS';
+
+    await page.waitForSelector('[data-testid="hole-visit-timeline"]', { timeout: 10_000 });
+    const invCount = await page.locator('[data-testid="hole-timeline-investigation"]').count();
+    results.V_test53_timeline_investigations = invCount > 0 ? 'PASS' : `FAIL:${invCount}`;
+
+    const occCells = await page.locator('[data-testid="occupancy-cell"]').count();
+    results.V_test53_occupancy_cells = occCells > 0 ? 'PASS' : `FAIL:${occCells}`;
+
+    const audit = await page.locator('[data-testid="report-max-speed-audit"]').textContent();
+    results.V_test53_max_speed_audit =
+      audit && audit.includes('812') && audit.includes('µs') ? 'PASS' : `FAIL:${audit?.trim()}`;
+
+    const latency = await page.locator('[data-testid="report-total-latency"]').textContent();
+    results.V_test53_latency_preserved =
+      latency && /24\.4\d s/.test(latency) ? 'PASS' : `FAIL:${latency?.trim()}`;
+
+    await selectTrial(page, /test51/i);
+    await page.waitForSelector('[data-testid="hole-visit-timeline"]', { timeout: 15_000 });
+    results.V_test51_timeline = 'PASS';
+    results.V_test51_occupancy =
+      (await page.locator('[data-testid="occupancy-heatmap"]').count()) > 0 ? 'PASS' : 'FAIL';
+
+    let hasVideo = false;
+    try {
+      await readFile(TEST53_MP4);
+      hasVideo = true;
+    } catch {
+      results.V_test53_trajectory_video = 'SKIP:no_mp4';
+    }
+
+    if (hasVideo) {
+      await page.locator('[data-testid="import-bundle-ingest-input"]').setInputFiles(FIXTURE);
+      await page.waitForSelector('[data-testid="import-collision-dialog"]', { timeout: 10_000 });
+      await page.locator('[data-testid="import-collision-cancel-btn"]').click();
+
+      await selectTrial(page, /test53/i);
+      const reselect = page.locator('[data-testid="reselect-video-btn"]');
+      if ((await reselect.count()) > 0) {
+        const chooserPromise = page.waitForEvent('filechooser');
+        await reselect.click();
+        const chooser = await chooserPromise;
+        await chooser.setFiles(TEST53_MP4);
+        await page.waitForSelector('[data-testid="review-view"]', { timeout: 120_000 });
+      }
+
+      if ((await page.locator('[data-testid="review-view"]').count()) > 0) {
+        await page.waitForSelector('[data-testid="trajectory-overlay"]', { timeout: 15_000 });
+        const visible = await page.locator('[data-testid="trajectory-overlay"]').getAttribute('data-visible');
+        results.V_test53_trajectory_overlay = visible === 'true' ? 'PASS' : `FAIL:${visible}`;
+        await page.locator('[data-testid="trajectory-toggle-btn"]').click();
+        const hidden = await page.locator('[data-testid="trajectory-overlay"]').getAttribute('data-visible');
+        results.V_trajectory_toggle = hidden === 'false' ? 'PASS' : `FAIL:${hidden}`;
+      } else {
+        results.V_test53_trajectory_overlay = 'SKIP:video_not_relinked';
+        results.V_trajectory_toggle = 'SKIP:video_not_relinked';
+      }
+    }
+  } finally {
+    await browser.close();
+    await new Promise((r) => server.close(r));
+  }
+
+  const failures = Object.entries(results).filter(([, v]) => String(v).startsWith('FAIL'));
+  console.log(JSON.stringify({ results }, null, 2));
+  if (failures.length) {
+    console.error('MS-6 visualization validation FAIL', failures);
+    process.exit(1);
+  }
+  console.log('MS-6 visualization validation PASS');
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

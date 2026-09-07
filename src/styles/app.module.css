@@ -411,6 +411,14 @@
   cursor: crosshair;
 }
 
+.trajectoryOverlayCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .playerControls {
   display: flex;
   flex-wrap: wrap;
@@ -776,4 +784,129 @@
 .warning {
   color: var(--color-warning, #8a4b00);
   font-size: 0.9rem;
+}
+
+.vizFigure {
+  margin: var(--space-lg) 0 0;
+}
+
+.vizFigure figcaption {
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+}
+
+.vizSvg {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+}
+
+.vizLegend {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-sm) 0 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+}
+
+.vizLegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.timelineAxisLabel {
+  font-size: 11px;
+  fill: var(--color-text-muted);
+}
+
+.timelineGridLine {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.timelinePreTrialShade {
+  fill: rgba(120, 120, 120, 0.12);
+}
+
+.timelineCensorShade {
+  fill: rgba(120, 120, 120, 0.2);
+}
+
+.timelineSpanConfirmed {
+  fill: rgba(30, 30, 30, 0.85);
+  cursor: pointer;
+}
+
+.timelineSpanProposed {
+  fill: rgba(30, 30, 30, 0.35);
+  stroke: rgba(30, 30, 30, 0.7);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  cursor: pointer;
+}
+
+.timelineSpanManual {
+  fill: rgba(0, 102, 204, 0.55);
+  cursor: pointer;
+}
+
+.timelineSpanAuto {
+  fill: rgba(30, 30, 30, 0.65);
+  cursor: pointer;
+}
+
+.timelineEscapeEntry {
+  stroke: rgba(30, 30, 30, 0.8);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+  cursor: pointer;
+}
+
+.timelineEscapeCompletion {
+  stroke: #111;
+  stroke-width: 3;
+  cursor: pointer;
+}
+
+.timelineEscapeCandidate {
+  stroke: rgba(138, 75, 0, 0.9);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  cursor: pointer;
+}
+
+.timelineCensorLine {
+  stroke: rgba(120, 120, 120, 0.9);
+  stroke-width: 2;
+  cursor: pointer;
+}
+
+.legendSwatchConfirmed,
+.legendSwatchProposed,
+.legendSwatchManual,
+.legendSwatchCompletion,
+.legendSwatchCandidate {
+  display: inline-block;
+  width: 1rem;
+  height: 0.65rem;
+  border: 1px solid var(--color-border);
+}
+
+.legendSwatchConfirmed { background: rgba(30, 30, 30, 0.85); }
+.legendSwatchProposed { background: rgba(30, 30, 30, 0.35); }
+.legendSwatchManual { background: rgba(0, 102, 204, 0.55); }
+.legendSwatchCompletion { background: #111; }
+.legendSwatchCandidate { background: rgba(138, 75, 0, 0.7); }
+
+.occupancyPlatformOutline {
+  fill: none;
+  stroke: rgba(40, 40, 40, 0.85);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
 }

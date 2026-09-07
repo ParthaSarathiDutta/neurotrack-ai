@@ -18,6 +18,7 @@
     "validate:ms4-ghost": "node scripts/verify-preview-ghost-test50.mjs",
     "validate:ms5": "node scripts/validate-ms5.mjs",
     "validate:import-empty": "node scripts/validate-import-empty.mjs",
+    "validate:ms6-viz": "node scripts/validate-ms6-viz.mjs",
     "validate:events-offline": "npx tsx scripts/validate-events-offline.mjs",
     "validate:calibration": "npx tsx scripts/validate-calibration.mjs",
     "preview": "vite preview"
