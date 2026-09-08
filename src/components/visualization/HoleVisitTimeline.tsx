@@ -1,5 +1,13 @@
 import type { HoleVisitTimelineModel, InvestigationSpan, EscapeMarkerKind } from '../../domain/visualization/holeVisitTimeline';
 import {
+  buildTimelineXTicks,
+  censorRegionLabelLayout,
+  escapeMarkerDisplayOffsets,
+  formatTimelineTickLabel,
+  timelineXTickPosition,
+  timelineXTickTextAnchor,
+} from '../../domain/visualization/timelineLayout';
+import {
   resolveTimelineLegend,
   type TimelineLegendKind,
   LEGEND_LABELS,
@@ -18,21 +26,11 @@ const TICK_LABEL_X = 48;
 const PLOT_LEFT = 54;
 const TOP_PAD = 40;
 const BOTTOM_PAD = 52;
-const RIGHT_PAD = 16;
+const RIGHT_PAD = 20;
 const CHART_WIDTH = 680;
 
 const CANDIDATE_STROKE = '#c45c00';
 const CANDIDATE_DASH = '6 4';
-
-function xTicks(durationSec: number): number[] {
-  if (durationSec <= 0) return [0];
-  const step =
-    durationSec <= 15 ? 5 : durationSec <= 30 ? 10 : durationSec <= 60 ? 15 : 30;
-  const ticks: number[] = [0];
-  for (let t = step; t < durationSec; t += step) ticks.push(t);
-  if (ticks[ticks.length - 1] !== durationSec) ticks.push(durationSec);
-  return ticks;
-}
 
 function investigationFill(status: InvestigationSpan['status']): string {
   return status === 'proposed' ? 'url(#timeline-proposed-hatch)' : '#2b2b2b';
@@ -171,20 +169,25 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
   const height = TOP_PAD + plotHeight + BOTTOM_PAD;
   const plotWidth = width - PLOT_LEFT - RIGHT_PAD;
   const durationSec = Math.max(0.001, model.trialDurationSec);
-  const ticks = xTicks(durationSec);
+  const ticks = buildTimelineXTicks(durationSec);
   const legend = resolveTimelineLegend(model, model.investigations);
 
   const xForSec = (sec: number) => PLOT_LEFT + (sec / durationSec) * plotWidth;
   const censorX = xForSec(model.censorSec);
   const postCensorWidth = Math.max(0, width - RIGHT_PAD - censorX);
+  const censorLabel = censorRegionLabelLayout(censorX, width, RIGHT_PAD);
+
+  const visibleEscapeMarkers = model.escapeMarkers.filter((m) => m.kind !== 'censor_boundary');
+  const markerDisplayOffsets = escapeMarkerDisplayOffsets(
+    visibleEscapeMarkers.map((m) => m.sec),
+    xForSec,
+  );
 
   const renderEscapeMarker = (
     marker: { kind: EscapeMarkerKind; sec: number; frameIndex: number; label: string },
-    i: number,
+    markerIndex: number,
   ) => {
-    if (marker.kind === 'censor_boundary') return null;
-
-    const x = xForSec(marker.sec);
+    const x = xForSec(marker.sec) + (markerDisplayOffsets[markerIndex] ?? 0);
     const yTop = TOP_PAD;
     const yBottom = TOP_PAD + plotHeight;
     const isCompletion = marker.kind === 'completion';
@@ -197,7 +200,7 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
 
     return (
       <g
-        key={`${marker.kind}-${i}`}
+        key={`${marker.kind}-${markerIndex}`}
         data-testid={`hole-timeline-${marker.kind}`}
         role="button"
         tabIndex={0}
@@ -300,8 +303,9 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
           data-testid="hole-timeline-censor-line"
         />
         <text
-          x={Math.min(censorX + 4, width - RIGHT_PAD - 80)}
+          x={censorLabel.x}
           y={TOP_PAD - 6}
+          textAnchor={censorLabel.textAnchor}
           className={styles.timelineRegionLabel}
           data-testid="hole-timeline-censor-label"
         >
@@ -367,28 +371,34 @@ export function HoleVisitTimeline({ model, onSeekFrame }: HoleVisitTimelineProps
           );
         })}
 
-        {model.escapeMarkers.map(renderEscapeMarker)}
+        {visibleEscapeMarkers.map((marker, i) => renderEscapeMarker(marker, i))}
 
-        {ticks.map((t) => (
-          <g key={`xtick-${t}`}>
-            <line
-              x1={xForSec(t)}
-              y1={TOP_PAD + plotHeight}
-              x2={xForSec(t)}
-              y2={TOP_PAD + plotHeight + 4}
-              stroke="#666"
-              strokeWidth={1}
-            />
-            <text
-              x={xForSec(t)}
-              y={height - 26}
-              textAnchor="middle"
-              className={styles.timelineAxisTick}
-            >
-              {t.toFixed(t % 1 === 0 ? 0 : 1)}
-            </text>
-          </g>
-        ))}
+        {ticks.map((t, i) => {
+          const anchor = timelineXTickTextAnchor(i, ticks.length);
+          const xAt = xForSec(t);
+          const x = timelineXTickPosition(xAt, anchor, PLOT_LEFT, width, RIGHT_PAD);
+          return (
+            <g key={`xtick-${t}`}>
+              <line
+                x1={xAt}
+                y1={TOP_PAD + plotHeight}
+                x2={xAt}
+                y2={TOP_PAD + plotHeight + 4}
+                stroke="#666"
+                strokeWidth={1}
+              />
+              <text
+                x={x}
+                y={height - 26}
+                textAnchor={anchor}
+                className={styles.timelineAxisTick}
+                data-testid="hole-timeline-x-tick-label"
+              >
+                {formatTimelineTickLabel(t)}
+              </text>
+            </g>
+          );
+        })}
 
         <text
           x={PLOT_LEFT + plotWidth / 2}

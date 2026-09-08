@@ -197,6 +197,14 @@ async function assertVizLayout(page, trialTag) {
 
   const censorLabel = await page.locator('[data-testid="hole-timeline-censor-label"]').count();
   results[`V_${trialTag}_censor_label`] = censorLabel > 0 ? 'PASS' : 'FAIL';
+
+  const xTicks = await textsWithinSvg(
+    page,
+    '[data-testid="hole-timeline-x-tick-label"]',
+    '[data-testid="hole-timeline-svg"]',
+  );
+  results[`V_${trialTag}_timeline_x_ticks_in_bounds`] =
+    xTicks.ok && xTicks.count > 0 ? 'PASS' : `FAIL:${JSON.stringify(xTicks)}`;
 }
 
 async function main() {
