@@ -1,0 +1,133 @@
+# Summary
+trialId,fileName,label,fingerprint,measurementBasis,targetStatus,targetHoleDisplay,scaleStatus,pxPerCm,platformDiameterCm,trialWindowStartSec,trialWindowEndSec,cutoffSeconds,trackStatus,eventsComputedAt,measuresComputedAt,eventsStale,eventsStaleReason,escapeStateSummary,searchStrategyClassification,searchStrategyOverride,primaryErrorsConfirmed,primaryErrorsProvisional,totalErrorsConfirmed,totalErrorsProvisional,primaryLatency_value,primaryLatency_valueKind,primaryLatency_unit,primaryLatency_lowerBound,primaryLatency_lowerBoundUnit,primaryLatency_unavailableReason,primaryLatency_definitionId,primaryLatency_definitionVersion,primaryLatency_definitionLabel,primaryLatency_flags,primaryLatency_assumptions,totalLatency_value,totalLatency_valueKind,totalLatency_unit,totalLatency_lowerBound,totalLatency_lowerBoundUnit,totalLatency_unavailableReason,totalLatency_definitionId,totalLatency_definitionVersion,totalLatency_definitionLabel,totalLatency_flags,totalLatency_assumptions,primaryErrors_value,primaryErrors_valueKind,primaryErrors_unit,primaryErrors_lowerBound,primaryErrors_lowerBoundUnit,primaryErrors_unavailableReason,primaryErrors_definitionId,primaryErrors_definitionVersion,primaryErrors_definitionLabel,primaryErrors_flags,primaryErrors_assumptions,totalErrors_value,totalErrors_valueKind,totalErrors_unit,totalErrors_lowerBound,totalErrors_lowerBoundUnit,totalErrors_unavailableReason,totalErrors_definitionId,totalErrors_definitionVersion,totalErrors_definitionLabel,totalErrors_flags,totalErrors_assumptions,pathLength_value,pathLength_valueKind,pathLength_unit,pathLength_lowerBound,pathLength_lowerBoundUnit,pathLength_unavailableReason,pathLength_definitionId,pathLength_definitionVersion,pathLength_definitionLabel,pathLength_flags,pathLength_assumptions,meanSpeed_value,meanSpeed_valueKind,meanSpeed_unit,meanSpeed_lowerBound,meanSpeed_lowerBoundUnit,meanSpeed_unavailableReason,meanSpeed_definitionId,meanSpeed_definitionVersion,meanSpeed_definitionLabel,meanSpeed_flags,meanSpeed_assumptions,maxSpeed_value,maxSpeed_valueKind,maxSpeed_unit,maxSpeed_lowerBound,maxSpeed_lowerBoundUnit,maxSpeed_unavailableReason,maxSpeed_definitionId,maxSpeed_definitionVersion,maxSpeed_definitionLabel,maxSpeed_flags,maxSpeed_assumptions,meanSpeedDiagnostic_value,meanSpeedDiagnostic_valueKind,meanSpeedDiagnostic_unit,meanSpeedDiagnostic_lowerBound,meanSpeedDiagnostic_lowerBoundUnit,meanSpeedDiagnostic_unavailableReason,meanSpeedDiagnostic_definitionId,meanSpeedDiagnostic_definitionVersion,meanSpeedDiagnostic_definitionLabel,meanSpeedDiagnostic_flags,meanSpeedDiagnostic_assumptions,maxSpeedDiagnostic_value,maxSpeedDiagnostic_valueKind,maxSpeedDiagnostic_unit,maxSpeedDiagnostic_lowerBound,maxSpeedDiagnostic_lowerBoundUnit,maxSpeedDiagnostic_unavailableReason,maxSpeedDiagnostic_definitionId,maxSpeedDiagnostic_definitionVersion,maxSpeedDiagnostic_definitionLabel,maxSpeedDiagnostic_flags,maxSpeedDiagnostic_assumptions,targetQuadrantFraction_value,targetQuadrantFraction_valueKind,targetQuadrantFraction_unit,targetQuadrantFraction_lowerBound,targetQuadrantFraction_lowerBoundUnit,targetQuadrantFraction_unavailableReason,targetQuadrantFraction_definitionId,targetQuadrantFraction_definitionVersion,targetQuadrantFraction_definitionLabel,targetQuadrantFraction_flags,targetQuadrantFraction_assumptions,targetQuadrantTimeSec_value,targetQuadrantTimeSec_valueKind,targetQuadrantTimeSec_unit,targetQuadrantTimeSec_lowerBound,targetQuadrantTimeSec_lowerBoundUnit,targetQuadrantTimeSec_unavailableReason,targetQuadrantTimeSec_definitionId,targetQuadrantTimeSec_definitionVersion,targetQuadrantTimeSec_definitionLabel,targetQuadrantTimeSec_flags,targetQuadrantTimeSec_assumptions,searchStrategy_valueKind,searchStrategy_classification,searchStrategy_override,searchStrategy_overrideReason,searchStrategy_classifierVersion,searchStrategy_reasoning
+114c2976-3767-4cc3-a796-c7ccf9fc884a,test50.mp4,test50,654e98559f5a81b964316487a457b206915a3ad9b084c7944c1afda3186fff87,corrected,unknown,,unknown,,,5.066667,185.100000,,done,2026-09-08T06:39:43.813Z,2026-09-08T06:39:43.816Z,false,,Censored outcome — follow-up lower bound ≥ 180.033333 s,random,,,,,,,unavailable,s,,,Target hole not confirmed.,primary_latency.v1,1,Primary latency,,,,censored,s,180.033333,s,,total_latency.v1,1,Total latency,escape_incomplete_censored,,,unavailable,count,,,Target hole not confirmed.,primary_errors.v1,1,Primary errors,,,,unavailable,count,,,Target hole not confirmed.,total_errors.v1,1,Total errors,,,5898.508982694878,numeric,px,,,,path_length.v1,1,Path length,,basis:corrected; scale_unavailable_px,31.592753718838054,numeric,px/s,,,,mean_speed.v2,2,Mean speed,timestamp_quality_gated,basis:corrected; scale_unavailable_px; speed_interval_validity.v1@1; reference_interval_us:33333; min_quality_dt_us:1667; median_observation_dt_us:33333; median_timestamp_index_dt_us:33333; quality_gated_intervals:5187; raw_intervals:5226; excluded_zero_dt:162; excluded_timestamp_compression:39,226.95185914561037,numeric,px/s,,,,max_speed.v2,2,Max speed,timestamp_quality_gated; raw_diagnostic_exceeds_gated,basis:corrected; scale_unavailable_px; speed_interval_validity.v1@1; reference_interval_us:33333; min_quality_dt_us:1667; median_observation_dt_us:33333; median_timestamp_index_dt_us:33333; quality_gated_intervals:5187; raw_intervals:5226; excluded_zero_dt:162; excluded_timestamp_compression:39,31.82631300044242,numeric,px/s,,,,mean_speed_diagnostic.v1,1,Mean speed (unfiltered diagnostic),diagnostic_only,basis:corrected; scale_unavailable_px; diagnostic:unfiltered_d12_speed; raw_intervals:5226; excluded_zero_dt:162,79030.29809434731,numeric,px/s,,,,max_speed_diagnostic.v1,1,Max speed (unfiltered diagnostic),diagnostic_only,basis:corrected; scale_unavailable_px; diagnostic:unfiltered_d12_speed; raw_intervals:5226; excluded_zero_dt:162,,unavailable,fraction,,,Target hole not confirmed.,target_quadrant_fraction.v1,1,Target quadrant fraction,,,,unavailable,s,,,Target hole not confirmed.,target_quadrant_time.v1,1,Target quadrant time,,,categorical,random,,,heuristic_v1,directnessIndex=0.022945308041365832; distinctHolesVisited=0; nonTargetInvestigationsBeforeTarget=0; centerCrossings=2; startDistanceFraction=0.5050132765294894; angularMonotonicity=0; classifierVersion=heuristic_v1
+
+# Events
+trialId,eventId,type,exportLabel,holeDisplay,holeIdInternal,startFrameIndex,endFrameIndex,startFrameDisplay,endFrameDisplay,startTimeSec,endTimeSec,entryOnsetTimeSec,completionTimeSec,censorBoundaryTimeSec,origin,status,confidence,visitIndex,isRevisit,bodyEntryPath,bodyEntryVersion,pixelEvidenceComplete,notes
+114c2976-3767-4cc3-a796-c7ccf9fc884a,419f365e-c68e-4913-97a7-2b1e8e0cb028,investigation,investigation,5,4,188,301,189,302,6.333333,10.133333,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,d6d06cb9-4d73-41ae-ac1b-8304779c5709,investigation,investigation,6,5,309,395,310,396,10.400000,13.266667,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,fd5fc4cb-525b-4816-a8ba-b85b19880314,investigation,investigation,6,5,434,472,435,473,14.566667,15.833333,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,0833c09e-c1ee-49c4-8254-a213b6dfbca7,investigation,investigation,7,6,475,548,476,549,15.933333,18.366667,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,37f92bd7-f681-4b45-b5a7-10c6ab684db3,investigation,investigation,7,6,558,571,559,572,18.700065,19.133333,,,,auto,proposed,low,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,123a8fd5-eda9-47b4-8a2f-034c6771ef95,investigation,investigation,7,6,592,698,593,699,19.866667,23.400000,,,,auto,proposed,low,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,a0284888-02bb-40de-8076-baccdbe24177,investigation,investigation,8,7,699,867,700,868,23.433333,29.033333,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,c02ed0a5-f789-471c-b72e-32574e29f92e,investigation,investigation,9,8,868,905,869,906,29.066667,30.300000,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,1b2fbb12-1c4e-45a3-b06d-9013ba8b699f,investigation,investigation,10,9,913,943,914,944,30.566667,31.566667,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,6f3b91fd-50f3-455f-bdf3-b2dfcce70e52,investigation,investigation,10,9,947,986,948,987,31.700000,33.000000,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,361cb452-f103-4a6a-a1ae-0be5c08d75f1,investigation,investigation,11,10,997,1025,998,1026,33.366667,34.300065,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,609e2eab-6ee2-44f7-8043-19bdc8369150,investigation,investigation,12,11,1049,1136,1050,1137,35.100000,38.033333,,,,auto,proposed,low,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,fb9a11d3-bf5b-4d9b-8f09-b253a7ea0e5d,investigation,investigation,6,5,1341,1469,1342,1470,44.866667,49.133333,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,2e2f75f8-0265-4dd8-a929-5536f064e97b,investigation,investigation,7,6,1470,1551,1471,1552,49.166667,51.866667,,,,auto,proposed,medium,4,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,d79a6af7-d182-406f-b323-1aacca333175,investigation,investigation,8,7,1555,1602,1556,1603,52.033333,53.600000,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,1b796835-72ce-453a-b81f-83535274c0b6,investigation,investigation,9,8,1605,1630,1606,1631,53.700000,54.533333,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,058d82c7-fb14-4aaa-a338-51426a5f003b,investigation,investigation,10,9,1720,1778,1721,1779,57.533333,59.466667,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,a37b4e5d-c888-499c-9853-672502ed6c0e,investigation,investigation,11,10,1787,1811,1788,1812,59.766667,60.566667,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,c961a2ec-6130-4eec-b319-2faf1dcad822,investigation,investigation,12,11,1836,1937,1837,1938,61.400000,64.766667,,,,auto,proposed,low,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,660d546a-d3ef-49d6-804e-fe93f5736d4f,investigation,investigation,13,12,1960,1986,1961,1987,65.533333,66.433333,,,,auto,proposed,low,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,9fb9489b-e66f-4deb-9be1-7f05a8a2110a,investigation,investigation,14,13,2000,2088,2001,2089,66.900000,69.833333,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,a80d012c-afbd-4e26-bccb-1bda9f21c209,investigation,investigation,16,15,2146,2207,2147,2208,71.766667,73.800000,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,a65dae6c-7ed4-46b6-8490-06d3816e3337,investigation,investigation,16,15,2228,2257,2229,2258,74.500000,75.466667,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,9f6de73e-2666-4843-9be2-39f129f57861,investigation,investigation,17,16,2271,2303,2272,2304,75.933333,77.000000,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,07a6d927-6f18-48b1-940a-d9387409de8a,investigation,investigation,17,16,2324,2342,2325,2343,77.700000,78.300000,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,0cecc955-80e3-41c2-bcb4-0fa1865a5a89,investigation,investigation,18,17,2532,2548,2533,2549,84.666667,85.200000,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,70627b6f-6dec-4ecc-9844-4826339a8c05,investigation,investigation,19,18,2589,2612,2590,2613,86.566667,87.333333,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,008cb730-0bd9-4772-b6df-3a66c8034941,investigation,investigation,1,0,2659,2671,2660,2672,88.900000,89.300000,,,,auto,proposed,high,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,f7383951-9aa9-4d44-9613-dc2b2fd30be9,investigation,investigation,2,1,2682,2707,2683,2708,89.666667,90.500000,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,c5a5a695-ebeb-41e6-a1bc-4b2988648859,investigation,investigation,4,3,2765,2787,2766,2788,92.433333,93.166667,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,80360563-25cf-4a26-8475-11b8638d08e1,investigation,investigation,5,4,2797,2820,2798,2821,93.500000,94.300000,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,f9036b43-797d-4ef1-a43f-e3fed9ddf1d2,investigation,investigation,5,4,2837,2862,2838,2863,94.866667,95.700000,,,,auto,proposed,low,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,d3bcff06-e80c-48e0-a86b-d7867a2863b6,investigation,investigation,6,5,2891,3018,2892,3019,96.666667,100.900000,,,,auto,proposed,medium,4,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,9dd15247-0afb-4f34-b3c8-8032bc126dd9,investigation,investigation,7,6,3025,3224,3026,3225,101.133333,107.800000,,,,auto,proposed,medium,5,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,b8ff677a-fa42-423a-9c38-64da7799d616,investigation,investigation,8,7,3228,3290,3229,3291,107.900000,109.966667,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,5e9e92fe-a283-4bef-af01-870d71374a48,investigation,investigation,9,8,3291,3323,3292,3324,110.033333,111.066732,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,6b1c6f40-3c54-4283-949d-277d281e7aee,investigation,investigation,10,9,3328,3349,3329,3350,111.266667,111.966667,,,,auto,proposed,medium,4,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,45b73661-1781-44aa-8fce-45fe2953069c,investigation,investigation,11,10,3358,3435,3359,3436,112.266667,114.833333,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,caff64b7-c9b3-474a-b9d4-622105c85f4e,investigation,investigation,12,11,3443,3467,3444,3468,115.100000,115.900000,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,af178521-b202-4418-a398-d925dd6040ed,investigation,investigation,13,12,3475,3504,3476,3505,116.166667,117.133333,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,c5e6e362-17c3-49b3-8d41-31a5d5587e4d,investigation,investigation,14,13,3511,3524,3512,3525,117.366667,117.800000,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,e3b60758-31b9-47b5-8929-0cf5dc94ccbc,investigation,investigation,15,14,3569,3646,3570,3647,119.300000,121.866667,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,d21380ae-af2c-4307-807d-d07ebbe39baf,investigation,investigation,20,19,3727,3770,3728,3771,124.600000,126.033333,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,59de58ff-0995-4c38-aaf8-ac0189e095a8,investigation,investigation,1,0,3775,3792,3776,3793,126.200000,126.766667,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,226bf1ff-3f93-4340-87d6-c2b586995454,investigation,investigation,3,2,3873,3942,3874,3943,129.466667,131.766667,,,,auto,proposed,medium,1,false,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,f1f35eac-72ea-4c5d-8811-5b49323bb2cc,investigation,investigation,5,4,3973,4006,3974,4007,132.800000,133.900000,,,,auto,proposed,medium,4,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,08caa7a8-42d9-409b-a8c8-6aad89235270,investigation,investigation,6,5,4012,4092,4013,4093,134.100000,136.766667,,,,auto,proposed,medium,5,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,f5f72c72-b49c-4bb0-ba2d-aced4d3c92c2,investigation,investigation,7,6,4100,4147,4101,4148,137.066667,138.633333,,,,auto,proposed,medium,6,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,c922cc70-ce9c-4ad4-896b-a4398fc672c3,investigation,investigation,8,7,4159,4208,4160,4209,139.033333,140.666667,,,,auto,proposed,medium,4,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,573ea0cd-26cc-445c-9b27-f4a1c60b1377,investigation,investigation,9,8,4209,4228,4210,4229,140.700000,141.333333,,,,auto,proposed,medium,4,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,797cd8c6-aca1-4db7-aa82-2262b0b11489,investigation,investigation,10,9,4249,4269,4250,4270,142.033333,142.700000,,,,auto,proposed,medium,5,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,31039c2d-542f-4e3a-890d-ab7d976f8217,investigation,investigation,11,10,4272,4295,4273,4296,142.800000,143.566667,,,,auto,proposed,medium,4,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,28f522da-f382-40fc-8ab9-83caa1eee30f,investigation,investigation,12,11,4319,4345,4320,4346,144.366667,145.233333,,,,auto,proposed,medium,4,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,b51aee30-59e1-4f1c-b8f3-46d0870156fe,investigation,investigation,13,12,4409,4430,4410,4431,147.366667,148.066667,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,3055dcb0-4f37-41ca-b525-06b70706659a,investigation,investigation,14,13,4433,4465,4434,4466,148.166667,149.233333,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,168e739a-a9a9-4f3f-9ffd-0dd7e2c063bf,investigation,investigation,15,14,4494,4525,4495,4526,150.233333,151.233333,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,21089b29-4e61-4879-a6b7-1553b0e6b640,investigation,investigation,16,15,4536,4633,4537,4634,151.600000,154.866667,,,,auto,proposed,medium,3,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,5236f0b1-ba5c-4cab-a338-6538ce76de96,investigation,investigation,4,3,4993,5046,4994,5047,166.900000,168.666667,,,,auto,proposed,medium,2,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,77571d7b-6194-42e5-b47c-25e1c87a1a0c,investigation,investigation,5,4,5048,5538,5049,5539,168.700000,185.100000,,,,auto,proposed,medium,5,true,,,,
+114c2976-3767-4cc3-a796-c7ccf9fc884a,75ba8276-1647-4b9c-89bb-2b8c8350d54b,escape_incomplete_censored,escape_incomplete_censored,5,4,5419,5538,5420,5539,181.100000,185.100000,181.100000,,185.100000,auto,proposed,medium,,,,3,,
+
+# Parameters
+category,parameter,value
+export,exportedAt,2026-09-08T06:39:43.831Z
+export,toolVersion,0.5.0-ms5
+export,measurementBasisDefault,corrected
+tracking,backgroundSampleCount,30
+tracking,minBlobAreaFraction,0.0015
+tracking,maxBlobAreaFraction,0.012
+tracking,maxPlausibleSpeedPxPerSec,800
+tracking,lowConfidenceThreshold,0.45
+tracking,toolVersion,0.5.0-ms5
+cleaning,maxGapFrames,3
+cleaning,maxGapDurationUs,500000
+cleaning,smoothingWindow,3
+cleaning,outlierSpeedMultiplier,2
+cleaning,toolVersion,0.5.0-ms5
+events,investigationNoseProximityFraction,0.1
+events,investigationBodyProximityFraction,0.14
+events,investigationMinDwellUs,400000
+events,investigationMergeGapUs,300000
+events,escapeProximityFraction,0.12
+events,escapeMotionDecayRatio,0.35
+events,escapeProximityMinSpanUs,250000
+events,escapeConfirmThreshold,0.75
+events,escapeCensorThreshold,0.45
+events,escapeCompletionAreaRatio,0.35
+events,pixelEvidenceBudgetFrames,300
+events,bodyEntryTorsoProximityFraction,0.06
+events,bodyEntryHoleDarkeningMin,0.12
+events,bodyEntryPlatformAreaMaxFraction,0.62
+events,bodyEntryTemporalMinFrames,2
+events,bodyEntryDarkeningProgressEps,0.01
+events,bodyEntryAreaProgressPx,5
+events,strategyDiThreshold,0.55
+events,strategyMaxDistinctHolesBeforeTarget,2
+events,strategyMinSerialHoles,4
+events,strategyMaxSerialViolations,2
+events,strategyCenterCrossingThreshold,2
+events,strategyNoncentralStartFlagFraction,0.35
+events,toolVersion,0.5.0-ms5
+operationalDefinitions,primaryLatencyVariant,first_target_investigation
+operationalDefinitions,quadrantConvention,target_centered_90
+operationalDefinitions,quadrantNorthDeg,
+
+# OperationalDefinitions
+definitionId,definitionVersion,definitionLabel,definitionSummary,selectedVariant,notes
+primary_latency.v1,1,Primary latency,Time to first target visit per selected variant,first_target_investigation,
+total_latency.v1,1,Total latency,Protocol completion time (confirmed escape completion),protocol_completion_time,Proposed auto completions remain censored until confirmed
+primary_errors.v1,1,Primary errors,Confirmed non-target investigations before first target visit,confirmed_investigations,Provisional counts exported separately in summary row
+total_errors.v1,1,Total errors,Confirmed non-target investigations before censor boundary,confirmed_investigations,
+path_length.v1,1,Path length,Sum of body displacements (D12),spatial_sum_valid_intervals,
+speed_interval_validity.v1,1,Speed interval validity,Exclude speed intervals with Δt below 5% of median in-trial container spacing (timestamp compression); path length unchanged (D12),median_reference_5pct,Scientific mean/max speed use v2 definitions gated by this policy
+mean_speed.v2,2,Mean speed,Time-weighted mean over timestamp-quality-valid intervals,time_weighted_mean_gated,mean_speed.v1 superseded; unfiltered diagnostic exported separately
+max_speed.v2,2,Max speed,Max instantaneous speed over timestamp-quality-valid intervals,max_quality_gated_interval,max_speed.v1 superseded; max_speed_diagnostic.v1 preserves unfiltered D12 max
+mean_speed_diagnostic.v1,1,Mean speed (unfiltered diagnostic),D12 time-weighted mean without timestamp-quality gate — not for primary reporting,time_weighted_mean_raw,
+max_speed_diagnostic.v1,1,Max speed (unfiltered diagnostic),D12 max without timestamp-quality gate — not for primary reporting,max_raw_interval,
+mean_speed.v1,1,Mean speed (legacy),Superseded by mean_speed.v2 with speed_interval_validity.v1,time_weighted_mean,Legacy bundles may still store v1 until explicit recompute
+max_speed.v1,1,Max speed (legacy),Superseded by max_speed.v2 with speed_interval_validity.v1,max_valid_interval,Legacy bundles may still store v1 until explicit recompute
+target_quadrant_fraction.v1,1,Target quadrant fraction,Fraction of in-trial time in target quadrant,target_centered_90,Unavailable when target not confirmed
+target_quadrant_time.v1,1,Target quadrant time,Time in target quadrant (seconds),target_centered_90,Unavailable when target not confirmed
+neurotrack_body_entry,3,Body entry (escape completion),Path A (centroid_pixel) may propose completion; Path B yields uncertain entry only,v3,See reference/neurotrack-body-entry-v3.md
+search_strategy.v1,heuristic_v1,Search strategy,Heuristic spatial / serial / random / unclassified,heuristic_v1,Override persisted in provenance
+
+# Provenance
+trialId,fileName,trackStatus,observationCount,manualCorrectionCount,appliedCleaningPresent,appliedCleaningStale,appliedCleaningStaleReason,eventsStale,eventsStaleReason,eventCountTotal,eventCountProposed,eventCountConfirmed,eventCountRejected,eventCountManual,investigationCount,escapeStateLabel,searchStrategyOverride,searchStrategyOverrideReason,measurementBasis,measuresBasisUsed
+114c2976-3767-4cc3-a796-c7ccf9fc884a,test50.mp4,done,5539,0,false,false,,false,,60,60,0,0,0,59,Censored outcome — follow-up lower bound ≥ 180.033333 s,,,corrected,corrected

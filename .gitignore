@@ -8,6 +8,9 @@ data/barnes-maze/*.mp4
 
 # Transient inspection artifacts
 .inspect-tmp/
+submission-review-assets/
+scripts/verify-timeline-visual.mjs
+tests/screenshots/timeline-verification/
 
 # Editor
 .vscode/

@@ -3,7 +3,7 @@
 Technical walkthrough for evaluators. Uses committed example analysis and documented sample outcomes — do not reclassify uncertain events or invent measurements for presentation.
 
 **Live app:** https://parthasarathidutta.github.io/neurotrack-ai/  
-**Demo video:** *(record and add URL to README before email submission)*
+**Demo video:** https://www.youtube.com/watch?v=hbHXh1_zTKE (~3:07; local source in `submission-review-assets/final-demo.mp4`, not committed)
 
 ---
 
@@ -43,7 +43,7 @@ Repeat briefly for test51 (censored) and test50 (censored incomplete).
 
 ## 3. Full pipeline with local video (optional second segment)
 
-Requires sample MP4s from [Salk sample data](https://github.com/talmolab/salk-airc-takehome/tree/main/data/barnes-maze) in `data/barnes-maze/`.
+Requires sample MP4s from [Salk take-home sample data](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze) in `data/barnes-maze/`.
 
 1. **Ingest** — drag/drop or folder import.
 2. **Calibration** — auto 20-hole detection; confirm or nudge; note low-confidence acknowledgment on test51.

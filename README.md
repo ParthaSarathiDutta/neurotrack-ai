@@ -1,10 +1,14 @@
 # NeuroTrack AI
 
 **Live app:** https://parthasarathidutta.github.io/neurotrack-ai/  
-**Demo video:** *(placeholder — add unlisted YouTube or Loom URL here before submission)*  
+**Demo video:** https://www.youtube.com/watch?v=hbHXh1_zTKE (~3:07)  
 **Repository:** https://github.com/ParthaSarathiDutta/neurotrack-ai
 
-Browser-based Barnes maze analysis pipeline (Salk Task 1). Architecture and roadmap: `specs/constitution.md`. Demonstration script: `reference/demo-checklist.md`.
+Browser-based Barnes maze analysis for Salk AIRC Task 1. NeuroTrack AI turns overhead maze videos into reviewable trajectories, hole-visit events, behavioral measures, and Excel-ready exports — without a terminal, install, or account. It is built for core-facility staff and graduate students who run cohorts a few times a year and need defensible numbers, visible thresholds, and manual override when tracking fails.
+
+Architecture and milestone specs: `specs/constitution.md`. Evaluator walkthrough: `reference/demo-checklist.md`.
+
+---
 
 ## Quick start (evaluators)
 
@@ -12,28 +16,69 @@ Browser-based Barnes maze analysis pipeline (Salk Task 1). Architecture and road
 2. Click **Load example analysis** to import three pre-analyzed trials (test50, test51, test53).
 3. Select a trial → review **Results & export**, **Visualizations**, and download CSV/XLSX or a `.neurotrack.json` bundle.
 
-Sample videos are not bundled; download from [Salk sample data](https://github.com/talmolab/salk-airc-takehome/tree/main/data/barnes-maze) to run the full ingest-to-export pipeline locally or to relink video after bundle import.
+Within about one minute you should see real reports and charts. No MP4 files are required for this path.
 
-## Known limitations
+**Saved example outcomes** (protocol target unknown on all clips):
 
-- **Protocol target unknown** on all three sample clips — primary latency, error counts, and quadrant measures export as **unavailable**, never as misleading zeros.
-- **Physical scale unknown** — path length and speeds report in px unless calibration supplies px/cm.
-- **Escape semantics** — test53 has confirmed *candidate-hole* completion (24.40 s); test51 uncertain entry (censored); test50 incomplete (censored). See `outputs/README.md`.
-- **Speed reporting** — primary mean/max use `speed_interval_validity.v1` / v2 definitions; diagnostic speeds retain ungated intervals for audit (`reference/speed-interval-validity.md`).
-- **Search strategy** — heuristic classifier with manual override; not tied to a single published method.
-- **Scope** — single-user, browser-local; no cohort batch queue, embedded video in bundles, or cross-session learning curves.
+| Clip | Escape / total latency | Notes |
+|------|------------------------|-------|
+| test53 | **24.40 s** numeric total latency | Candidate-hole completion confirmed; not protocol-target escape |
+| test51 | Censored ≥ **44.24 s** | Uncertain hole entry — not confirmed escape |
+| test50 | Censored ≥ **180.03 s** | Incomplete trial at recording end |
 
-## Development
+Primary latency, error counts, and quadrant measures show **Unavailable** (not zero) because the protocol target hole was never confirmed.
 
-Requires Node.js 20+ and Chromium (Playwright validators). Sample videos are **not** committed — download from [Salk sample data](https://github.com/talmolab/salk-airc-takehome/tree/main/data/barnes-maze) into `data/barnes-maze/`.
+---
+
+## Full workflow with sample videos
+
+Sample MP4s are **not** bundled in this repo. Download from the authoritative Salk take-home data:
+
+https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze
+
+Place `test50.mp4`, `test51.mp4`, and `test53.mp4` under `data/barnes-maze/` (see `reference/sample-data.md` for frame rates and known difficulties).
+
+Typical scientist workflow:
+
+1. **Ingest** — drag-and-drop or folder import; session persists in IndexedDB across refresh.
+2. **Calibrate** — auto-detect 20 holes; confirm or nudge; optionally confirm target hole if known.
+3. **Trial window** — review motion onset (~5 s) and trial end; optional protocol cutoff.
+4. **Track** — background-subtraction tracker with progress and quality summary.
+5. **Correct & clean** — frame-accurate body/nose edits; preview/apply trajectory cleaning with provenance.
+6. **Detect events** — hole investigations and escape semantics with adjustable thresholds.
+7. **Review & export** — confirm or reject proposed events; download CSV/XLSX or portable `.neurotrack.json`.
+
+---
+
+## Restore analysis without re-tracking
+
+**Load example analysis** imports `public/example/all-clips-session.neurotrack.json`.
+
+To restore your own work:
+
+1. Import a `.neurotrack.json` bundle (empty session panel or Results & export).
+2. Reports, events, measures, and calibration reload immediately — no re-tracking or re-detection.
+3. Re-select the matching MP4 when video playback is needed (fingerprint-based re-link).
+
+Portable bundles exclude video bytes by design.
+
+---
+
+## Developer setup (cold clone)
+
+Requires **Node.js 22** (CI pin) and **Chromium** (Playwright validators). Dependencies are pinned via `package-lock.json`.
 
 ```bash
+git clone https://github.com/ParthaSarathiDutta/neurotrack-ai.git
+cd neurotrack-ai
 npm ci
-npm run dev                    # local dev server (Vite)
-npm run lint && npm test && npm run build
+npm run dev          # http://localhost:5173/neurotrack-ai/
+npm run lint
+npm test             # 230 unit tests
+npm run build
 ```
 
-### Validation suite (MS-1–MS-6)
+### Validation suite
 
 Run after `npm run build` for Playwright scripts:
 
@@ -46,335 +91,110 @@ npm run validate:tracking
 npm run validate:ms4
 npm run validate:ms5
 npm run validate:import-empty
-npm run validate:ms6          # validate:ms6-viz + validate:ms6-outputs
-npm run validate:deploy       # production GitHub Pages smoke test (after deploy)
+npm run validate:ms6          # viz + output integrity
+npm run validate:deploy       # production GitHub Pages smoke test
 ```
 
-Unit tests alone: `npm test` (205 tests at MS-6 sign-off).
+Consolidated MS-6 check: `npm run validate:ms6`.
 
-### Persistence — two mechanisms
-
-1. **Browser-local (automatic):** IndexedDB via Dexie stores trials, geometry, tracks, corrections, events, and measures across refresh. Video bytes are cached with a bounded fingerprint-indexed budget; when evicted, the user re-selects the MP4 and analysis state is preserved.
-
-2. **Portable analysis bundle (explicit export/import):** `.neurotrack.json` files serialize the full trial state except video bytes. Import restores calibration through measures without re-tracking. Fingerprint metadata enables video re-linking on import.
-
-### Load example analysis
-
-On an empty session, **Load example analysis** imports `public/example/all-clips-session.neurotrack.json` (three trials: test50, test51, test53). Reports, exports, and visualizations work without MP4 bytes; re-select video when playback is needed.
-
-### Committed submission outputs
-
-Pre-generated artifacts live in `outputs/` (CSV, six-sheet XLSX, per-clip and session bundles). See `outputs/README.md` for provenance, tool versions, and regeneration:
+Regenerate committed canonical outputs from the reviewed fixture:
 
 ```bash
 npm run generate:ms6-outputs
 npm run validate:ms6-outputs
 ```
 
-Source analysis: `tests/fixtures/ms6/three-trial-session.neurotrack.json`.
+---
 
-### Submission inventory (`outputs/`)
+## Output inventory and provenance
+
+Pre-generated artifacts live in `outputs/` — see `outputs/README.md` for full provenance.
 
 | Artifact | Description |
 |----------|-------------|
-| `test{50,51,53}_summary.csv` | Machine-readable trial summary rows |
-| `test{50,51,53}_events.csv` | Event detail export |
-| `test{50,51,53}_report.xlsx` | Six-sheet workbook (Results + Summary + Events + Parameters + OperationalDefinitions + Provenance) |
+| `test{50,51,53}_summary.csv` | Machine-readable trial summary |
+| `test{50,51,53}_events.csv` | Per-event detail |
+| `test{50,51,53}_report.xlsx` | Six-sheet workbook (Results, Summary, Events, Parameters, OperationalDefinitions, Provenance) |
 | `test{50,51,53}.neurotrack.json` | Per-clip analysis bundles |
 | `bundles/all-clips-session.neurotrack.json` | Three-trial session bundle |
-| `outputs/README.md` | Provenance, tool versions, regeneration instructions |
-| `public/example/all-clips-session.neurotrack.json` | Load-example copy served by GitHub Pages |
+| `demo-recording-2026-09-08/test*_report.csv` | Live browser exports from the final demo recording (supplementary) |
+| `public/example/all-clips-session.neurotrack.json` | Served by GitHub Pages for Load example |
 
-No `.mp4` files are committed (see `.gitignore`).
+**Canonical source:** `tests/fixtures/ms6/three-trial-session.neurotrack.json` (reviewed pipeline run; test53 escape confirmed at 24.40 s). Demo-recording CSVs are preserved separately and match the same escape/censor semantics with minor session-level numeric drift.
 
-### Deployment
+No `.mp4` files are committed.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs lint, test, and build on push; **main** deploys to GitHub Pages at `/neurotrack-ai/` base path. Verify after deploy:
+---
+
+## Demo video
+
+A final screen recording demonstrates all three sample videos analyzed end-to-end in the browser.
+
+| Item | Status |
+|------|--------|
+| Hosted video | [YouTube — NeuroTrack AI demo](https://www.youtube.com/watch?v=hbHXh1_zTKE) (1080p, ~**3:07**) |
+| Local file | `submission-review-assets/final-demo.mp4` (not committed; same recording) |
+| Hosted URL | **Resolved** — linked at top of README |
+
+The assignment asks for a 2–3 minute video. The final recording is approximately **3:07** (~7 seconds over the upper bound). It was not shortened or edited to fit the limit.
+
+---
+
+## Known limitations
+
+### Scientific / protocol
+
+- **Protocol target unknown** on all three sample clips — primary latency, error counts, and quadrant measures export as **unavailable**, never as misleading zeros.
+- **Physical scale unknown** — path length and speeds report in **px** unless the user supplies px/cm calibration.
+- **Escape semantics** — test53 has confirmed *candidate-hole* completion (24.40 s); test51 uncertain entry (censored); test50 incomplete (censored). Proposed auto events remain visually distinct from confirmed ones.
+- **No ground truth** — sample videos have no reference scoring; numbers are defensible pipeline outputs, not validated against human raters.
+- **Search strategy** — heuristic classifier (`heuristic_v1`) with manual override; not tied to a single published method.
+- **Speed reporting** — primary mean/max use `speed_interval_validity.v1` / v2 definitions; diagnostic speeds retain ungated intervals for audit (`reference/speed-interval-validity.md`).
+- **Timestamp quirks** — duplicate container timestamps and sub-millisecond intervals can inflate diagnostic max speed; gated v2 speeds exclude compression intervals.
+
+### Deliberate scope exclusions
+
+- Single-user, browser-local; no cohort batch queue or server-side storage.
+- No embedded video in portable bundles.
+- No cross-session learning curves, inter-rater comparison, or model-assisted retraining.
+- Tasks 2 and 3 (colony manager, AlphaFold front end) intentionally out of scope.
+
+### Known defects / clip-specific behavior
+
+- **test51 calibration** — off-center platform and start cylinder require low-confidence acknowledgment; ring-fit uses geometric circle fit (not centroid averaging).
+- **Hole detection** — generalizes across lighting/position but may need manual nudge on unusual rigs.
+- **Occupancy time** — on-platform time can be less than trial duration when the mouse leaves the platform (documented for test51 in `reference/occupancy-time-accounting.md`).
+
+---
+
+## Data handling
+
+All video decoding, tracking, event detection, and export run **entirely in the browser**. Video bytes stay on the user's machine in IndexedDB (bounded cache) unless the user explicitly downloads an export or uploads a bundle file elsewhere. There is **no backend**, **no telemetry**, and **no third-party vision API** — the design choice keeps IACUC-sensitive recordings local by default. GitHub Pages serves only the static app shell and the committed example JSON bundle; user analyses are never uploaded automatically.
+
+---
+
+## Keys and cost
+
+**No API keys are required.** The app degrades gracefully without any credentials: evaluators can use **Load example analysis** for a full demo path with reports, charts, and exports. Local development and validation use open-source dependencies only (npm packages, Playwright). Representative cost for the Institute at scale: **$0** for analysis compute (client-side); optional GitHub Pages hosting for the static deployment only.
+
+---
+
+## Deployment
+
+GitHub Actions (`.github/workflows/ci.yml`) runs lint, test, and build on push; **main** deploys to GitHub Pages at `/neurotrack-ai/`. Verify after deploy:
 
 ```bash
 npm run validate:deploy
 ```
 
-### Data handling
+---
 
-All video processing and analysis run locally in the browser. No API keys, backend, or data egress.
+## Accessibility
 
-License: MIT
+Keyboard navigation, visible focus, labeled controls, and non-color-only status encoding are built into the UI. Validation scripts include keyboard-reachability checks (`validate:ms2` V14). Layout uses design tokens intended to remain usable at **200% browser zoom**. Key numeric results are duplicated in the Results report panel for screen-reader access alongside charts.
 
 ---
 
-# Salk AIRC: Research Software Engineer take-home
+## License
 
-Center for AI and Research Computing · Salk Institute for Biological Studies
-Requisition **RESEA002823** · Research Software Engineer I
-
-This take-home is your opportunity to show how you define,
-build, and ship research software with AI coding agents.
-
----
-
-## The short version
-
-| | |
-|---|---|
-| **Complete** | at least one of the [three tasks](#the-tasks) |
-| **Sent** | Monday, August 31, 2026 |
-| **Due** | **Tuesday, September 8, 2026, 9:00 AM Pacific** |
-| **Submit** | a GitHub repo link, emailed to **talmo@salk.edu** |
-| **Private repo?** | Fine; add **`talmo`** as a collaborator. |
-| **After** | approximately ten candidates will be invited to interview |
-
-Use any stack, language, or architecture that gets you to a working product
-your user can operate.
-
-If something in here is ambiguous, resolve it however you think best and say so
-in your README. Deciding what the request means is part of the job. We will
-answer questions about genuine blockers, but product and technical decisions
-are yours to make.
-
----
-
-## The tasks
-
-Each task comes from work requested by people at the Institute.
-
-| | Task | Leans | The one-line version |
-|---|---|---|---|
-| **1** | [Barnes maze analysis pipeline](tasks/01-barnes-maze.md) | research software | Turn a folder of behavior videos into a spreadsheet a neuroscientist can use in a paper, with no terminal required. |
-| **2** | [Animal colony manager](tasks/02-colony-manager.md) | software engineering | Build a phone-friendly system for tracking mice, cages, cleaning, and staff coverage in the vivarium. |
-| **3** | [AlphaFold front end](tasks/03-alphafold-frontend.md) | ML infrastructure | Build an approachable interface for a GPU job with a real queue behind it. |
-
-The tasks emphasize different parts of the role and use the same evaluation
-criteria. Complete at least one. A strong, deeply developed solution can score
-very well on its own. Go beyond the brief when you see a useful opportunity. If
-you want to demonstrate versatility, you may complete more than one task. We
-will consider the quality and range of everything you submit.
-
-Sample data for Task 1 is in [`data/barnes-maze/`](data/barnes-maze/). Tasks 2
-and 3 need no data from us; invent what you need, and make it plausible.
-
----
-
-## Cross-cutting requirements
-
-These requirements apply to **all three** tasks.
-
-### 1. Usability
-
-This is central to the role. We will evaluate your interface by opening it cold
-and trying to complete the task as its intended user.
-
-Design for a scientist who does not want to become a software operator. Assume:
-
-- **They will not open a terminal**, including to start your app.
-- **They are not confident with file systems.** "Put the CSV in `./data/raw/`"
-  is, for a real fraction of our users, a genuine obstacle.
-- **They will not install Python**, or conda, or Docker, or Node.
-- **They may use it four times a year** and forget the workflow between uses.
-- **They may be using a laptop the lab bought in 2019.** Assume no GPU and no
-  admin rights.
-
-A **static, client-side page** is a strong fit for many of these constraints. It
-can open in a browser with no installation, server, or account. If the task
-requires a backend, prefer a deployed service that the user visits by URL. Keep
-the installation and maintenance burden away from the scientist.
-
-### 2. Authentication
-
-**Tasks 2 and 3 need it.** They are shared internal services holding data that
-belongs to particular people, so they have to know who you are.
-
-Use **OIDC**, and demonstrate it with **GitHub** as the identity provider.
-"Sign in with GitHub" is fine and expected. At Salk this would be Entra ID or
-Okta behind the same protocol. We care that you implemented a real OIDC flow and
-considered its consequences, not which provider is on the other end.
-Authentication must be paired with authorization because different people need
-different permissions over the same records. Explain how to obtain the required
-credentials in your README, and do not commit secrets.
-
-**Task 1 is exempt.** It is a single-user analysis tool. A static client-side
-page needs no account or server, so do not add authentication unless you build a
-server-backed version with shared state or stored results.
-
-### 3. It has to run
-
-Your project must run from a cold clone on someone else's machine using only the
-instructions in your README.
-
-- Clear, complete, honest setup instructions.
-- Pin your dependencies.
-- **A live deployment is strongly encouraged.** GitHub Pages, Cloudflare
-  Workers/Pages, Fly.io, Vercel, and Modal are all reasonable options. A URL we
-  can open proves the project runs and makes it easier to evaluate.
-- If some part cannot be deployed publicly, say so and show it working in the
-  video below.
-
-**A 2 to 3 minute demo video is required.** Show the intended user completing
-the core task from start to finish. Link it from the top of your README. An
-unlisted YouTube video, Loom recording, or file in the repo is fine.
-
-The video lets us see the interface in use and provides a fallback if the live
-deployment is unavailable. Do not edit out slow or awkward parts of the
-workflow.
-
-[Screen Studio](https://screen.studio) is excellent on macOS,
-[ScreenToGif](https://www.screentogif.com) on Windows. QuickTime and OBS are
-free and completely fine. Polish is not scored.
-
-**Ship it with demo state.** Within about sixty seconds, we should be able to
-see the product doing something real without creating an account, entering
-data, or hunting for files. Seed it, include fixtures, or add a "load example"
-button. An empty app with a working *Add* button does not provide enough to
-evaluate.
-
-### 4. Use AI coding agents deliberately
-
-Fluency with agentic coding tools is a stated requirement of this job. Use the
-tools you would use in the role. We are evaluating the result and how well you
-directed, checked, and extended the agents' work.
-
-The task requirements are a starting point. Strong submissions use the leverage
-from these tools to add meaningful depth, polish, or capability.
-
-In your repo, include a short **`AI_NOTES.md`** covering:
-
-- Which tools and models you used, and how you set them up (`CLAUDE.md`,
-  subagents, hooks, custom slash commands, MCP servers, or other configuration).
-- **Two or three specific moments** where you and the model disagreed, or it
-  produced something wrong, or you threw out its approach and did it yourself.
-  What was the tell? How did you catch it?
-- What you checked before believing it worked.
-
-Keep it under a page. We are interested in your judgment and how you direct the
-tools. Session transcripts or `.specstory`-style logs are optional.
-
-**Honesty policy:** generated work is allowed. You must understand and be able
-to defend everything you submit. Expect to walk through your code in the
-interview and explain your decisions.
-
-### 5. Where the data goes, and what it costs
-
-Include two short paragraphs in your README covering the following topics.
-
-**What leaves the user's machine.** Name anything sent to a third party and
-explain the decision. Research data carries real handling constraints — animal
-records sit under an IACUC protocol, and plenty of institutional data cannot
-leave the building at all — so data handling is part of the design rather than
-an afterthought. A hosted vision API may be a reasonable choice if you identify
-and justify the tradeoff.
-
-**Keys and cost.** If your submission needs an API key, tell us which one, how
-to get it, and roughly what a representative run costs. It must **degrade
-gracefully without one** through a demo path, cached results, a mock, or a
-similar approach. If the design would cost the Institute money at scale,
-estimate that cost.
-
-### 6. Accessibility and devices
-
-Meet these minimum accessibility requirements:
-
-- Keyboard navigable. Nothing essential reachable only by hover or drag.
-- Legible contrast. Do not encode meaning in color alone; some users cannot
-  distinguish red from green.
-- Usable at 200% browser zoom.
-- Sensible labels on controls, so a screen reader is not reading `button`.
-
-**Task 2 additionally has to work on a real phone**, in a browser, held in one
-hand. Test it on an actual device rather than a resized desktop window. Test
-**iOS Safari specifically**, since that is the browser most people in the
-vivarium will use.
-
-### 7. Optional agent interface
-
-An **MCP server** or **Claude skill** that lets someone operate your product
-through Claude or ChatGPT is one way to stand out. For example: "Pull the
-strategy summary for cohort B and put it in a sheet."
-
----
-
-## Reference
-
-Our [`talmolab/vibes`](https://github.com/talmolab/vibes) repository contains
-small, browser-based research tools that may provide useful patterns, especially
-for Task 1. Borrow patterns freely, but do not submit a copy of an existing
-tool.
-
----
-
-## What your repo should contain
-
-- **`README.md`:** what it does, who it is for, how to run it, and what you
-  chose not to build and why. Put the **demo video link and live URL at the
-  top.**
-- **A "Known limitations" section**, in the README or its own file. Distinguish
-  known defects from deliberately excluded scope. Be specific. For example,
-  "hole detection fails when the platform is off-center, see `test51`" is more
-  useful than "could be more robust."
-- **`AI_NOTES.md`:** as described above.
-- **Your `.claude/` directory, `CLAUDE.md`, skills, commands, MCP configs**, if
-  you built any. This configuration helps us understand how you used the tools.
-  Do not gitignore it.
-- **Real commit history.** Do not squash the project into one `initial commit`.
-  Preserve the history of how the work developed.
-- **The code**, with whatever tests and CI you think the thing warrants.
-- **A license.** A permissive license allows us to build on work we find useful.
-
-Do not commit large binaries, secrets, or the sample videos to your own repo.
-Link to this repository instead.
-
----
-
-## How we will evaluate it
-
-We will use the following criteria across every task.
-
-| Dimension | What we are looking for |
-|---|---|
-| **User alignment and usability** | Can the intended user complete the full workflow without a terminal or your help? Does the product reflect how scientists actually work? |
-| **Creativity and ambition** | Did you find useful opportunities beyond the feature list? Do the additions make the product more effective rather than merely larger? |
-| **Execution and reliability** | Does it run from a cold clone using the README? Is there a working deployment or a clear demo of the complete workflow? |
-| **Engineering quality** | Is the code readable, maintainable, and resilient? Are error handling, tests, git history, and CI appropriate for the project? |
-| **AI-assisted development** | Did you use agents effectively and apply sound judgment to their output? Is that leverage visible in the finished product? |
-| **Judgment and domain engagement** | Did you understand the scientific or operational problem, make deliberate tradeoffs, and document real limitations? |
-| **Motivation and follow-through** | Does the submission show initiative, attention to detail, and a high standard of completion? Depth on one task, meaningful extensions, and strong work across multiple tasks can all demonstrate this. |
-
-An MCP server or agent skill, a live deployment, and other useful work beyond
-the brief can strengthen a submission.
-
-A note on what we are *not* scoring: framework choice, test coverage percentage,
-line count, commit count, or whether your CSS is fashionable.
-
----
-
-## Ground rules
-
-- **The work should be yours** in the sense that you directed it, understand it,
-  and can defend it. Agents, libraries, Stack Overflow, and your friend who
-  knows React are all fine. Handing the brief to another person is not.
-- **Do not commit secrets.** If you leak an API key, rotate it and disclose the
-  incident in your submission.
-- **Accessibility and licensing:** respect the licenses of what you pull in.
-- **If a serious issue affects your submission**, such as illness, a family
-  emergency, or hardware failure, email us.
-
-## Submitting
-
-Email the repo link to **talmo@salk.edu** by **9:00 AM Pacific on Tuesday,
-September 8**. Private repos are fine; add **`talmo`** as a collaborator.
-
-**We will confirm receipt within 24 hours.** If you have not heard back, email
-again in case the first message was filtered.
-
-## Questions
-
-Genuine blockers (broken data files, a link that 404s, an accessibility need):
-**talmo@salk.edu**. Design questions: make a call and document it.
-
-## Terms
-
-The exercise materials in this repo are provided for the purpose of this hiring
-process. You may keep and publish your own submission afterward. See
-[`data/barnes-maze/README.md`](data/barnes-maze/README.md) for the origin of the
-sample videos.
-
-Good luck. We look forward to reviewing your work.
+MIT — see [LICENSE](LICENSE).

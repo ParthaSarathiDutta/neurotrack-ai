@@ -1,0 +1,78 @@
+# Summary
+trialId,fileName,label,fingerprint,measurementBasis,targetStatus,targetHoleDisplay,scaleStatus,pxPerCm,platformDiameterCm,trialWindowStartSec,trialWindowEndSec,cutoffSeconds,trackStatus,eventsComputedAt,measuresComputedAt,eventsStale,eventsStaleReason,escapeStateSummary,searchStrategyClassification,searchStrategyOverride,primaryErrorsConfirmed,primaryErrorsProvisional,totalErrorsConfirmed,totalErrorsProvisional,primaryLatency_value,primaryLatency_valueKind,primaryLatency_unit,primaryLatency_lowerBound,primaryLatency_lowerBoundUnit,primaryLatency_unavailableReason,primaryLatency_definitionId,primaryLatency_definitionVersion,primaryLatency_definitionLabel,primaryLatency_flags,primaryLatency_assumptions,totalLatency_value,totalLatency_valueKind,totalLatency_unit,totalLatency_lowerBound,totalLatency_lowerBoundUnit,totalLatency_unavailableReason,totalLatency_definitionId,totalLatency_definitionVersion,totalLatency_definitionLabel,totalLatency_flags,totalLatency_assumptions,primaryErrors_value,primaryErrors_valueKind,primaryErrors_unit,primaryErrors_lowerBound,primaryErrors_lowerBoundUnit,primaryErrors_unavailableReason,primaryErrors_definitionId,primaryErrors_definitionVersion,primaryErrors_definitionLabel,primaryErrors_flags,primaryErrors_assumptions,totalErrors_value,totalErrors_valueKind,totalErrors_unit,totalErrors_lowerBound,totalErrors_lowerBoundUnit,totalErrors_unavailableReason,totalErrors_definitionId,totalErrors_definitionVersion,totalErrors_definitionLabel,totalErrors_flags,totalErrors_assumptions,pathLength_value,pathLength_valueKind,pathLength_unit,pathLength_lowerBound,pathLength_lowerBoundUnit,pathLength_unavailableReason,pathLength_definitionId,pathLength_definitionVersion,pathLength_definitionLabel,pathLength_flags,pathLength_assumptions,meanSpeed_value,meanSpeed_valueKind,meanSpeed_unit,meanSpeed_lowerBound,meanSpeed_lowerBoundUnit,meanSpeed_unavailableReason,meanSpeed_definitionId,meanSpeed_definitionVersion,meanSpeed_definitionLabel,meanSpeed_flags,meanSpeed_assumptions,maxSpeed_value,maxSpeed_valueKind,maxSpeed_unit,maxSpeed_lowerBound,maxSpeed_lowerBoundUnit,maxSpeed_unavailableReason,maxSpeed_definitionId,maxSpeed_definitionVersion,maxSpeed_definitionLabel,maxSpeed_flags,maxSpeed_assumptions,meanSpeedDiagnostic_value,meanSpeedDiagnostic_valueKind,meanSpeedDiagnostic_unit,meanSpeedDiagnostic_lowerBound,meanSpeedDiagnostic_lowerBoundUnit,meanSpeedDiagnostic_unavailableReason,meanSpeedDiagnostic_definitionId,meanSpeedDiagnostic_definitionVersion,meanSpeedDiagnostic_definitionLabel,meanSpeedDiagnostic_flags,meanSpeedDiagnostic_assumptions,maxSpeedDiagnostic_value,maxSpeedDiagnostic_valueKind,maxSpeedDiagnostic_unit,maxSpeedDiagnostic_lowerBound,maxSpeedDiagnostic_lowerBoundUnit,maxSpeedDiagnostic_unavailableReason,maxSpeedDiagnostic_definitionId,maxSpeedDiagnostic_definitionVersion,maxSpeedDiagnostic_definitionLabel,maxSpeedDiagnostic_flags,maxSpeedDiagnostic_assumptions,targetQuadrantFraction_value,targetQuadrantFraction_valueKind,targetQuadrantFraction_unit,targetQuadrantFraction_lowerBound,targetQuadrantFraction_lowerBoundUnit,targetQuadrantFraction_unavailableReason,targetQuadrantFraction_definitionId,targetQuadrantFraction_definitionVersion,targetQuadrantFraction_definitionLabel,targetQuadrantFraction_flags,targetQuadrantFraction_assumptions,targetQuadrantTimeSec_value,targetQuadrantTimeSec_valueKind,targetQuadrantTimeSec_unit,targetQuadrantTimeSec_lowerBound,targetQuadrantTimeSec_lowerBoundUnit,targetQuadrantTimeSec_unavailableReason,targetQuadrantTimeSec_definitionId,targetQuadrantTimeSec_definitionVersion,targetQuadrantTimeSec_definitionLabel,targetQuadrantTimeSec_flags,targetQuadrantTimeSec_assumptions,searchStrategy_valueKind,searchStrategy_classification,searchStrategy_override,searchStrategy_overrideReason,searchStrategy_classifierVersion,searchStrategy_reasoning
+d91867e3-57b3-4ab4-8cb9-0d0e211012c8,test53.mp4,test53,351e85627241debbe7b2624d84e1c7ce97086db04fed215305019cb358d4d571,corrected,unknown,,unknown,,,5.066667,30.266667,,done,2026-09-08T06:38:22.372Z,2026-09-08T06:38:37.817Z,false,,Completion at 24.400000 s; 24.40 s total latency — candidate hole completion; protocol target not confirmed,unclassified,,,,,,,unavailable,s,,,Target hole not confirmed.,primary_latency.v1,1,Primary latency,,,24.4,numeric,s,,,,total_latency.v1,1,Total latency,,,,unavailable,count,,,Target hole not confirmed.,primary_errors.v1,1,Primary errors,,,,unavailable,count,,,Target hole not confirmed.,total_errors.v1,1,Total errors,,,525.6614843472322,numeric,px,,,,path_length.v1,1,Path length,,basis:corrected; scale_unavailable_px,19.825621335659235,numeric,px/s,,,,mean_speed.v2,2,Mean speed,timestamp_quality_gated,basis:corrected; scale_unavailable_px; speed_interval_validity.v1@1; reference_interval_us:33333; min_quality_dt_us:1667; median_observation_dt_us:33333; median_timestamp_index_dt_us:33333; quality_gated_intervals:722; raw_intervals:729; excluded_zero_dt:25; excluded_timestamp_compression:7,115.12974105958878,numeric,px/s,,,,max_speed.v2,2,Max speed,timestamp_quality_gated; raw_diagnostic_exceeds_gated,basis:corrected; scale_unavailable_px; speed_interval_validity.v1@1; reference_interval_us:33333; min_quality_dt_us:1667; median_observation_dt_us:33333; median_timestamp_index_dt_us:33333; quality_gated_intervals:722; raw_intervals:729; excluded_zero_dt:25; excluded_timestamp_compression:7,20.182760932013945,numeric,px/s,,,,mean_speed_diagnostic.v1,1,Mean speed (unfiltered diagnostic),diagnostic_only,basis:corrected; scale_unavailable_px; diagnostic:unfiltered_d12_speed; raw_intervals:729; excluded_zero_dt:25,43157.98558441336,numeric,px/s,,,,max_speed_diagnostic.v1,1,Max speed (unfiltered diagnostic),diagnostic_only,basis:corrected; scale_unavailable_px; diagnostic:unfiltered_d12_speed; raw_intervals:729; excluded_zero_dt:25,,unavailable,fraction,,,Target hole not confirmed.,target_quadrant_fraction.v1,1,Target quadrant fraction,,,,unavailable,s,,,Target hole not confirmed.,target_quadrant_time.v1,1,Target quadrant time,,,categorical,unclassified,,,heuristic_v1,directnessIndex=0.1421811844085211; distinctHolesVisited=0; nonTargetInvestigationsBeforeTarget=0; centerCrossings=0; startDistanceFraction=0.9175729551233949; angularMonotonicity=0; classifierVersion=heuristic_v1
+
+# Events
+trialId,eventId,type,exportLabel,holeDisplay,holeIdInternal,startFrameIndex,endFrameIndex,startFrameDisplay,endFrameDisplay,startTimeSec,endTimeSec,entryOnsetTimeSec,completionTimeSec,censorBoundaryTimeSec,origin,status,confidence,visitIndex,isRevisit,bodyEntryPath,bodyEntryVersion,pixelEvidenceComplete,notes
+d91867e3-57b3-4ab4-8cb9-0d0e211012c8,02bd69a2-ce36-4cbc-9dfb-d1dbfc78ab33,investigation,investigation,1,0,150,265,151,266,5.066667,8.900000,,,,auto,proposed,medium,1,false,,,,
+d91867e3-57b3-4ab4-8cb9-0d0e211012c8,0f6a5764-535e-4187-a7ad-3264d36c0561,investigation,investigation,2,1,270,430,271,431,9.066667,14.433333,,,,auto,proposed,medium,1,false,,,,
+d91867e3-57b3-4ab4-8cb9-0d0e211012c8,4b5a07a9-ea77-4850-9bd4-607b8a80efcd,investigation,investigation,4,3,536,647,537,648,17.966667,21.666667,,,,auto,proposed,medium,1,false,,,,
+d91867e3-57b3-4ab4-8cb9-0d0e211012c8,5caf7a62-080e-4a01-a890-d54ec36eb6bb,investigation,investigation,2,1,737,904,738,905,24.700000,30.266667,,,,auto,proposed,medium,2,true,,,,
+d91867e3-57b3-4ab4-8cb9-0d0e211012c8,71fb9f4d-dfd3-4994-8b86-8ef05e0bd8b5,escape_completed,escape_completed_confirmed_candidate_hole,2,1,785,880,786,881,26.300000,29.466667,26.300000,29.466667,30.266667,auto,confirmed,high,,,,3,,
+
+# Parameters
+category,parameter,value
+export,exportedAt,2026-09-08T06:38:37.820Z
+export,toolVersion,0.5.0-ms5
+export,measurementBasisDefault,corrected
+tracking,backgroundSampleCount,30
+tracking,minBlobAreaFraction,0.0015
+tracking,maxBlobAreaFraction,0.012
+tracking,maxPlausibleSpeedPxPerSec,800
+tracking,lowConfidenceThreshold,0.45
+tracking,toolVersion,0.5.0-ms5
+cleaning,maxGapFrames,3
+cleaning,maxGapDurationUs,500000
+cleaning,smoothingWindow,3
+cleaning,outlierSpeedMultiplier,2
+cleaning,toolVersion,0.5.0-ms5
+events,investigationNoseProximityFraction,0.1
+events,investigationBodyProximityFraction,0.14
+events,investigationMinDwellUs,400000
+events,investigationMergeGapUs,300000
+events,escapeProximityFraction,0.12
+events,escapeMotionDecayRatio,0.35
+events,escapeProximityMinSpanUs,250000
+events,escapeConfirmThreshold,0.75
+events,escapeCensorThreshold,0.45
+events,escapeCompletionAreaRatio,0.35
+events,pixelEvidenceBudgetFrames,300
+events,bodyEntryTorsoProximityFraction,0.06
+events,bodyEntryHoleDarkeningMin,0.12
+events,bodyEntryPlatformAreaMaxFraction,0.62
+events,bodyEntryTemporalMinFrames,2
+events,bodyEntryDarkeningProgressEps,0.01
+events,bodyEntryAreaProgressPx,5
+events,strategyDiThreshold,0.55
+events,strategyMaxDistinctHolesBeforeTarget,2
+events,strategyMinSerialHoles,4
+events,strategyMaxSerialViolations,2
+events,strategyCenterCrossingThreshold,2
+events,strategyNoncentralStartFlagFraction,0.35
+events,toolVersion,0.5.0-ms5
+operationalDefinitions,primaryLatencyVariant,first_target_investigation
+operationalDefinitions,quadrantConvention,target_centered_90
+operationalDefinitions,quadrantNorthDeg,
+
+# OperationalDefinitions
+definitionId,definitionVersion,definitionLabel,definitionSummary,selectedVariant,notes
+primary_latency.v1,1,Primary latency,Time to first target visit per selected variant,first_target_investigation,
+total_latency.v1,1,Total latency,Protocol completion time (confirmed escape completion),protocol_completion_time,Proposed auto completions remain censored until confirmed
+primary_errors.v1,1,Primary errors,Confirmed non-target investigations before first target visit,confirmed_investigations,Provisional counts exported separately in summary row
+total_errors.v1,1,Total errors,Confirmed non-target investigations before censor boundary,confirmed_investigations,
+path_length.v1,1,Path length,Sum of body displacements (D12),spatial_sum_valid_intervals,
+speed_interval_validity.v1,1,Speed interval validity,Exclude speed intervals with Δt below 5% of median in-trial container spacing (timestamp compression); path length unchanged (D12),median_reference_5pct,Scientific mean/max speed use v2 definitions gated by this policy
+mean_speed.v2,2,Mean speed,Time-weighted mean over timestamp-quality-valid intervals,time_weighted_mean_gated,mean_speed.v1 superseded; unfiltered diagnostic exported separately
+max_speed.v2,2,Max speed,Max instantaneous speed over timestamp-quality-valid intervals,max_quality_gated_interval,max_speed.v1 superseded; max_speed_diagnostic.v1 preserves unfiltered D12 max
+mean_speed_diagnostic.v1,1,Mean speed (unfiltered diagnostic),D12 time-weighted mean without timestamp-quality gate — not for primary reporting,time_weighted_mean_raw,
+max_speed_diagnostic.v1,1,Max speed (unfiltered diagnostic),D12 max without timestamp-quality gate — not for primary reporting,max_raw_interval,
+mean_speed.v1,1,Mean speed (legacy),Superseded by mean_speed.v2 with speed_interval_validity.v1,time_weighted_mean,Legacy bundles may still store v1 until explicit recompute
+max_speed.v1,1,Max speed (legacy),Superseded by max_speed.v2 with speed_interval_validity.v1,max_valid_interval,Legacy bundles may still store v1 until explicit recompute
+target_quadrant_fraction.v1,1,Target quadrant fraction,Fraction of in-trial time in target quadrant,target_centered_90,Unavailable when target not confirmed
+target_quadrant_time.v1,1,Target quadrant time,Time in target quadrant (seconds),target_centered_90,Unavailable when target not confirmed
+neurotrack_body_entry,3,Body entry (escape completion),Path A (centroid_pixel) may propose completion; Path B yields uncertain entry only,v3,See reference/neurotrack-body-entry-v3.md
+search_strategy.v1,heuristic_v1,Search strategy,Heuristic spatial / serial / random / unclassified,heuristic_v1,Override persisted in provenance
+
+# Provenance
+trialId,fileName,trackStatus,observationCount,manualCorrectionCount,appliedCleaningPresent,appliedCleaningStale,appliedCleaningStaleReason,eventsStale,eventsStaleReason,eventCountTotal,eventCountProposed,eventCountConfirmed,eventCountRejected,eventCountManual,investigationCount,escapeStateLabel,searchStrategyOverride,searchStrategyOverrideReason,measurementBasis,measuresBasisUsed
+d91867e3-57b3-4ab4-8cb9-0d0e211012c8,test53.mp4,done,905,1,false,false,,false,,5,4,1,0,0,4,Completion at 24.400000 s; 24.40 s total latency — candidate hole completion; protocol target not confirmed,,,corrected,corrected

@@ -104,11 +104,11 @@ serializers in \`src/domain/export/\`. Video bytes are **not** included.
 
 ## Source videos
 
-Sample MP4s: [Salk AIRC sample data](https://github.com/salk-software/airc-takehome/tree/main/data/barnes-maze)
+Sample MP4s: [Salk AIRC take-home sample data](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze)
 (\`test50.mp4\`, \`test51.mp4\`, \`test53.mp4\`). Place locally under \`data/barnes-maze/\` for
 regeneration or MP4 re-link in the browser.
 
-## Analysis source
+## Analysis source (canonical)
 
 | Item | Location |
 |------|----------|
@@ -120,11 +120,21 @@ Pipeline: MS-1 ingest → calibration → trial window → tracking → MS-5 eve
 scientist review (test53 \`escape_completed\` confirmed at 24.40 s). Measures recomputed
 with \`speed_interval_validity.v1\` / \`max_speed.v2\` without re-detecting events.
 
+Export timestamp for canonical artifacts: **${exportedAt}** (\`toolVersion\` ${TOOL_VERSION}).
+
+## Demo-recording exports (supplementary)
+
+Browser exports from the final submission demo recording live in
+\`outputs/demo-recording-2026-09-08/\` when present (multi-section CSV reports downloaded live
+during the demo). They are preserved separately from the canonical bundle; escape/censor
+semantics should match canonical outputs with possible minor session-level numeric drift.
+Local demo video (not committed): \`submission-review-assets/final-demo.mp4\` (~3:07).
+
 ## Tool and schema versions
 
 | Field | Value |
 |-------|-------|
-| Export timestamp | ${exportedAt} |
+| Export timestamp (canonical) | ${exportedAt} |
 | Tool version | ${TOOL_VERSION} |
 | Bundle schema | 1.0.0 (\`neurotrack-analysis\`) |
 | Speed gating | speed_interval_validity.v1 |
