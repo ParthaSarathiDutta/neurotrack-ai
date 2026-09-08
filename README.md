@@ -74,9 +74,9 @@ Portable bundles deliberately exclude video bytes. Keep the original recordings 
 
 ## Source data and attribution
 
-The three demonstration recordings are `test50.mp4`, `test51.mp4`, and `test53.mp4`, provided by the [Salk Institute Center for AI and Research Computing](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze) for its Research Software Engineer exercise. NeuroTrack AI originated from that exercise and is maintained here as a standalone research-software and engineering portfolio project. The original requirements and source-data documentation are retained in the repository for traceability; they are not the project README.
+The example dataset contains three Barnes maze recordings, `test50.mp4`, `test51.mp4`, and `test53.mp4`, provided by the [Salk Institute Center for AI and Research Computing](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze). The [original source repository](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze) contains the recordings and accompanying documentation. NeuroTrack AI is an independently implemented analysis application, and the dataset is credited here for provenance and reproducibility.
 
-The sample MP4s are not committed. Download them from the linked source and place them in `data/barnes-maze/` for local development or full-pipeline validation, or select them directly through the browser interface. See [reference/sample-data.md](reference/sample-data.md) for frame rates and known clip-specific difficulties. The source recordings do not include reference annotations or complete protocol metadata.
+The sample MP4s are not committed. Download them from the linked source and place them in `data/barnes-maze/` for local development or full-pipeline validation, or select them directly through the browser interface. See [reference/sample-data.md](reference/sample-data.md) for frame rates and known clip-specific difficulties. The source recordings do not include reference annotations or complete protocol metadata. Original assignment context is preserved in [reference/salk-assignment.md](reference/salk-assignment.md).
 
 ## Developer setup
 

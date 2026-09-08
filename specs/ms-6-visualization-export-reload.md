@@ -106,8 +106,8 @@ Deliver the **scientist-facing outputs** that make MS-1–MS-5 usable in a paper
 |---|---|
 | RD1 | Reproducible workflow documented in spec and README: ingest three clips → calibrate → window → track → detect events → (optional manual confirm on test53 escape) → view report → export CSV/XLSX → save bundle. |
 | RD2 | **Committed outputs** under `outputs/` (see D3): for each of `test50`, `test51`, `test53`: `{clip}_summary.csv`, `{clip}_events.csv`, `{clip}_report.xlsx`, `{clip}.neurotrack.json`, plus `outputs/README.md` describing generation date, tool version, target/scale assumptions, and review state. |
-| RD3 | Sample MP4 files **not** committed; `outputs/README.md` links to [Salk sample data](https://github.com/talmolab/salk-airc-takehome/tree/main/data/barnes-maze). |
-| RD4 | **Load example** — UI action or documented one-click path that imports committed bundles for all three clips so evaluators see real computed output within ~60 s without running tracking (video re-select still required if blobs absent). |
+| RD3 | Sample MP4 files **not** committed; `outputs/README.md` links to [Salk sample data](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze). |
+| RD4 | **Load example** — UI action or documented one-click path that imports committed bundles for all three clips so users see real computed output within ~60 s without running tracking (video re-select still required if blobs absent). |
 | RD5 | Script `scripts/generate-demo-outputs.mjs` (or extend `validate-events-offline`) regenerates committed outputs when domain changes — run manually before release, not on every CI run (requires local videos). |
 
 ### E. Validation (priority 5)
@@ -218,7 +218,7 @@ outputs/
     all-clips-session.neurotrack.json   # optional: load-example single file
 ```
 
-Filenames stable for Salk evaluators and CI smoke tests.
+Filenames stable for downstream tools and CI smoke tests.
 
 ### D4 — Measure export encoding rules
 
@@ -282,7 +282,7 @@ Trajectory overlay: toggle in `VideoOverlay` / player chrome (`Show trajectory`)
 |---|---|
 | Standalone Cartesian path plot | Trajectory overlay done |
 | D3-based charts | SVG timeline sufficient |
-| PNG/SVG figure download | Screenshot enough for submission |
+| PNG/SVG figure download | Screenshot sufficient for demonstration |
 | Session merge UI for bundle collisions | Single-session demo adequate |
 | Multi-trial learning curve | No metadata model |
 | Show max speed + quadrant in UI | Included in ResultsExportPanel and export (Checkpoint 1) |
@@ -338,7 +338,7 @@ Sequential — each checkpoint ends with tests passing; no MS-5 science changes.
 
 **Validation gate:** Charts render in browser validation; grayscale-safe styling; MS-2/MS-4/MS-5 regressions green.
 
-### Checkpoint 4 — Submission outputs
+### Checkpoint 4 — Published outputs
 
 **Scope:** `outputs/` for test50/51/53; single session bundle; load-example path; `outputs/README.md`.
 
@@ -471,7 +471,7 @@ MS-6 is complete:
 | Export accidentally triggers re-detect | Corrupts reviewed science | Pure serializers + spy tests; code review gate |
 | Trajectory overlay performance | Janky scrubbing | Decimate display points; full resolution in export chart only if needed |
 | Load example without videos | Empty player | Clear `needs_reselect` UX; report/charts still populate from bundle |
-| Committed outputs drift from code | Evaluator confusion | Regenerate script + note toolVersion in README; CI optional hash check |
+| Committed outputs drift from code | User confusion | Regenerate script + note toolVersion in README; CI optional hash check |
 | xlsx license ambiguity | Legal | Use community edition; document in README third-party notices |
 
 ---

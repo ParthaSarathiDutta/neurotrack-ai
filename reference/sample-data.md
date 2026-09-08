@@ -3,7 +3,7 @@
 Three recordings of mice running a Barnes maze, for use in
 [Task 1](../../tasks/01-barnes-maze.md).
 
-![A frame from test53.mp4](frames/test53.jpg)
+![A frame from test53.mp4](../data/barnes-maze/frames/test53.jpg)
 
 ## Files
 
@@ -65,9 +65,6 @@ Found by hand; not exhaustive, and finding the rest is part of the exercise.
 Recorded at the Salk Institute in 2024 as pilot data for a Barnes maze pipeline.
 Use them freely for this exercise.
 
-Please link back to this repository rather than committing copies into your own
-— that keeps your submission small, and means you are always pointing at the
-same files we are looking at.
+Please link back to the [authoritative source repository](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze) rather than committing copies into your own project — that keeps the repository smaller and ensures everyone uses the same files.
 
-If your submission needs to show output, showing it on these clips is exactly
-what we want to see.
+These three clips are the standard demonstration dataset for validating pipeline output and reproducibility.

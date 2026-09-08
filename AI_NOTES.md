@@ -1,11 +1,11 @@
 # AI Notes
 
-Concise summary for submission. Full milestone-by-milestone engineering log: `reference/ai-notes-archive.md`.
+Concise engineering summary. Full milestone-by-milestone log: `reference/ai-notes-archive.md`.
 
 ## Tools and setup
 
 - **Primary environment:** [Cursor](https://cursor.com) IDE with Agent mode (Composer), used for implementation, refactors, validation scripts, and documentation across MS-1–MS-6.
-- **Project guidance:** `.cursor/rules/project.mdc` (Salk Task 1 scope, scientific integrity, no sample-video hard-coding). Specs in `specs/` and `reference/` were treated as authoritative over agent suggestions.
+- **Project guidance:** `.cursor/rules/project.mdc` (Barnes maze pipeline scope, scientific integrity, no sample-video hard-coding). Specs in `specs/` and `reference/` were treated as authoritative over agent suggestions.
 - **Validation:** Vitest unit tests, ESLint, Playwright browser validators (`scripts/validate-*.mjs`), and GitHub Actions CI (lint → test → build → Pages deploy).
 - **No committed `CLAUDE.md` or custom MCP server** for this repo — configuration is the Cursor rules above plus the archived notes.
 
