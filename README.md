@@ -4,6 +4,8 @@
 
 [**Live application**](https://parthasarathidutta.github.io/neurotrack-ai/) · [**Watch the demo**](https://www.youtube.com/watch?v=hbHXh1_zTKE) · [**Analysis outputs**](outputs/) · [**Source code**](src/)
 
+For the clearest view of the interface, select **1080p** in YouTube's Quality settings.
+
 NeuroTrack AI transforms overhead behavioral recordings into reviewable trajectories, hole-investigation events, scientific measurements, visualizations, and spreadsheet-ready reports. It combines automated computer vision with scientist-in-the-loop review so that tracking failures, uncertain events, and missing protocol information remain visible rather than being silently converted into measurements.
 
 The application runs locally in the browser without an account, GPU, backend, or installation for end users. It is designed for researchers and core-facility staff who need a reproducible workflow from raw video to analysis results. Developed by Partha Sarathi Dutta using TypeScript, React, WebCodecs, browser workers, and local persistence.
