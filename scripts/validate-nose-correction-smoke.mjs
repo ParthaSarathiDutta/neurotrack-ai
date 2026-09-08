@@ -336,9 +336,12 @@ async function main() {
         ? 'PASS'
         : `FAIL: before=${eventsMetaBeforeReset.computedAt} after=${eventsMetaAfterReset.computedAt}`;
 
+    await seekFrameIndex(page, frameIndex);
     await reactClick(page, 'correction-remove-nose');
     await waitForPersist(page);
     await waitForReviewAfterReload(page);
+    const trialIdAfterReload = await page.locator('[data-testid="review-view"]').getAttribute('data-trial-id');
+    if (!trialIdAfterReload) throw new Error('trial id missing after reload');
     await seekFrameIndex(page, frameIndex);
 
     const afterReload = await page.evaluate(
@@ -346,7 +349,7 @@ async function main() {
         effectiveNose: window.__ntGetEffectiveNoseAt?.(tid, idx) ?? null,
         meta: window.__ntGetManualCorrectionMeta?.(tid, idx) ?? null,
       }),
-      { tid: trialId, idx: frameIndex },
+      { tid: trialIdAfterReload, idx: frameIndex },
     );
     results.S7_reload_persistence =
       afterReload.effectiveNose == null && afterReload.meta?.noseRemoved === true
@@ -355,7 +358,7 @@ async function main() {
 
     const invCountAfterReload = await page.evaluate(
       (tid) => window.__ntGetInvestigationCount?.(tid) ?? 0,
-      trialId,
+      trialIdAfterReload,
     );
     results.S8_downstream_events =
       invCountAfterReload === invCountBeforeReset ? 'PASS' : `PASS (counts ${invCountBeforeReset}→${invCountAfterReload}, redetect ran)`;

@@ -14,6 +14,7 @@ In Correction & cleaning, **Remove nose** required an existing manual correction
 
 1. **Body-only correction hid automatic nose.** `applyManualBodyCorrection` stored `noseXY: null` when no manual nose existed, and `applyManualCorrections` treated that as an explicit null override — hiding a valid automatic nose.
 2. **Reset frame to auto did not update downstream analysis.** `resetManualCorrection` persisted the reset and marked cleaning stale but did not call `scheduleAsyncRedetect`, unlike body correction and nose removal.
+3. **Manual nose placement did not update downstream analysis.** `applyManualNoseCorrection` persisted the correction and marked cleaning stale but did not call `scheduleAsyncRedetect`.
 
 ### Expected behavior
 
@@ -30,6 +31,13 @@ On any frame with a visible nose estimate (automatic or manual):
 - Changes only the body position.
 - Preserves an existing manual nose or automatic nose when available.
 - Does not restore a nose that was explicitly marked unavailable (`noseRemoved: true`).
+
+**Correct nose (manual placement)**
+
+- Requires a body position (automatic or manual) on the frame.
+- Sets `noseXY` to the placed point and clears `noseRemoved`.
+- Preserves the effective body unchanged.
+- Marks cleaning stale, persists, and triggers event re-detection (same workflow as body correction, nose removal, and reset).
 
 Removing a nose means marking its position unavailable for analysis on that frame — not deleting the mouse, the frame, or body tracking.
 
@@ -49,7 +57,8 @@ Removing a nose means marking its position unavailable for analysis on that fram
 
 **Store (`src/store/sessionStore.ts`)**
 
-- Body/nose/remove actions use builders; `resetManualCorrection` calls `scheduleAsyncRedetect` when a correction existed.
+- Body/nose/remove/reset actions use builders and call `scheduleAsyncRedetect` on successful correction changes.
+- Re-detect is skipped when nose placement cannot proceed (no body on frame).
 
 **UI (`src/components/CorrectionCleaningPanel.tsx`)**
 
@@ -66,8 +75,12 @@ Removing a nose means marking its position unavailable for analysis on that fram
 - Body-only preserves automatic and manual nose.
 - Body correction after explicit removal does not restore nose.
 - Legacy bundle compatibility heuristics.
-- One-click removal, reset, cleaning staleness, persistence, bundle round-trip.
+- One-click removal, manual nose placement after removal, reset, cleaning staleness, persistence, bundle round-trip.
 - Confirmed event preservation through merge.
+
+**Legacy limitation (not migrated)**
+
+Bundles saved before `noseRemoved` was introduced may contain ambiguous records when a scientist removed the nose **after** also correcting the body on the same frame. Those records stored `noseXY: null` without `noseRemoved: true`. On load, the legacy heuristic treats unchanged-body + null nose as explicit removal and changed-body + null nose as body-only (inherit automatic nose). A true explicit removal that changed only the nose flag while the stored body differed from raw may be misclassified until the frame is re-saved through **Mark nose unavailable** (which writes `noseRemoved: true`). No automatic rewrite of saved bundles is performed.
 
 **Automated suites**
 
@@ -76,6 +89,7 @@ Removing a nose means marking its position unavailable for analysis on that fram
 - `npm run build`
 - `npm run validate:ms4`
 - `npm run validate:nose-correction-smoke` — isolated Playwright session on `test53.mp4`.
+- `npm run validate:ms5` — event/measures regression (downstream correction workflow).
 
 **Manual browser smoke (validate:nose-correction-smoke)**
 

@@ -378,3 +378,147 @@ describe('one-click nose removal persistence', () => {
     expect(imported!.track!.observations[0].noseXY).toEqual({ x: 42, y: 48 });
   });
 });
+
+describe('manual nose placement', () => {
+  const timeUs = 1_000_000;
+  const frameIndex = 5;
+  const autoBody = { x: 100, y: 200 };
+  const autoNose = { x: 110, y: 190 };
+  const manualBody = { x: 120, y: 210 };
+  const placedNose = { x: 130, y: 195 };
+
+  it('clears explicit removal and shows placed nose while preserving automatic body', () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const removal = resolveNoseRemoval(frameIndex, timeUs, raw, undefined, 'removed');
+    expect(removal.kind).toBe('ok');
+    if (removal.kind !== 'ok') return;
+
+    const placed = buildManualNoseCorrection(
+      frameIndex,
+      timeUs,
+      autoBody,
+      placedNose.x,
+      placedNose.y,
+      'placed',
+    );
+    expect(placed.noseRemoved).toBe(false);
+    expect(isNoseExplicitlyRemoved(raw, placed)).toBe(false);
+
+    const effective = applyManualCorrections([raw], [placed]);
+    expect(effective[0].noseXY).toEqual(placedNose);
+    expect(effective[0].bodyXY).toEqual(autoBody);
+    expect(raw.noseXY).toEqual(autoNose);
+  });
+
+  it('preserves manual body coordinates when placing nose after explicit removal', () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const bodyCorrection = buildBodyCorrection(
+      frameIndex,
+      timeUs,
+      manualBody.x,
+      manualBody.y,
+      undefined,
+      'body',
+    );
+    const removal = resolveNoseRemoval(frameIndex, timeUs, raw, bodyCorrection, 'removed');
+    expect(removal.kind).toBe('ok');
+    if (removal.kind !== 'ok') return;
+
+    const placed = buildManualNoseCorrection(
+      frameIndex,
+      timeUs,
+      manualBody,
+      placedNose.x,
+      placedNose.y,
+      'placed',
+    );
+    const effective = applyManualCorrections([raw], [placed]);
+    expect(effective[0].bodyXY).toEqual(manualBody);
+    expect(effective[0].noseXY).toEqual(placedNose);
+    expect(placed.noseRemoved).toBe(false);
+  });
+
+  it('marks applied cleaning stale when a manual nose correction is upserted', () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const placed = buildManualNoseCorrection(
+      frameIndex,
+      timeUs,
+      autoBody,
+      placedNose.x,
+      placedNose.y,
+      'placed',
+    );
+    const base = trackWith([raw], [], true);
+    const updated = markAppliedCleaningStale(
+      {
+        ...base,
+        manualCorrections: upsertManualCorrection(base.manualCorrections, placed),
+      },
+      STALE_REASON_MANUAL_CORRECTION,
+    );
+    expect(updated.appliedCleaning?.stale).toBe(true);
+  });
+
+  it('round-trips manual nose placement after explicit removal through session persistence', async () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const removal = resolveNoseRemoval(frameIndex, timeUs, raw, undefined, 'removed');
+    expect(removal.kind).toBe('ok');
+    if (removal.kind !== 'ok') return;
+    const placed = buildManualNoseCorrection(
+      frameIndex,
+      timeUs,
+      autoBody,
+      placedNose.x,
+      placedNose.y,
+      'placed',
+    );
+
+    const trial = applyIngestResult(createTrialStub('nose-place-fp', 'test51.mp4'), null, [], 100);
+    trial.track = trackWith([raw], [placed]);
+
+    await saveSession({
+      trials: [trial],
+      selectedTrialId: trial.id,
+      analysisParams: defaultAnalysisParams(),
+    });
+
+    const loaded = await loadSession();
+    const correction = loaded?.trials[0]?.track?.manualCorrections[0];
+    expect(correction?.noseRemoved).toBe(false);
+    expect(correction?.noseXY).toEqual(placedNose);
+    const effective = resolveEffectiveObservations(loaded!.trials[0].track!, {});
+    expect(effective.find((o) => o.frameIndex === frameIndex)?.noseXY).toEqual(placedNose);
+    expect(loaded!.trials[0].track!.observations[0].noseXY).toEqual(autoNose);
+  });
+
+  it('preserves confirmed reviewed events during merge after nose placement re-detect', () => {
+    const confirmed: BehavioralEvent = {
+      id: 'confirmed-inv',
+      type: 'investigation',
+      holeId: 2,
+      startFrameIndex: frameIndex,
+      endFrameIndex: frameIndex + 5,
+      startTimeUs: timeUs,
+      endTimeUs: timeUs + 500_000,
+      entryOnsetTimeUs: timeUs,
+      completionTimeUs: null,
+      censorBoundaryTimeUs: null,
+      origin: 'auto',
+      status: 'confirmed',
+      confidence: 'high',
+      visitIndex: 1,
+      isRevisit: false,
+      evidence: {},
+      notes: null,
+    };
+    const redetected: BehavioralEvent = {
+      ...confirmed,
+      id: 'new-auto',
+      status: 'proposed',
+      origin: 'auto',
+    };
+    const merged = mergeDetectedEvents([confirmed], [redetected]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.status).toBe('confirmed');
+  });
+});

@@ -872,6 +872,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   applyManualNoseCorrection: (trialId, frameIndex, x, y) => {
+    let shouldRedetect = false;
     set((state) => {
       const trial = state.trials.find((t) => t.id === trialId);
       if (!trial?.track?.observations.length) return state;
@@ -881,6 +882,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const existing = trial.track.manualCorrections.find((c) => c.frameIndex === frameIndex);
       const body = existing?.bodyXY ?? raw?.bodyXY;
       if (!body) return { ...state, statusMessage: 'Set a body position before placing the nose.' };
+      shouldRedetect = true;
       const correction = buildManualNoseCorrection(
         frameIndex,
         entry.timeUs,
@@ -906,6 +908,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         statusMessage: `Manual nose correction saved for frame ${frameIndex + 1}.`,
       };
     });
+    if (shouldRedetect) {
+      scheduleAsyncRedetect(get, set, trialId);
+    }
     void flushSave(get, set);
   },
 
