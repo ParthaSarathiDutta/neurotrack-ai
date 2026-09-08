@@ -8,8 +8,11 @@ import {
 import { mergeDetectedEvents } from '../src/domain/events/eventMerge';
 import {
   applyManualCorrections,
+  buildBodyCorrection,
+  buildManualNoseCorrection,
   canRemoveNoseEstimate,
   effectiveNoseXY,
+  isNoseExplicitlyRemoved,
   removeManualCorrection,
   resolveNoseRemoval,
   upsertManualCorrection,
@@ -19,8 +22,16 @@ import {
   STALE_REASON_MANUAL_CORRECTION,
 } from '../src/domain/trajectory/cleaningStaleness';
 import { resolveEffectiveObservations } from '../src/domain/trajectory/resolveObservations';
-import type { BehavioralEvent, ManualCorrection, Observation, Track } from '../src/domain/types';
-import { applyIngestResult, createTrialStub, defaultCleaningParams, defaultTrackingParams } from '../src/domain/trialFactory';
+import { buildNeuroTrackBundle, serializeNeuroTrackBundle } from '../src/domain/export/bundleExport';
+import { applyBundleImport } from '../src/domain/export/bundleImport';
+import { parseNeuroTrackBundleJson } from '../src/domain/export/bundleSchema';
+import type { BehavioralEvent, ManualCorrection, Observation, Track, TrialRecord } from '../src/domain/types';
+import {
+  applyIngestResult,
+  createTrialStub,
+  defaultCleaningParams,
+  defaultTrackingParams,
+} from '../src/domain/trialFactory';
 
 function obs(
   frameIndex: number,
@@ -65,6 +76,95 @@ function trackWith(
   };
 }
 
+describe('manual correction nose preservation', () => {
+  const timeUs = 1_000_000;
+  const frameIndex = 5;
+  const autoBody = { x: 100, y: 200 };
+  const autoNose = { x: 110, y: 190 };
+  const manualBody = { x: 120, y: 210 };
+  const manualNose = { x: 125, y: 205 };
+
+  it('body-only correction preserves automatic nose', () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const correction = buildBodyCorrection(frameIndex, timeUs, manualBody.x, manualBody.y, undefined, 't');
+    const effective = applyManualCorrections([raw], [correction]);
+    expect(raw.noseXY).toEqual(autoNose);
+    expect(effective[0].bodyXY).toEqual(manualBody);
+    expect(effective[0].noseXY).toEqual(autoNose);
+    expect(correction.noseRemoved).toBe(false);
+  });
+
+  it('body-only correction preserves manual nose', () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const existing = buildManualNoseCorrection(
+      frameIndex,
+      timeUs,
+      autoBody,
+      manualNose.x,
+      manualNose.y,
+      'before',
+    );
+    const correction = buildBodyCorrection(
+      frameIndex,
+      timeUs,
+      manualBody.x,
+      manualBody.y,
+      existing,
+      't',
+    );
+    const effective = applyManualCorrections([raw], [correction]);
+    expect(effective[0].noseXY).toEqual(manualNose);
+    expect(effective[0].bodyXY).toEqual(manualBody);
+  });
+
+  it('body correction after explicit nose removal does not restore the nose', () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const removed = resolveNoseRemoval(frameIndex, timeUs, raw, undefined, 'removed');
+    expect(removed.kind).toBe('ok');
+    if (removed.kind !== 'ok') return;
+
+    const bodyAfterRemoval = buildBodyCorrection(
+      frameIndex,
+      timeUs,
+      manualBody.x,
+      manualBody.y,
+      removed.correction,
+      'body',
+    );
+    const effective = applyManualCorrections([raw], [bodyAfterRemoval]);
+    expect(effective[0].noseXY).toBeNull();
+    expect(effective[0].bodyXY).toEqual(manualBody);
+    expect(bodyAfterRemoval.noseRemoved).toBe(true);
+    expect(isNoseExplicitlyRemoved(raw, bodyAfterRemoval)).toBe(true);
+  });
+
+  it('legacy body-only correction with null noseXY inherits automatic nose when body changed', () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const legacyBodyOnly: ManualCorrection = {
+      frameIndex,
+      timeUs,
+      bodyXY: manualBody,
+      noseXY: null,
+      correctedAt: 'legacy',
+    };
+    const effective = applyManualCorrections([raw], [legacyBodyOnly]);
+    expect(effective[0].noseXY).toEqual(autoNose);
+  });
+
+  it('legacy explicit nose removal with unchanged body stays unavailable', () => {
+    const raw = obs(frameIndex, timeUs, autoBody, autoNose);
+    const legacyRemoval: ManualCorrection = {
+      frameIndex,
+      timeUs,
+      bodyXY: autoBody,
+      noseXY: null,
+      correctedAt: 'legacy',
+    };
+    expect(isNoseExplicitlyRemoved(raw, legacyRemoval)).toBe(true);
+    expect(applyManualCorrections([raw], [legacyRemoval])[0].noseXY).toBeNull();
+  });
+});
+
 describe('one-click nose removal', () => {
   const timeUs = 1_000_000;
   const frameIndex = 5;
@@ -81,6 +181,7 @@ describe('one-click nose removal', () => {
 
     expect(outcome.correction.bodyXY).toEqual(autoBody);
     expect(outcome.correction.noseXY).toBeNull();
+    expect(outcome.correction.noseRemoved).toBe(true);
 
     const effective = applyManualCorrections([raw], [outcome.correction]);
     expect(raw.noseXY).toEqual(autoNose);
@@ -109,6 +210,7 @@ describe('one-click nose removal', () => {
 
     expect(outcome.correction.bodyXY).toEqual(manualBody);
     expect(outcome.correction.noseXY).toBeNull();
+    expect(outcome.correction.noseRemoved).toBe(true);
 
     const effective = applyManualCorrections([raw], [outcome.correction]);
     expect(effective[0].bodyXY).toEqual(manualBody);
@@ -128,6 +230,7 @@ describe('one-click nose removal', () => {
       timeUs,
       bodyXY: autoBody,
       noseXY: null,
+      noseRemoved: true,
       correctedAt: 't',
     };
     expect(effectiveNoseXY(raw, existing)).toBeNull();
@@ -150,6 +253,7 @@ describe('one-click nose removal', () => {
     );
     expect(afterReset[0].origin).toBe('auto');
     expect(afterReset[0].noseXY).toEqual(autoNose);
+    expect(afterReset[0].bodyXY).toEqual(autoBody);
     expect(raw.noseXY).toEqual(autoNose);
   });
 
@@ -209,7 +313,7 @@ describe('one-click nose removal persistence', () => {
     await clearSessionForTests();
   });
 
-  it('round-trips nose removal corrections through session persistence', async () => {
+  it('round-trips explicit nose removal through session persistence', async () => {
     const frameIndex = 3;
     const timeUs = 900_000;
     const raw = obs(frameIndex, timeUs, { x: 50, y: 60 }, { x: 55, y: 58 });
@@ -229,6 +333,7 @@ describe('one-click nose removal persistence', () => {
     const loaded = await loadSession();
     const loadedCorrection = loaded?.trials[0]?.track?.manualCorrections[0];
     expect(loadedCorrection?.noseXY).toBeNull();
+    expect(loadedCorrection?.noseRemoved).toBe(true);
     expect(loadedCorrection?.bodyXY).toEqual({ x: 50, y: 60 });
 
     const effective = resolveEffectiveObservations(loaded!.trials[0].track!, {});
@@ -236,5 +341,40 @@ describe('one-click nose removal persistence', () => {
     expect(frame?.noseXY).toBeNull();
     expect(frame?.bodyXY).toEqual({ x: 50, y: 60 });
     expect(loaded!.trials[0].track!.observations[0].noseXY).toEqual({ x: 55, y: 58 });
+  });
+
+  it('round-trips explicit nose removal through analysis bundle export/import', () => {
+    const frameIndex = 8;
+    const timeUs = 1_200_000;
+    const raw = obs(frameIndex, timeUs, { x: 40, y: 50 }, { x: 42, y: 48 });
+    const removal = resolveNoseRemoval(frameIndex, timeUs, raw, undefined, 'bundle-t');
+    expect(removal.kind).toBe('ok');
+    if (removal.kind !== 'ok') return;
+
+    const trial: TrialRecord = {
+      ...applyIngestResult(createTrialStub('bundle-fp', 'test53.mp4'), null, [], 100),
+      track: trackWith([raw], [removal.correction]),
+    };
+    const bundle = buildNeuroTrackBundle([trial], defaultAnalysisParams(), trial.id);
+    const json = serializeNeuroTrackBundle(bundle);
+    const parsed = parseNeuroTrackBundleJson(json);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const importedResult = applyBundleImport({
+      bundle: parsed.bundle,
+      existingTrials: [],
+      existingSelectedTrialId: null,
+      existingAnalysisParams: defaultAnalysisParams(),
+      replaceConfirmed: false,
+      cachedFingerprints: new Set(),
+    });
+    expect(importedResult.ok).toBe(true);
+    if (!importedResult.ok) return;
+    const imported = importedResult.trials[0];
+    const correction = imported?.track?.manualCorrections[0];
+    expect(correction?.noseRemoved).toBe(true);
+    expect(resolveEffectiveObservations(imported!.track!, {}).find((o) => o.frameIndex === frameIndex)
+      ?.noseXY).toBeNull();
+    expect(imported!.track!.observations[0].noseXY).toEqual({ x: 42, y: 48 });
   });
 });

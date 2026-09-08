@@ -21,10 +21,12 @@ import {
 import { censorBoundaryTimeUs, effectiveTrialStartUs } from '../domain/events/holeProximity';
 import { measuresFromAnalysis } from '../domain/measures/computeMeasures';
 import { resolveMeasurementObservations } from '../domain/trajectory/measurementObservations';
-import type { AnalysisParams, BehavioralEvent, CleaningParams, EventDetectionParams, EventType, Geometry, Hole, ManualCorrection, MeasurementBasis, Observation, OperationalDefinitionSelections, TrialRecord, TrialWindow } from '../domain/types';
+import type { AnalysisParams, BehavioralEvent, CleaningParams, EventDetectionParams, EventType, Geometry, Hole, MeasurementBasis, Observation, OperationalDefinitionSelections, TrialRecord, TrialWindow } from '../domain/types';
 import { computeCleanedTrajectory } from '../domain/trajectory/cleaning';
 import {
   applyManualCorrections,
+  buildBodyCorrection,
+  buildManualNoseCorrection,
   removeManualCorrection,
   resolveNoseRemoval,
   upsertManualCorrection,
@@ -836,13 +838,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const entry = trial.timestampIndex[frameIndex];
       if (!entry) return state;
       const existing = trial.track.manualCorrections.find((c) => c.frameIndex === frameIndex);
-      const correction: ManualCorrection = {
+      const correction = buildBodyCorrection(
         frameIndex,
-        timeUs: entry.timeUs,
-        bodyXY: { x, y },
-        noseXY: existing?.noseXY ?? null,
-        correctedAt: new Date().toISOString(),
-      };
+        entry.timeUs,
+        x,
+        y,
+        existing,
+        new Date().toISOString(),
+      );
       return {
         correctionMode: state.correctionMode,
         cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
@@ -878,13 +881,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const existing = trial.track.manualCorrections.find((c) => c.frameIndex === frameIndex);
       const body = existing?.bodyXY ?? raw?.bodyXY;
       if (!body) return { ...state, statusMessage: 'Set a body position before placing the nose.' };
-      const correction: ManualCorrection = {
+      const correction = buildManualNoseCorrection(
         frameIndex,
-        timeUs: entry.timeUs,
-        bodyXY: body,
-        noseXY: { x, y },
-        correctedAt: new Date().toISOString(),
-      };
+        entry.timeUs,
+        body,
+        x,
+        y,
+        new Date().toISOString(),
+      );
       return {
         cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
         trials: patchTrial(state.trials, trialId, (t) => ({
@@ -950,6 +954,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   resetManualCorrection: (trialId, frameIndex) => {
+    const hadCorrection = get().trials.some(
+      (t) =>
+        t.id === trialId &&
+        t.track?.manualCorrections.some((c) => c.frameIndex === frameIndex),
+    );
     set((state) => ({
       cleaningPreviewByTrialId: { ...state.cleaningPreviewByTrialId, [trialId]: null },
       trials: patchTrial(state.trials, trialId, (t) => ({
@@ -966,6 +975,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       })),
       statusMessage: `Frame ${frameIndex + 1} restored to automatic tracking.`,
     }));
+    if (hadCorrection) {
+      scheduleAsyncRedetect(get, set, trialId);
+    }
     void flushSave(get, set);
   },
 
@@ -1310,6 +1322,29 @@ if (typeof window !== 'undefined') {
       trialId: string,
       frameIndex: number,
     ) => { x: number; y: number } | null;
+    __ntGetRawBodyAt?: (trialId: string, frameIndex: number) => { x: number; y: number } | null;
+    __ntGetRawNoseAt?: (trialId: string, frameIndex: number) => { x: number; y: number } | null;
+    __ntGetEffectiveNoseAt?: (
+      trialId: string,
+      frameIndex: number,
+    ) => { x: number; y: number } | null;
+    __ntGetEffectiveBodyAt?: (
+      trialId: string,
+      frameIndex: number,
+    ) => { x: number; y: number } | null;
+    __ntRemoveNoseCorrection?: (trialId: string, frameIndex: number) => void;
+    __ntFindFrameWithAutoNose?: (trialId: string) => number | null;
+    __ntGetManualCorrectionMeta?: (
+      trialId: string,
+      frameIndex: number,
+    ) => {
+      bodyXY: { x: number; y: number } | null;
+      noseXY: { x: number; y: number } | null;
+      noseRemoved: boolean;
+    } | null;
+    __ntGetTrialEventsMeta?: (
+      trialId: string,
+    ) => { computedAt: string | null; stale: boolean; eventCount: number } | null;
     __ntResetManualCorrection?: (trialId: string, frameIndex: number) => void;
     __ntGetEffectiveOriginAt?: (trialId: string, frameIndex: number) => string | null;
     __ntUpdateCleaningParams?: (patch: { maxGapFrames?: number; smoothingWindow?: number; maxGapDurationUs?: number }) => void;
@@ -1376,6 +1411,62 @@ if (typeof window !== 'undefined') {
     const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
     const correction = trial?.track?.manualCorrections.find((c) => c.frameIndex === frameIndex);
     return correction?.bodyXY ?? null;
+  };
+  hooks.__ntGetRawBodyAt = (trialId, frameIndex) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    return trial?.track?.observations.find((o) => o.frameIndex === frameIndex)?.bodyXY ?? null;
+  };
+  hooks.__ntGetRawNoseAt = (trialId, frameIndex) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    return trial?.track?.observations.find((o) => o.frameIndex === frameIndex)?.noseXY ?? null;
+  };
+  hooks.__ntGetEffectiveNoseAt = (trialId, frameIndex) => {
+    const state = useSessionStore.getState();
+    const trial = state.trials.find((t) => t.id === trialId);
+    if (!trial?.track) return null;
+    const effective = resolveEffectiveObservations(trial.track, {
+      cleaningPreview: state.cleaningPreviewByTrialId[trialId] ?? null,
+    });
+    return effective.find((o) => o.frameIndex === frameIndex)?.noseXY ?? null;
+  };
+  hooks.__ntGetEffectiveBodyAt = (trialId, frameIndex) => {
+    const state = useSessionStore.getState();
+    const trial = state.trials.find((t) => t.id === trialId);
+    if (!trial?.track) return null;
+    const effective = resolveEffectiveObservations(trial.track, {
+      cleaningPreview: state.cleaningPreviewByTrialId[trialId] ?? null,
+    });
+    return effective.find((o) => o.frameIndex === frameIndex)?.bodyXY ?? null;
+  };
+  hooks.__ntRemoveNoseCorrection = (trialId, frameIndex) => {
+    useSessionStore.getState().removeManualNoseCorrection(trialId, frameIndex);
+  };
+  hooks.__ntFindFrameWithAutoNose = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    if (!trial?.track) return null;
+    for (const obs of trial.track.observations) {
+      if (obs.noseXY != null && obs.bodyXY != null) return obs.frameIndex;
+    }
+    return null;
+  };
+  hooks.__ntGetManualCorrectionMeta = (trialId, frameIndex) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    const correction = trial?.track?.manualCorrections.find((c) => c.frameIndex === frameIndex);
+    if (!correction) return null;
+    return {
+      bodyXY: correction.bodyXY,
+      noseXY: correction.noseXY,
+      noseRemoved: correction.noseRemoved === true,
+    };
+  };
+  hooks.__ntGetTrialEventsMeta = (trialId) => {
+    const trial = useSessionStore.getState().trials.find((t) => t.id === trialId);
+    if (!trial?.events) return null;
+    return {
+      computedAt: trial.events.computedAt,
+      stale: trial.events.stale ?? false,
+      eventCount: trial.events.events.length,
+    };
   };
   hooks.__ntResetManualCorrection = (trialId, frameIndex) => {
     useSessionStore.getState().resetManualCorrection(trialId, frameIndex);

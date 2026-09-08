@@ -124,6 +124,8 @@ export interface ManualCorrection {
   timeUs: number;
   bodyXY: { x: number; y: number } | null;
   noseXY: { x: number; y: number } | null;
+  /** When true, nose is explicitly unavailable; body-only corrections leave this false/undefined. */
+  noseRemoved?: boolean;
   correctedAt: string;
 }
 

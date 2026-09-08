@@ -15,6 +15,7 @@
     "validate:tracking": "npx tsx scripts/validate-tracking.mjs",
     "validate:ms3": "node scripts/validate-ms3.mjs",
     "validate:ms4": "node scripts/validate-ms4.mjs",
+    "validate:nose-correction-smoke": "node scripts/validate-nose-correction-smoke.mjs",
     "validate:ms4-ghost": "node scripts/verify-preview-ghost-test50.mjs",
     "validate:ms5": "node scripts/validate-ms5.mjs",
     "validate:import-empty": "node scripts/validate-import-empty.mjs",

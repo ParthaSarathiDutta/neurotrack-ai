@@ -1,5 +1,40 @@
 import type { ManualCorrection, Observation } from '../types';
 
+function bodiesEqual(
+  a: { x: number; y: number } | null | undefined,
+  b: { x: number; y: number } | null | undefined,
+): boolean {
+  if (!a || !b) return false;
+  return a.x === b.x && a.y === b.y;
+}
+
+/** Resolve effective nose after applying a manual correction layer over raw observations. */
+export function resolveCorrectedNoseXY(
+  raw: Observation | undefined,
+  correction: ManualCorrection | undefined,
+): { x: number; y: number } | null {
+  if (!correction) return raw?.noseXY ?? null;
+  if (correction.noseRemoved === true) return null;
+  if (correction.noseXY != null) return correction.noseXY;
+  if (correction.noseRemoved === false) return raw?.noseXY ?? null;
+  // Legacy bundles: noseXY null without noseRemoved — infer intent from body change.
+  if (correction.noseXY === null) {
+    if (bodiesEqual(correction.bodyXY, raw?.bodyXY)) return null;
+    return raw?.noseXY ?? null;
+  }
+  return raw?.noseXY ?? null;
+}
+
+export function isNoseExplicitlyRemoved(
+  raw: Observation | undefined,
+  correction: ManualCorrection | undefined,
+): boolean {
+  if (!correction) return false;
+  if (correction.noseRemoved === true) return true;
+  if (correction.noseRemoved === false) return false;
+  return correction.noseXY === null && bodiesEqual(correction.bodyXY, raw?.bodyXY);
+}
+
 /** Apply manual corrections over raw automatic observations — raw array is never mutated. */
 export function applyManualCorrections(
   raw: Observation[],
@@ -14,7 +49,7 @@ export function applyManualCorrections(
     return {
       ...obs,
       bodyXY: corr.bodyXY,
-      noseXY: corr.noseXY,
+      noseXY: resolveCorrectedNoseXY(obs, corr),
       origin: 'manual',
       observed: hasBody ? 'tracked' : obs.observed,
       confidence: hasBody ? 1 : obs.confidence,
@@ -50,8 +85,7 @@ export function effectiveNoseXY(
   raw: Observation | undefined,
   correction: ManualCorrection | undefined,
 ): { x: number; y: number } | null {
-  if (correction) return correction.noseXY;
-  return raw?.noseXY ?? null;
+  return resolveCorrectedNoseXY(raw, correction);
 }
 
 /** True when Remove nose would hide a currently visible nose estimate. */
@@ -60,6 +94,42 @@ export function canRemoveNoseEstimate(
   correction: ManualCorrection | undefined,
 ): boolean {
   return effectiveNoseXY(raw, correction) != null;
+}
+
+export function buildBodyCorrection(
+  frameIndex: number,
+  timeUs: number,
+  x: number,
+  y: number,
+  existing: ManualCorrection | undefined,
+  correctedAt: string,
+): ManualCorrection {
+  return {
+    frameIndex,
+    timeUs,
+    bodyXY: { x, y },
+    noseXY: existing?.noseXY ?? null,
+    noseRemoved: existing?.noseRemoved ?? false,
+    correctedAt,
+  };
+}
+
+export function buildManualNoseCorrection(
+  frameIndex: number,
+  timeUs: number,
+  body: { x: number; y: number },
+  x: number,
+  y: number,
+  correctedAt: string,
+): ManualCorrection {
+  return {
+    frameIndex,
+    timeUs,
+    bodyXY: body,
+    noseXY: { x, y },
+    noseRemoved: false,
+    correctedAt,
+  };
 }
 
 export type NoseRemovalOutcome =
@@ -84,7 +154,7 @@ export function resolveNoseRemoval(
     };
   }
   if (!canRemoveNoseEstimate(raw, existing)) {
-    if (existing?.noseXY === null) {
+    if (isNoseExplicitlyRemoved(raw, existing)) {
       return {
         kind: 'already_removed',
         message: 'Nose already marked unavailable on this frame.',
@@ -102,6 +172,7 @@ export function resolveNoseRemoval(
       timeUs,
       bodyXY: body,
       noseXY: null,
+      noseRemoved: true,
       correctedAt,
     },
   };

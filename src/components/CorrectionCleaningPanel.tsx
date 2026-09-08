@@ -11,6 +11,7 @@ import {
   applyManualCorrections,
   canRemoveNoseEstimate,
   getManualCorrection,
+  isNoseExplicitlyRemoved,
 } from '../domain/trajectory/manualCorrection';
 import { formatCleaningQualityFlags } from '../domain/trajectory/cleaningLabels';
 import { resolveEffectiveObservations } from '../domain/trajectory/resolveObservations';
@@ -144,7 +145,7 @@ export function CorrectionCleaningPanel({
       <p className={styles.hint} data-testid="correction-nose-removal-hint">
         {canRemoveNose
           ? 'Mark nose unavailable hides the nose on this frame without moving the body or deleting the frame. Use Reset frame to auto to restore the automatic nose estimate.'
-          : manualOnFrame?.noseXY === null
+          : isNoseExplicitlyRemoved(rawObs, manualOnFrame ?? undefined)
             ? 'Nose already marked unavailable on this frame. Reset frame to auto restores the automatic estimate.'
             : 'No nose estimate on this frame to mark unavailable.'}
       </p>
@@ -160,6 +161,12 @@ export function CorrectionCleaningPanel({
         {manualCount} manual correction{manualCount === 1 ? '' : 's'}
         {currentObs ? ` · current frame origin: ${currentObs.origin}` : ''}
       </p>
+      <span
+        hidden
+        aria-hidden="true"
+        data-testid="correction-current-frame"
+        data-frame-index={currentFrameIndex}
+      />
 
       {currentObs?.qualityFlags?.length ? (
         <p className={styles.hint} data-testid="observation-quality-flags">
