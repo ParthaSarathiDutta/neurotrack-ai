@@ -1,103 +1,86 @@
-# NeuroTrack AI — committed submission outputs (MS-6)
+# NeuroTrack AI — analysis outputs
 
-Generated from the approved three-trial analysis session using the production export
-serializers in `src/domain/export/`. Video bytes are **not** included.
+This directory contains reviewed reference artifacts and separate live browser exports from the recorded demonstration. All reports use the production serializers in `src/domain/export/`. Source video bytes are not included.
 
-## Source videos
+## Source recordings
 
-Sample MP4s: [Salk AIRC take-home sample data](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze)
-(`test50.mp4`, `test51.mp4`, `test53.mp4`). Place locally under `data/barnes-maze/` for
-regeneration or MP4 re-link in the browser.
+The three sample MP4s, `test50.mp4`, `test51.mp4`, and `test53.mp4`, were provided by the [Salk Institute Center for AI and Research Computing](https://github.com/salk-airc/rse-takehome-2026/tree/main/data/barnes-maze). Download them from the original source and place them under `data/barnes-maze/` for regeneration or browser video re-linking. Reference annotations and complete protocol metadata are not provided.
 
-## Analysis source (canonical)
+## Reviewed reference analysis
 
 | Item | Location |
-|------|----------|
-| Session bundle (canonical) | `tests/fixtures/ms6/three-trial-session.neurotrack.json` |
+|---|---|
+| Source session fixture | `tests/fixtures/ms6/three-trial-session.neurotrack.json` |
 | Load-example copy | `public/example/all-clips-session.neurotrack.json` |
-| Committed session bundle | `outputs/bundles/all-clips-session.neurotrack.json` |
+| Published session bundle | `outputs/bundles/all-clips-session.neurotrack.json` |
 
-Pipeline: MS-1 ingest → calibration → trial window → tracking → MS-5 event detection →
-scientist review (test53 `escape_completed` confirmed at 24.40 s). Measures recomputed
-with `speed_interval_validity.v1` / `max_speed.v2` without re-detecting events.
+Pipeline: ingest → calibration → trial window → tracking → event detection → scientist review → measurement and export. The reviewed session includes test53 candidate-hole completion confirmed at 24.40 s. Measures use the documented speed-validity definitions; regeneration does not require re-detecting the reviewed events.
 
-Export timestamp for canonical artifacts: **2026-09-07T20:19:04.008Z** (`toolVersion` 0.5.0-ms5).
+Canonical export timestamp: **2026-09-07T20:19:04.008Z**. Tool version: `0.5.0-ms5`.
 
-## Demo-recording exports (supplementary)
+## Demo-recording exports
 
-Browser exports from the **final submission demo recording** (~2026-09-08) live in
-`outputs/demo-recording-2026-09-08/`. These are multi-section CSV reports (Summary, Events,
-Parameters, OperationalDefinitions, Provenance) downloaded live during the demo — not regenerated
-from the canonical bundle.
+The [recorded workflow demonstration](https://www.youtube.com/watch?v=hbHXh1_zTKE) includes live CSV downloads from three independently processed browser sessions. These original exports are preserved in `outputs/demo-recording-2026-09-08/`, rather than being regenerated from the reference bundle.
 
-| File | Notes |
-|------|-------|
-| `test53_report.csv` | Confirmed candidate-hole completion **24.40 s**; 1 manual correction in demo session |
-| `test51_report.csv` | Uncertain entry — censored ≥ **44.24 s** |
-| `test50_report.csv` | Incomplete — censored ≥ **180.03 s** |
+| Recording | Report | Outcome |
+|---|---|---|
+| test50 | [test50_report.csv](demo-recording-2026-09-08/test50_report.csv) | Incomplete/censored; latency ≥180.03 s |
+| test51 | [test51_report.csv](demo-recording-2026-09-08/test51_report.csv) | Uncertain entry; latency ≥44.24 s |
+| test53 | [test53_report.csv](demo-recording-2026-09-08/test53_report.csv) | Confirmed candidate-hole completion, 24.40 s; one manual correction |
 
-Scientific escape/censor semantics match the canonical outputs. Minor numeric differences
-(path length, mean speed) reflect separate browser sessions and export timestamps, not
-revised event detection. The canonical bundle and `outputs/test*_*.csv` / `*_report.xlsx`
-remain the reviewed reference state for Load example analysis.
+Each report contains Summary, Events, Parameters, OperationalDefinitions, and Provenance sections. The escape/censoring semantics match the reference analysis. Minor path-length and mean-speed differences reflect separate tracking sessions; test50 also has a one-frame investigation-boundary difference. The reviewed reference artifacts remain unchanged. Neither set of results should be overwritten merely to make the sessions numerically identical.
 
-Local demo video (not committed): `submission-review-assets/final-demo.mp4` (~**3:07**).
+## Canonical output inventory
+
+| Recording | Summary | Events | Excel workbook | Analysis bundle |
+|---|---|---|---|---|
+| test50 | [CSV](test50_summary.csv) | [CSV](test50_events.csv) | [XLSX](test50_report.xlsx) | [JSON](test50.neurotrack.json) |
+| test51 | [CSV](test51_summary.csv) | [CSV](test51_events.csv) | [XLSX](test51_report.xlsx) | [JSON](test51.neurotrack.json) |
+| test53 | [CSV](test53_summary.csv) | [CSV](test53_events.csv) | [XLSX](test53_report.xlsx) | [JSON](test53.neurotrack.json) |
+
+Combined session: [all-clips-session.neurotrack.json](bundles/all-clips-session.neurotrack.json). The Excel workbooks contain Results, Summary, Events, Parameters, OperationalDefinitions, and Provenance worksheets.
+
+## Scientific interpretation
+
+| Recording | Escape / latency | Event summary |
+|---|---|---|
+| test53 | Confirmed candidate-hole completion; total latency 24.40 s | 5 events, including one confirmed escape |
+| test51 | Candidate entry uncertain; censored ≥44.24 s | 10 events, including uncertain entry |
+| test50 | Incomplete/censored; lower bound ≥180.03 s | 60 events, including incomplete entry |
+
+The protocol target and physical scale are unknown for all three recordings. Target-dependent primary latency, error counts, and quadrant measures are unavailable, not zero. Distances and speeds remain in pixel units. A confirmed candidate-hole completion must not be interpreted as a verified protocol-target escape. Proposed events and censored outcomes retain their respective semantics.
+
+The sample recordings have no ground-truth annotations. These reports are pipeline and scientist-review outputs, not independent accuracy validation against human raters.
 
 ## Tool and schema versions
 
 | Field | Value |
-|-------|-------|
-| Export timestamp (canonical) | 2026-09-07T20:19:04.008Z |
+|---|---|
+| Canonical export timestamp | 2026-09-07T20:19:04.008Z |
 | Tool version | 0.5.0-ms5 |
 | Bundle schema | 1.0.0 (`neurotrack-analysis`) |
 | Speed gating | speed_interval_validity.v1 |
-| Gated speed defs | mean_speed.v2, max_speed.v2 |
-| Diagnostic speed defs | mean_speed_diagnostic.v1, max_speed_diagnostic.v1 |
+| Gated speed definitions | mean_speed.v2, max_speed.v2 |
+| Diagnostic speed definitions | mean_speed_diagnostic.v1, max_speed_diagnostic.v1 |
 
-## Target hole and physical scale
-
-All three trials: **protocol target unknown**, **px/cm unknown**. Summary exports mark
-primary latency and quadrant measures unavailable — not zero.
-
-## Review provenance (high level)
-
-| Clip | Escape / latency | Events |
-|------|------------------|--------|
-| test53 | Confirmed completion — **24.40 s** total latency | 5 events (1 confirmed escape) |
-| test51 | Candidate entry uncertain — censored ≥ 44.24 s | 10 proposed investigations |
-| test50 | Incomplete censored — censored ≥ 180.03 s | 60 proposed investigations |
-
-## Output inventory (canonical)
-
-- test53_summary.csv, test53_events.csv, test53_report.xlsx, test53.neurotrack.json
-- test51_summary.csv, test51_events.csv, test51_report.xlsx, test51.neurotrack.json
-- test50_summary.csv, test50_events.csv, test50_report.xlsx, test50.neurotrack.json
-- bundles/all-clips-session.neurotrack.json
-- demo-recording-2026-09-08/test{50,51,53}_report.csv (demo session exports)
-- README.md
-
-## Regenerate canonical outputs
+## Reproduce the reference reports
 
 ```bash
 npm run generate:ms6-outputs
 npm run validate:ms6-outputs
 ```
 
-Requires the source bundle at `tests/fixtures/ms6/three-trial-session.neurotrack.json`.
-To rebuild that bundle from local MP4s (full pipeline):
+The source fixture must be present at `tests/fixtures/ms6/three-trial-session.neurotrack.json`. To rebuild that fixture from local MP4s through the full pipeline, the existing validation workflow provides:
 
 ```bash
 WRITE_IMPORT_FIXTURE=1 node scripts/smoke-export-checkpoint1.mjs
 npm run generate:ms6-outputs
 ```
 
-## Load in the app
+The fixture-writing command intentionally replaces the local reference fixture; use it only when regeneration is intended. Preserve the published reviewed artifacts when experimenting with new tracking parameters or manual decisions.
 
-Use **Load example analysis** on an empty session, or import `bundles/all-clips-session.neurotrack.json`.
-Reports and visualizations work without MP4 bytes; re-select video via fingerprint when needed.
+## Load results in the application
 
-## Operational definitions
+Use **Load example analysis** in an empty session, or import `bundles/all-clips-session.neurotrack.json`. Reports and visualizations load without MP4 bytes. Re-select the matching source video when frame-accurate playback is needed; the application uses fingerprint-based re-linking.
 
-See the `OperationalDefinitions` worksheet in each `*_report.xlsx`, or
-`reference/occupancy-time-accounting.md`, `reference/speed-interval-validity.md`,
-`reference/occupancy-display-normalization.md`.
+For operational definitions and measurement conventions, see the Excel report worksheets and `reference/occupancy-time-accounting.md`, `reference/speed-interval-validity.md`, and `reference/occupancy-display-normalization.md` in the repository root.
